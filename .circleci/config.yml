@@ -109,10 +109,16 @@ jobs:
             py -3.11 -m pip install --upgrade pip
             py -3.11 -m pip install setuptools wheel build
       - run:
-          name: Download missing headers
+          name: Ensure simple_svg header exists
           shell: powershell.exe
           command: |
-            curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+            $outFile = "Vectorize/src_polyvector/simple_svg_1.0.0.hpp"
+            if (Test-Path $outFile) {
+              Write-Host "Header already present: $outFile"
+            } else {
+              Write-Host "Downloading missing header to: $outFile"
+              Invoke-WebRequest -Uri "https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp" -OutFile $outFile
+            }
       - run:
           name: Configure & build C++ extension (Windows)
           shell: powershell.exe
