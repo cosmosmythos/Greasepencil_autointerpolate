@@ -119,8 +119,10 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, int m, int n,
 
     Mat eigTauTimesGmag2ReLaplacian, eigTauTimesGmag2ImLaplacian;
     std::cout << "  DEBUG: Computing Laplacians..." << std::endl;
-    Laplacian(eigTauTimesGmag2Re, eigTauTimesGmag2ReLaplacian, CV_32F, 1, 1, 0);
-    Laplacian(eigTauTimesGmag2Im, eigTauTimesGmag2ImLaplacian, CV_32F, 1, 0, 0);
+    // OpenCV 4.x: Ensure destination depth >= source depth.
+    // eigTauTimesGmag2Re/Im are created from Eigen doubles, so treat as 64F.
+    Laplacian(eigTauTimesGmag2Re, eigTauTimesGmag2ReLaplacian, CV_64F, 1, 1, 0);
+    Laplacian(eigTauTimesGmag2Im, eigTauTimesGmag2ImLaplacian, CV_64F, 1, 1, 0);
     std::cout << "  DEBUG: Laplacian completed - about to call cv2eigen..." << std::endl;
 
     Eigen::MatrixXd lapRe, lapIm;
