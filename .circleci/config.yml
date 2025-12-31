@@ -7,6 +7,7 @@ commands:
       - run:
           name: Setup Python (Linux)
           command: |
+            python --version
             python -m pip install --upgrade pip
             pip install setuptools wheel build
 
@@ -56,7 +57,7 @@ jobs:
 
   build_interpolate_linux:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.11.9
     steps:
       - checkout
       - run:
@@ -154,7 +155,7 @@ jobs:
 
   build_linevector_linux:
     docker:
-      - image: cimg/python:3.11
+      - image: cimg/python:3.11.9
     steps:
       - checkout
       - run:
@@ -206,36 +207,97 @@ jobs:
           name: Install zip
           command: sudo apt-get update && sudo apt-get install -y zip
       - run:
-          name: Create platform packages
+          name: Create platform-specific packages (Windows + Linux)
           command: |
-            # Create directories
-            mkdir -p build_windows/Addon build_linux/Addon
+            set -e
             
-            # Copy addon files
+            # Do NOT hardcode versions; use the exact wheel filenames produced by builds
+            VERSION_INTERP=""
+            VERSION_LINE=""
+            
+            # Collect all wheels into wheels-temp (mirror GitHub Actions)
+            rm -rf wheels-temp
+            mkdir -p wheels-temp
+            find . -path "*/dist/*.whl" -exec cp {} wheels-temp/ \;
+            echo "Collected wheels:"
+            ls -ლა wheels-temp || ls -la wheels-temp
+            
+            # Windows package
+            echo "Creating Windows package..."
+            mkdir -p build_windows/Addon
             cp -r Addon/* build_windows/Addon/
+            rm -rf build_windows/Addon/wheels
+            mkdir -p build_windows/Addon/wheels
+            find wheels-temp -name "*win_amd64.whl" -exec cp {} build_windows/Addon/wheels/ \;
+            
+            WIN_INTERP=$(ls build_windows/Addon/wheels/*autointerpolate*win_amd64.whl 2>/dev/null | head -n 1)
+            WIN_LINE=$(ls build_windows/Addon/wheels/*linevector*win_amd64.whl 2>/dev/null | head -n 1)
+            
+            if [ -z "$WIN_INTERP" ] || [ -z "$WIN_LINE" ]; then
+              echo "❌ Missing required Windows wheels"; ls -la build_windows/Addon/wheels; exit 1;
+            fi
+            
+            WIN_INTERP_BN=$(basename "$WIN_INTERP")
+            WIN_LINE_BN=$(basename "$WIN_LINE")
+            
+            cat >> build_windows/Addon/blender_manifest.toml << EOF
+
+            # BEGIN GENERATED CONTENT.
+            [build.generated]
+            platforms = ["windows-x64"]
+            wheels = [
+              "./wheels/${WIN_INTERP_BN}",
+              "./wheels/${WIN_LINE_BN}"
+            ]
+            # END GENERATED CONTENT.
+            EOF
+            cd build_windows/Addon
+            # Derive version from interpolate wheel filename to name the zip similarly to GitHub Actions
+            WIN_ZIP_VER=$(echo "$WIN_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+            if [ -z "$WIN_ZIP_VER" ]; then WIN_ZIP_VER="unknown"; fi
+            zip -r ../../gp_auto_interpolate-${WIN_ZIP_VER}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+            cd ../..
+            
+            # Linux package
+            echo "Creating Linux package..."
+            mkdir -p build_linux/Addon
             cp -r Addon/* build_linux/Addon/
+            rm -rf build_linux/Addon/wheels
+            mkdir -p build_linux/Addon/wheels
+            find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \;
             
-            # Create wheels directories
-            mkdir -p build_windows/Addon/wheels build_linux/Addon/wheels
+            LINUX_INTERP=$(ls build_linux/Addon/wheels/*autointerpolate*manylinux*.whl 2>/dev/null | head -n 1)
+            LINUX_LINE=$(ls build_linux/Addon/wheels/*linevector*manylinux*.whl 2>/dev/null | head -n 1)
             
-            # Copy wheels (find all available wheels)
-            find dist -name "*win*.whl" -exec cp {} build_windows/Addon/wheels/ \; 2>/dev/null || true
-            find dist -name "*linux*.whl" -exec cp {} build_linux/Addon/wheels/ \; 2>/dev/null || true
-            find dist -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \; 2>/dev/null || true
+            if [ -z "$LINUX_INTERP" ] || [ -z "$LINUX_LINE" ]; then
+              echo "❌ Missing required Linux wheels"; ls -la build_linux/Addon/wheels; exit 1;
+            fi
             
-            # Create ZIPs
-            cd build_windows && zip -r ../gp_auto_interpolate-windows.zip Addon/
-            cd ../build_linux && zip -r ../gp_auto_interpolate-linux.zip Addon/
+            LINUX_INTERP_BN=$(basename "$LINUX_INTERP")
+            LINUX_LINE_BN=$(basename "$LINUX_LINE")
             
-            # Show what we built
-            cd ..
-            ls -la *.zip
-            echo "Windows package contents:"
-            unzip -l gp_auto_interpolate-windows.zip | head -20
-            echo "Linux package contents:"
-            unzip -l gp_auto_interpolate-linux.zip | head -20
+            cat >> build_linux/Addon/blender_manifest.toml << EOF
+
+            # BEGIN GENERATED CONTENT.
+            [build.generated]
+            platforms = ["linux-x64"]
+            wheels = [
+              "./wheels/${LINUX_INTERP_BN}",
+              "./wheels/${LINUX_LINE_BN}"
+            ]
+            # END GENERATED CONTENT.
+            EOF
+            cd build_linux/Addon
+            # Derive version from interpolate wheel filename to name the zip similarly to GitHub Actions
+            ZIP_VER=$(echo "$LINUX_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+            if [ -z "$ZIP_VER" ]; then ZIP_VER="unknown"; fi
+            zip -r ../../gp_auto_interpolate-${ZIP_VER}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+            cd ../..
+            
+            echo "✅ Packages created:"
+            ls -lh gp_auto_interpolate-*.zip
       - store_artifacts:
-          path: "*.zip"
+          path: "gp_auto_interpolate-*.zip"
 
 workflows:
   build_and_package:
