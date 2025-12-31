@@ -220,7 +220,7 @@ jobs:
             mkdir -p wheels-temp
             find . -path "*/dist/*.whl" -exec cp {} wheels-temp/ \;
             echo "Collected wheels:"
-            ls -ლა wheels-temp || ls -la wheels-temp
+            ls -la wheels-temp
             
             # Windows package
             echo "Creating Windows package..."
@@ -254,9 +254,14 @@ jobs:
             cp -r Addon/* build_linux/Addon/
             rm -rf build_linux/Addon/wheels
             mkdir -p build_linux/Addon/wheels
-            find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \;
+            # Copy Linux wheels (interpolate may be linux_x86_64, linevector should be manylinux after auditwheel)
+            find wheels-temp -name "*linux_x86_64.whl" -exec cp {} build_linux/Addon/wheels/ \; || true
+            find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \; || true
             
-            LINUX_INTERP=$(ls build_linux/Addon/wheels/*autointerpolate*manylinux*.whl 2>/dev/null | head -n 1)
+            LINUX_INTERP=$(ls build_linux/Addon/wheels/*autointerpolate*linux_x86_64.whl 2>/dev/null | head -n 1)
+            if [ -z "$LINUX_INTERP" ]; then
+              LINUX_INTERP=$(ls build_linux/Addon/wheels/*autointerpolate*manylinux*.whl 2>/dev/null | head -n 1)
+            fi
             LINUX_LINE=$(ls build_linux/Addon/wheels/*linevector*manylinux*.whl 2>/dev/null | head -n 1)
             
             if [ -z "$LINUX_INTERP" ] || [ -z "$LINUX_LINE" ]; then
