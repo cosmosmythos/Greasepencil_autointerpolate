@@ -11,6 +11,13 @@ build_interpolate_linux:
     - apt-get install -y cmake build-essential
     - pip install --upgrade pip setuptools wheel build
   script:
+    # Build the C++ extension first
+    - mkdir -p Executable/build
+    - cd Executable/build
+    - cmake .. -DCMAKE_BUILD_TYPE=Release
+    - cmake --build . --config Release
+    - cd ../..
+    # Now build the Python wheel
     - python setup.py bdist_wheel
   artifacts:
     paths:
