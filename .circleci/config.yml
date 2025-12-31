@@ -1,0 +1,214 @@
+version: 2.1
+
+# Define reusable commands
+commands:
+  setup_python:
+    steps:
+      - run:
+          name: Setup Python
+          command: |
+            python -m pip install --upgrade pip
+            pip install setuptools wheel build
+
+jobs:
+  # Build Interpolate Module
+  build_interpolate_windows:
+    machine:
+      image: windows-server-2022-gui:current
+    resource_class: windows.medium
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            choco install python3 cmake visualstudio2022buildtools -y
+      - setup_python
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir Executable\build
+            cd Executable\build
+            cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+            cmake --build . --config Release
+            cd ..\..
+      - run:
+          name: Build wheel
+          command: |
+            python setup.py bdist_wheel
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
+  build_interpolate_linux:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y cmake build-essential
+      - setup_python
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir -p Executable/build
+            cd Executable/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            cmake --build . --config Release
+            cd ../..
+      - run:
+          name: Build wheel
+          command: |
+            python setup.py bdist_wheel
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
+  # Build LineVector Module
+  build_linevector_windows:
+    machine:
+      image: windows-server-2022-gui:current
+    resource_class: windows.medium
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            choco install python3 cmake opencv eigen visualstudio2022buildtools -y
+            choco install boost-msvc-14.3 -y --ignore-dependencies || echo "Boost install failed, will use vcpkg fallback"
+      - setup_python
+      - run:
+          name: Download missing headers
+          command: |
+            curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir Vectorize\build
+            cd Vectorize\build
+            cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+            cmake --build . --config Release
+            cd ..\..
+      - run:
+          name: Build wheel
+          command: |
+            python setup_vectorize.py bdist_wheel
+      - run:
+          name: Bundle dependencies
+          command: |
+            pip install delvewheel
+            cd dist
+            for %%f in (*.whl) do delvewheel repair "%%f" -w . --add-path "C:/ProgramData/chocolatey/lib/opencv/tools/opencv/build/x64/vc16/bin"
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
+  build_linevector_linux:
+    docker:
+      - image: cimg/python:3.11
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y build-essential cmake libopencv-dev libeigen3-dev libboost-dev curl patchelf
+      - setup_python
+      - run:
+          name: Download missing headers
+          command: |
+            curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir -p Vectorize/build
+            cd Vectorize/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            cmake --build . --config Release
+            cd ../..
+      - run:
+          name: Build wheel
+          command: |
+            python setup_vectorize.py bdist_wheel
+      - run:
+          name: Bundle dependencies
+          command: |
+            pip install auditwheel
+            cd dist
+            for wheel in *.whl; do
+              auditwheel repair "$wheel" -w .
+            done
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
+  # Package Everything
+  package:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Install zip
+          command: sudo apt-get update && sudo apt-get install -y zip
+      - run:
+          name: Create platform packages
+          command: |
+            # Create directories
+            mkdir -p build_windows/Addon build_linux/Addon
+            
+            # Copy addon files
+            cp -r Addon/* build_windows/Addon/
+            cp -r Addon/* build_linux/Addon/
+            
+            # Create wheels directories
+            mkdir -p build_windows/Addon/wheels build_linux/Addon/wheels
+            
+            # Copy wheels (find all available wheels)
+            find dist -name "*win*.whl" -exec cp {} build_windows/Addon/wheels/ \; 2>/dev/null || true
+            find dist -name "*linux*.whl" -exec cp {} build_linux/Addon/wheels/ \; 2>/dev/null || true
+            find dist -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \; 2>/dev/null || true
+            
+            # Create ZIPs
+            cd build_windows && zip -r ../gp_auto_interpolate-windows.zip Addon/
+            cd ../build_linux && zip -r ../gp_auto_interpolate-linux.zip Addon/
+            
+            # Show what we built
+            cd ..
+            ls -la *.zip
+            echo "Windows package contents:"
+            unzip -l gp_auto_interpolate-windows.zip | head -20
+            echo "Linux package contents:"
+            unzip -l gp_auto_interpolate-linux.zip | head -20
+      - store_artifacts:
+          path: "*.zip"
+
+workflows:
+  build_and_package:
+    jobs:
+      - build_interpolate_windows
+      - build_interpolate_linux
+      - build_linevector_windows
+      - build_linevector_linux
+      - package:
+          requires:
+            - build_interpolate_windows
+            - build_interpolate_linux
+            - build_linevector_windows
+            - build_linevector_linux
