@@ -281,8 +281,15 @@ jobs:
             
             echo "✅ Packages created:"
             ls -lh gp_auto_interpolate-*.zip
+            
+            # CircleCI store_artifacts does NOT support glob patterns reliably.
+            # Move zips into a directory and upload the directory.
+            rm -rf out_zips
+            mkdir -p out_zips
+            mv gp_auto_interpolate-*.zip out_zips/
+            ls -lh out_zips
       - store_artifacts:
-          path: "gp_auto_interpolate-*.zip"
+          path: out_zips
 
 workflows:
   build_and_package:
