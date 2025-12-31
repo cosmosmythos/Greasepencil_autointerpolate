@@ -1,0 +1,64 @@
+stages:
+  - build
+  - package
+
+# Build Interpolate Linux
+build_interpolate_linux:
+  stage: build
+  image: python:3.11
+  before_script:
+    - apt-get update
+    - apt-get install -y cmake build-essential
+    - pip install --upgrade pip setuptools wheel build
+  script:
+    - python setup.py bdist_wheel
+  artifacts:
+    paths:
+      - dist/*.whl
+    expire_in: 1 day
+
+# Build LineVector Linux  
+build_linevector_linux:
+  stage: build
+  image: ubuntu:22.04
+  before_script:
+    - apt-get update
+    - apt-get install -y build-essential cmake libopencv-dev libeigen3-dev libboost-dev python3 python3-pip curl
+    - curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+    - python3 -m pip install --upgrade pip setuptools wheel
+  script:
+    - mkdir -p Vectorize/build
+    - cd Vectorize/build
+    - cmake .. -DCMAKE_BUILD_TYPE=Release
+    - cmake --build . --config Release
+    - cd ../..
+    - python3 setup_vectorize.py bdist_wheel
+    - python3 -m pip install auditwheel
+    - python3 -m auditwheel repair dist/*.whl -w dist
+  artifacts:
+    paths:
+      - dist/*.whl
+    expire_in: 1 day
+
+# Package Everything!
+package:
+  stage: package
+  image: ubuntu:22.04
+  dependencies:
+    - build_interpolate_linux
+    - build_linevector_linux
+  before_script:
+    - apt-get update && apt-get install -y zip
+  script:
+    - mkdir -p packages/Addon/wheels
+    - cp -r Addon/* packages/Addon/
+    - find . -name "*.whl" -exec cp {} packages/Addon/wheels/ \;
+    - cd packages && zip -r ../gp_auto_interpolate.zip Addon/
+  artifacts:
+    paths:
+      - "*.zip"
+    expire_in: 1 week
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"

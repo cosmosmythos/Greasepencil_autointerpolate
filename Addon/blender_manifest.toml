@@ -1,0 +1,27 @@
+schema_version = "1.0.0"
+id = "gp_auto_interpolate"
+name = "GP Auto Interpolate"
+version = "2.1.0"
+tagline = "Grease Pencil Real-time Auto-Interpolation with Line Art Import"
+maintainer = "cosmosmythos"
+type = "add-on"
+tags = ["Grease Pencil", "Animation", "Geometry Nodes"]
+blender_version_min = "4.3.0"
+license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2025- cosmosmythos"]
+website = "https://cosmosmythos.gumroad.com/"
+
+# Platforms supported
+platforms = ["windows-x64", "macos-arm64", "linux-x64"]
+
+# Wheels are auto-loaded by Blender - no sys.path needed
+wheels = [
+  "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-win_amd64.whl",
+  "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-macosx_11_0_arm64.whl",
+  "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-manylinux_2_34_x86_64.whl",
+  "./wheels/gp_linevector-1.0.0-cp311-abi3-win_amd64.whl",
+  "./wheels/gp_linevector-1.0.0-cp311-abi3-macosx_11_0_arm64.whl",
+  "./wheels/gp_linevector-1.0.0-cp311-abi3-manylinux_2_34_x86_64.whl",
+]
+
+[permissions]

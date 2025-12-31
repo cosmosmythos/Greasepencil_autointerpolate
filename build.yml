@@ -1,0 +1,262 @@
+name: Build and Release Wheels
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            wheel_platform: win_amd64
+          - os: macos-latest
+            platform: macos-arm64
+            wheel_platform: macosx_11_0_arm64
+          - os: ubuntu-latest
+            platform: linux-x64
+            wheel_platform: manylinux_2_34_x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel setuptools build
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libomp-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake libomp
+
+      - name: Configure CMake
+        run: |
+          mkdir -p Executable/build
+          cd Executable/build
+          
+          # Get Python information
+          python -c "import sys; print(f'Using Python: {sys.version}'); print(f'Executable: {sys.executable}')"
+          
+          # Platform-specific CMake configuration
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            cmake .. -G "Visual Studio 17 2022" -A x64
+          else
+            cmake ..
+          fi
+        shell: bash
+
+      - name: Build C++ module
+        run: |
+          cd Executable/build
+          echo "Building with CMake..."
+          cmake --build . --config Release --verbose
+          
+          echo "=== Build completed. Checking output directories ==="
+          ls -la || dir
+          find . -name "*.pyd" -o -name "*.so" || echo "No extensions found in build directory"
+          
+          # Check expected output locations
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "Checking Windows output..."
+            ls -la ../output/Release/ || echo "Release directory not found"
+          else
+            echo "Checking Unix output..."
+            ls -la ../output/ || echo "Output directory not found"
+          fi
+        shell: bash
+
+      - name: Test extension import (basic smoke test)
+        run: |
+          python -c "
+          import sys
+          import os
+          import glob
+          
+          print('Testing extension import...')
+          print(f'Platform: {sys.platform}')
+          print(f'Python: {sys.version}')
+          
+          # Find the built extension file
+          if sys.platform == 'win32':
+              extension_file = glob.glob('Executable/**/gp_autointerpolate.pyd', recursive=True)
+          else:
+              extension_file = glob.glob('Executable/**/gp_autointerpolate.so', recursive=True)
+          
+          if extension_file:
+              ext_dir = os.path.dirname(extension_file[0])
+              sys.path.insert(0, ext_dir)
+              print(f'Found extension at: {extension_file[0]}')
+          else:
+              print('ERROR: Extension file not found')
+              sys.exit(1)
+          
+          try:
+              import gp_autointerpolate
+              interpolator = gp_autointerpolate.Interpolator()
+              print('SUCCESS: Extension loaded successfully')
+              print(f'Interpolator created: {type(interpolator)}')
+          except ImportError as e:
+              print(f'ERROR: Import failed: {e}')
+              sys.exit(1)
+          except Exception as e:
+              print(f'ERROR: {e}')
+              sys.exit(1)
+          "
+
+      - name: Build wheel
+        run: |
+          python -m build --wheel
+
+      - name: Rename wheel with correct platform tag
+        shell: bash
+        run: |
+          cd dist
+          for wheel in *.whl; do
+            # Extract base name and version
+            if [[ $wheel =~ (gp_autointerpolate-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+              base="${BASH_REMATCH[1]}"
+              new_name="${base}-cp311-abi3-${{ matrix.wheel_platform }}.whl"
+              # Only rename if different
+              if [ "$wheel" != "$new_name" ]; then
+                mv "$wheel" "$new_name"
+                echo "Renamed to: $new_name"
+              else
+                echo "Already correctly named: $wheel"
+              fi
+            fi
+          done
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.platform }}
+          path: dist/*.whl
+
+  package:
+    name: Package Extension
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheels-temp
+
+      - name: Create platform-specific packages
+        run: |
+          # Create a package for each platform
+          
+          # Windows
+          echo "Creating Windows package..."
+          mkdir -p build_windows/Addon
+          cp -r Addon/* build_windows/Addon/
+          mkdir -p build_windows/Addon/wheels
+          find wheels-temp -name "*win_amd64.whl" -exec cp {} build_windows/Addon/wheels/ \;
+          echo '' >> build_windows/Addon/blender_manifest.toml
+          echo '# BEGIN GENERATED CONTENT.' >> build_windows/Addon/blender_manifest.toml
+          echo '[build.generated]' >> build_windows/Addon/blender_manifest.toml
+          echo 'platforms = ["windows-x64"]' >> build_windows/Addon/blender_manifest.toml
+          echo 'wheels = ["./wheels/gp_autointerpolate-2.1.0-cp311-abi3-win_amd64.whl"]' >> build_windows/Addon/blender_manifest.toml
+          echo '# END GENERATED CONTENT.' >> build_windows/Addon/blender_manifest.toml
+          cd build_windows/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+          
+          # macOS
+          echo "Creating macOS package..."
+          mkdir -p build_macos/Addon
+          cp -r Addon/* build_macos/Addon/
+          mkdir -p build_macos/Addon/wheels
+          find wheels-temp -name "*macosx*.whl" -exec cp {} build_macos/Addon/wheels/ \;
+          echo '' >> build_macos/Addon/blender_manifest.toml
+          echo '# BEGIN GENERATED CONTENT.' >> build_macos/Addon/blender_manifest.toml
+          echo '[build.generated]' >> build_macos/Addon/blender_manifest.toml
+          echo 'platforms = ["macos-arm64"]' >> build_macos/Addon/blender_manifest.toml
+          echo 'wheels = ["./wheels/gp_autointerpolate-2.1.0-cp311-abi3-macosx_11_0_arm64.whl"]' >> build_macos/Addon/blender_manifest.toml
+          echo '# END GENERATED CONTENT.' >> build_macos/Addon/blender_manifest.toml
+          cd build_macos/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-macos-arm64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+          
+          # Linux
+          echo "Creating Linux package..."
+          mkdir -p build_linux/Addon
+          cp -r Addon/* build_linux/Addon/
+          mkdir -p build_linux/Addon/wheels
+          find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \;
+          echo '' >> build_linux/Addon/blender_manifest.toml
+          echo '# BEGIN GENERATED CONTENT.' >> build_linux/Addon/blender_manifest.toml
+          echo '[build.generated]' >> build_linux/Addon/blender_manifest.toml
+          echo 'platforms = ["linux-x64"]' >> build_linux/Addon/blender_manifest.toml
+          echo 'wheels = ["./wheels/gp_autointerpolate-2.1.0-cp311-abi3-manylinux_2_34_x86_64.whl"]' >> build_linux/Addon/blender_manifest.toml
+          echo '# END GENERATED CONTENT.' >> build_linux/Addon/blender_manifest.toml
+          cd build_linux/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+          
+          echo "✅ Platform-specific packages created:"
+          ls -lh gp_auto_interpolate-*.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v2.1.0-build-${{ github.run_number }}
+          name: "GP Auto Interpolate v2.1.0"
+          body: |
+            🎉 **Wheel-based release with Local_Modern architecture**
+            
+            ✅ **Zero-friction installation** - Install like any Blender extension
+            ✅ **Cross-platform wheels** - Windows, macOS (Intel + Apple Silicon), Linux
+            ✅ **Optimized baking** - Single frame + range with stepping (1-4 frames)
+            ✅ **Static linking** - Works across Linux distributions
+            ✅ **Modern architecture** - Clean, maintainable codebase
+            
+            **Installation:**
+            1. Download `gp_auto_interpolate-2.1.0.zip`
+            2. Install in Blender Extensions
+            3. Done! No pip, no manual steps required.
+          files: |
+            gp_auto_interpolate-2.1.0-windows-x64.zip
+            gp_auto_interpolate-2.1.0-macos-arm64.zip
+            gp_auto_interpolate-2.1.0-linux-x64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload extension artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: gp_auto_interpolate-2.1.0-*.zip

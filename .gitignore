@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+*.pyc
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+Executable/build/
+Executable/output/
+
+# Blender
+*.blend1
+*.blend2
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Wheels are built by CI - don't commit them to repo
+Addon/wheels/*.whl

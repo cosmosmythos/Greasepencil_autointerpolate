@@ -1,0 +1,556 @@
+name: Build and Release Wheels
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build_interpolate:
+    name: Build Interpolate - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            wheel_platform: win_amd64
+          - os: macos-latest
+            platform: macos-arm64
+            wheel_platform: macosx_11_0_arm64
+          - os: ubuntu-latest
+            platform: linux-x64
+            wheel_platform: manylinux_2_34_x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.9"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install wheel setuptools build
+
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libomp-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake libomp
+
+      # ============================================================================
+      # BUILD INTERPOLATE MODULE
+      # ============================================================================
+      - name: Configure CMake - Interpolate
+        run: |
+          mkdir -p Executable/build
+          cd Executable/build
+          python -c "import sys; print(f'Using Python: {sys.version}')"
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            cmake .. -G "Visual Studio 17 2022" -A x64
+          else
+            cmake ..
+          fi
+        shell: bash
+
+      - name: Build C++ module - Interpolate
+        run: |
+          cd Executable/build
+          cmake --build . --config Release --verbose
+          echo "=== Interpolate build completed ==="
+          find . -name "*.pyd" -o -name "*.so" || echo "No extensions found"
+        shell: bash
+
+      # Note: gp_linevector (Vectorize) is built by build_polyvector.yml workflow
+      # (requires OpenCV, Eigen3, Boost dependencies - separate workflow)
+
+      # ============================================================================
+      # TEST IMPORTS
+      # ============================================================================
+      - name: Test extension imports
+        run: |
+          python -c "
+          import sys
+          import os
+          import glob
+          
+          print('Testing extension imports...')
+          
+          # Test interpolate only (gp_linevector tested in separate workflow)
+          if sys.platform == 'win32':
+              ext1 = glob.glob('Executable/**/gp_autointerpolate.pyd', recursive=True)
+          else:
+              ext1 = glob.glob('Executable/**/gp_autointerpolate.so', recursive=True)
+          
+          if ext1:
+              sys.path.insert(0, os.path.dirname(ext1[0]))
+              import gp_autointerpolate
+              print('[OK] gp_autointerpolate loaded successfully')
+          else:
+              print('[FAIL] gp_autointerpolate not found')
+              sys.exit(1)
+          "
+
+      # ============================================================================
+      # BUILD WHEELS
+      # ============================================================================
+      - name: Build wheel - Interpolate
+        run: |
+          python -m build --wheel
+
+      # Note: gp_linevector is built by build_polyvector.yml
+      # (requires OpenCV, Eigen3, Boost - separate workflow)
+
+      - name: Rename wheels with correct platform tags
+        shell: bash
+        run: |
+          cd dist
+          for wheel in *.whl; do
+            if [[ $wheel =~ (gp_autointerpolate-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+              base="${BASH_REMATCH[1]}"
+              new_name="${base}-cp311-abi3-${{ matrix.wheel_platform }}.whl"
+              if [ "$wheel" != "$new_name" ]; then
+                mv "$wheel" "$new_name"
+              fi
+            fi
+            # gp_linevector wheels are built by separate workflow
+            # (they require OpenCV dependencies)
+          done
+          echo "Wheels:"
+          ls -la
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-interpolate-${{ matrix.platform }}
+          path: dist/*.whl
+
+  build_linevector:
+    name: Build LineVector - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+            wheel_platform: win_amd64
+          - os: macos-latest
+            platform: macos-arm64
+            wheel_platform: macosx_11_0_arm64
+          - os: macos-15-intel
+            platform: macos-x64
+            wheel_platform: macosx_10_15_x86_64
+          - os: ubuntu-latest
+            platform: linux-x64
+            wheel_platform: manylinux_2_34_x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.9"
+
+      # ============================================================================
+      # Download Missing Headers
+      # ============================================================================
+      - name: Download simple_svg header
+        run: |
+          curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp \
+            https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+          echo "✓ Downloaded simple_svg_1.0.0.hpp"
+        shell: bash
+
+      # ============================================================================
+      # Install Dependencies
+      # ============================================================================
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libopencv-dev libeigen3-dev libboost-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake opencv eigen boost
+          
+          # Verify installation
+          echo "=== Homebrew prefix: $(brew --prefix)"
+          echo "=== OpenCV prefix: $(brew --prefix opencv)"
+          
+          OPENCV_CMAKE="$(brew --prefix opencv)/lib/cmake/opencv4"
+          if [ -d "$OPENCV_CMAKE" ]; then
+            echo "✓ OpenCV CMake config found at: $OPENCV_CMAKE"
+          else
+            echo "❌ OpenCV CMake config NOT found at expected location"
+            find "$(brew --prefix)" -name "OpenCVConfig.cmake" 2>/dev/null || echo "Not found anywhere"
+            exit 1
+          fi
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install opencv eigen boost-msvc-14.3 -y
+        shell: pwsh
+
+      # ============================================================================
+      # Build Module
+      # ============================================================================
+      - name: Configure CMake
+        run: |
+          mkdir -p Vectorize/build
+          cd Vectorize/build
+          
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            # Set OpenCV path for Windows (Chocolatey installs to C:\tools\opencv)
+            cmake .. -G "Visual Studio 17 2022" -A x64 \
+              -DOpenCV_DIR="C:/tools/opencv/build"
+            
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            # macOS: Homebrew packages need explicit paths
+            BREW_PREFIX=$(brew --prefix)
+            OPENCV_CMAKE="${BREW_PREFIX}/opt/opencv/lib/cmake/opencv4"
+            
+            echo "Using Homebrew prefix: $BREW_PREFIX"
+            echo "Using OpenCV cmake: $OPENCV_CMAKE"
+            
+            # Build the correct architecture per runner:
+            # - macos-14: arm64
+            # - macos-13: x86_64
+            if [ "${{ matrix.platform }}" == "macos-x64" ]; then
+              OSX_ARCH=x86_64
+            else
+              OSX_ARCH=arm64
+            fi
+            echo "Building macOS arch: $OSX_ARCH"
+            
+            cmake .. \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_PREFIX_PATH="${BREW_PREFIX}" \
+              -DOpenCV_DIR="${OPENCV_CMAKE}" \
+              -DCMAKE_OSX_ARCHITECTURES=$OSX_ARCH
+              
+          else
+            # Linux: system paths work automatically
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+          fi
+        shell: bash
+
+      - name: Build C++ module
+        run: |
+          cd Vectorize/build
+          cmake --build . --config Release --verbose
+          echo "=== LineVector build completed ==="
+          find . -name "*.pyd" -o -name "*.so" || echo "No extensions found"
+        shell: bash
+
+      # ============================================================================
+      # Build Wheel
+      # ============================================================================
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build wheel setuptools
+
+      - name: Build wheel
+        run: |
+          python setup_vectorize.py bdist_wheel
+
+      - name: Rename wheels with correct platform tags (before bundling - except Linux)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          cd dist
+          for wheel in *.whl; do
+            if [[ $wheel =~ (gp_linevector-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+              base="${BASH_REMATCH[1]}"
+              new_name="${base}-cp311-abi3-${{ matrix.wheel_platform }}.whl"
+              if [ "$wheel" != "$new_name" ]; then
+                echo "Renaming: $wheel -> $new_name"
+                mv "$wheel" "$new_name"
+              fi
+            fi
+          done
+          echo "Wheels after renaming:"
+          ls -la
+
+      - name: Bundle dependencies into wheel (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pip install delvewheel
+          cd dist
+          # Repair wheel to include OpenCV DLLs
+          original_wheel=$(ls *.whl)
+          echo "Repairing wheel: $original_wheel"
+          delvewheel repair "$original_wheel" -w repaired --add-path "C:/tools/opencv/build/x64/vc16/bin"
+          # Replace original with repaired wheel
+          rm "$original_wheel"
+          mv repaired/*.whl .
+          echo "Final wheel:"
+          ls -la
+
+      - name: Bundle dependencies into wheel (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          pip install delocate
+          cd dist
+          original_wheel=$(ls *.whl)
+          echo "Repairing wheel: $original_wheel"
+          
+          # Determine architecture from wheel name
+          if [[ "$original_wheel" == *"arm64"* ]]; then
+            echo "Detected ARM64 wheel"
+            ARCH_FLAG="--require-archs arm64"
+          elif [[ "$original_wheel" == *"x86_64"* ]]; then
+            echo "Detected x86_64 wheel"
+            ARCH_FLAG="--require-archs x86_64"
+          else
+            echo "Could not detect architecture, using default"
+            ARCH_FLAG=""
+          fi
+          
+          # Repair wheel - delocate writes to output directory
+          mkdir -p repaired
+          delocate-wheel -w repaired -v $ARCH_FLAG "$original_wheel" || {
+            echo "delocate failed with --require-archs, trying without..."
+            delocate-wheel -w repaired -v "$original_wheel"
+          }
+          
+          # Replace original with repaired wheel
+          rm "$original_wheel"
+          mv repaired/*.whl .
+          echo "Final wheel:"
+          ls -la
+
+      - name: Bundle dependencies into wheel (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          pip install auditwheel
+          cd dist
+          original_wheel=$(ls *.whl)
+          echo "Repairing wheel: $original_wheel"
+          
+          # Let auditwheel determine the appropriate manylinux platform
+          # It will use the oldest compatible version based on symbols
+          mkdir -p repaired
+          auditwheel repair "$original_wheel" -w repaired
+          
+          # Replace original with repaired wheel
+          rm "$original_wheel"
+          mv repaired/*.whl .
+          echo "Final wheel (auditwheel determined platform):"
+          ls -la
+
+      # ============================================================================
+      # Test Wheel
+      # ============================================================================
+      - name: Test wheel installation
+        shell: bash
+        # Skip test on Windows - OpenCV DLLs not in PATH during test
+        # The wheel is still valid and will work when installed in Blender
+        if: runner.os != 'Windows'
+        run: |
+          pip install dist/*.whl
+          python -c "import gp_linevector; print(f'LineVector v{gp_linevector.__version__} imported successfully')"
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-linevector-${{ matrix.platform }}
+          path: dist/*.whl
+
+  package:
+    name: Package Extension
+    needs: [build_interpolate, build_linevector]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: wheels-temp
+          pattern: wheel-*
+
+      - name: Create platform-specific packages
+        run: |
+          # Windows
+          echo "Creating Windows package..."
+          mkdir -p build_windows/Addon
+          cp -r Addon/* build_windows/Addon/
+          # Fresh wheels folder: do NOT package repo wheels
+          rm -rf build_windows/Addon/wheels
+          mkdir -p build_windows/Addon/wheels
+          find wheels-temp -name "*win_amd64.whl" -exec cp {} build_windows/Addon/wheels/ \;
+          cat >> build_windows/Addon/blender_manifest.toml << 'EOF'
+
+          # BEGIN GENERATED CONTENT.
+          [build.generated]
+          platforms = ["windows-x64"]
+          wheels = [
+            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-win_amd64.whl",
+            "./wheels/gp_linevector-1.0.0-cp311-abi3-win_amd64.whl"
+          ]
+          # END GENERATED CONTENT.
+          EOF
+          cd build_windows/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+          
+          # macOS ARM64
+          echo "Creating macOS arm64 package..."
+          mkdir -p build_macos_arm64/Addon
+          cp -r Addon/* build_macos_arm64/Addon/
+          # Fresh wheels folder: do NOT package repo wheels
+          rm -rf build_macos_arm64/Addon/wheels
+          mkdir -p build_macos_arm64/Addon/wheels
+          
+          # Copy interpolate wheel from artifacts (universal binary works for both architectures)
+          find wheels-temp -name "*autointerpolate*macosx_11_0_arm64.whl" -exec cp {} build_macos_arm64/Addon/wheels/ \;
+          
+          # Copy linevector wheel from artifacts (delocate creates macosx_15_0 wheels)
+          find wheels-temp -name "*linevector*arm64.whl" -exec cp {} build_macos_arm64/Addon/wheels/ \;
+          
+          cat >> build_macos_arm64/Addon/blender_manifest.toml << 'EOF'
+
+          # BEGIN GENERATED CONTENT.
+          [build.generated]
+          platforms = ["macos-arm64"]
+          wheels = [
+            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-macosx_11_0_arm64.whl",
+            "./wheels/gp_linevector-1.0.0-cp311-abi3-macosx_11_0_arm64.whl"
+          ]
+          # END GENERATED CONTENT.
+          EOF
+          cd build_macos_arm64/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-macos-arm64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+
+          # macOS x64
+          echo "Creating macOS x64 package..."
+          mkdir -p build_macos_x64/Addon
+          cp -r Addon/* build_macos_x64/Addon/
+          rm -rf build_macos_x64/Addon/wheels
+          mkdir -p build_macos_x64/Addon/wheels
+
+          # Copy interpolate wheel from artifacts (universal binary, rename for Intel package)
+          INTERP_WHEEL=$(find wheels-temp -name "*autointerpolate*macosx_11_0_arm64.whl")
+          if [ -n "$INTERP_WHEEL" ]; then
+            # Copy and rename universal wheel for Intel package
+            cp "$INTERP_WHEEL" build_macos_x64/Addon/wheels/
+            cd build_macos_x64/Addon/wheels/
+            # Rename from arm64 to x86_64 (same binary, different filename for consistency)
+            for f in *macosx_11_0_arm64.whl; do
+              mv "$f" "${f/macosx_11_0_arm64/macosx_10_15_x86_64}"
+            done
+            cd ../../..
+          fi
+
+          # Copy linevector wheel from artifacts (delocate creates macosx_15_0 wheels)  
+          find wheels-temp -name "*linevector*x86_64.whl" -exec cp {} build_macos_x64/Addon/wheels/ \;
+
+          cat >> build_macos_x64/Addon/blender_manifest.toml << 'EOF'
+
+          # BEGIN GENERATED CONTENT.
+          [build.generated]
+          platforms = ["macos-x64"]
+          wheels = [
+            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-macosx_10_15_x86_64.whl",
+            "./wheels/gp_linevector-1.0.0-cp311-abi3-macosx_10_15_x86_64.whl"
+          ]
+          # END GENERATED CONTENT.
+          EOF
+          cd build_macos_x64/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-macos-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+          
+          # Linux
+          echo "Creating Linux package..."
+          mkdir -p build_linux/Addon
+          cp -r Addon/* build_linux/Addon/
+          # Fresh wheels folder: do NOT package repo wheels
+          rm -rf build_linux/Addon/wheels
+          mkdir -p build_linux/Addon/wheels
+          find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \;
+          cat >> build_linux/Addon/blender_manifest.toml << 'EOF'
+
+          # BEGIN GENERATED CONTENT.
+          [build.generated]
+          platforms = ["linux-x64"]
+          wheels = [
+            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-manylinux_2_34_x86_64.whl",
+            "./wheels/gp_linevector-1.0.0-cp311-abi3-manylinux_2_34_x86_64.whl"
+          ]
+          # END GENERATED CONTENT.
+          EOF
+          cd build_linux/Addon
+          zip -r ../../gp_auto_interpolate-2.1.0-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          cd ../..
+          
+          echo "✅ Platform-specific packages created:"
+          ls -lh gp_auto_interpolate-*.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v2.1.0-build-${{ github.run_number }}
+          name: "GP Auto Interpolate v2.1.0"
+          body: |
+            🎉 **Wheel-based release with Local_Modern architecture**
+            
+            ✅ **Zero-friction installation** - Install like any Blender extension
+            ✅ **Cross-platform wheels** - Windows, macOS (Apple Silicon), Linux
+            ✅ **Optimized interpolation** - C++ with OpenMP parallelization
+            ✅ **Line Art Import** - High-performance vectorization (NEW!)
+            ✅ **Static linking** - Works across Linux distributions
+            
+            **Features:**
+            - Real-time interpolation with easing curves
+            - Arc-based interpolation (Bezier + Spiral)
+            - **Line Art Import**: File > Import > Grease Pencil Line Art
+            
+            **Installation:**
+            1. Download the package for your OS
+            2. Install in Blender Extensions
+            3. Done!
+          files: |
+            gp_auto_interpolate-2.1.0-windows-x64.zip
+            gp_auto_interpolate-2.1.0-macos-arm64.zip
+            gp_auto_interpolate-2.1.0-macos-x64.zip
+            gp_auto_interpolate-2.1.0-linux-x64.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload extension artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: gp_auto_interpolate-2.1.0-*.zip
