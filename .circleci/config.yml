@@ -240,17 +240,7 @@ jobs:
             WIN_INTERP_BN=$(basename "$WIN_INTERP")
             WIN_LINE_BN=$(basename "$WIN_LINE")
             
-            cat >> build_windows/Addon/blender_manifest.toml << EOF
-
-            # BEGIN GENERATED CONTENT.
-            [build.generated]
-            platforms = ["windows-x64"]
-            wheels = [
-              "./wheels/${WIN_INTERP_BN}",
-              "./wheels/${WIN_LINE_BN}"
-            ]
-            # END GENERATED CONTENT.
-            EOF
+            printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["windows-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$WIN_INTERP_BN" "$WIN_LINE_BN" >> build_windows/Addon/blender_manifest.toml
             cd build_windows/Addon
             # Derive version from interpolate wheel filename to name the zip similarly to GitHub Actions
             WIN_ZIP_VER=$(echo "$WIN_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
@@ -276,17 +266,7 @@ jobs:
             LINUX_INTERP_BN=$(basename "$LINUX_INTERP")
             LINUX_LINE_BN=$(basename "$LINUX_LINE")
             
-            cat >> build_linux/Addon/blender_manifest.toml << EOF
-
-            # BEGIN GENERATED CONTENT.
-            [build.generated]
-            platforms = ["linux-x64"]
-            wheels = [
-              "./wheels/${LINUX_INTERP_BN}",
-              "./wheels/${LINUX_LINE_BN}"
-            ]
-            # END GENERATED CONTENT.
-            EOF
+            printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["linux-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$LINUX_INTERP_BN" "$LINUX_LINE_BN" >> build_linux/Addon/blender_manifest.toml
             cd build_linux/Addon
             # Derive version from interpolate wheel filename to name the zip similarly to GitHub Actions
             ZIP_VER=$(echo "$LINUX_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
