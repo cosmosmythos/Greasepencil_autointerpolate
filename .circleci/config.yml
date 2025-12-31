@@ -11,7 +11,7 @@ commands:
             pip install setuptools wheel build
 
 jobs:
-  # Build Interpolate Module
+  # Build Interpolate Modules
   build_interpolate_windows:
     machine:
       image: windows-server-2022-gui:current
