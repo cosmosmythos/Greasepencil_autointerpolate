@@ -5,7 +5,7 @@ commands:
   setup_python:
     steps:
       - run:
-          name: Setup Python
+          name: Setup Python (Linux)
           command: |
             python -m pip install --upgrade pip
             pip install setuptools wheel build
@@ -19,22 +19,34 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install dependencies
+          name: Install dependencies (Windows)
+          shell: powershell.exe
           command: |
-            choco install python3 cmake visualstudio2022buildtools -y
-      - setup_python
+            choco install cmake visualstudio2022buildtools -y
+            # Pin Python exactly like GitHub Actions
+            choco install python --version=3.11.9 -y --force
+            py -3.11 --version
+            & "C:\Program Files\CMake\bin\cmake.exe" --version
       - run:
-          name: Build C++ extension
+          name: Install Python build deps (Windows)
+          shell: powershell.exe
           command: |
-            mkdir Executable\build
-            cd Executable\build
-            cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
-            cmake --build . --config Release
-            cd ..\..
+            py -3.11 -m pip install --upgrade pip
+            py -3.11 -m pip install setuptools wheel build
       - run:
-          name: Build wheel
+          name: Build C++ extension (Windows)
+          shell: powershell.exe
           command: |
-            python setup.py bdist_wheel
+            New-Item -ItemType Directory -Force -Path Executable\build | Out-Null
+            Set-Location Executable\build
+            & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+            & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release
+            Set-Location ../..
+      - run:
+          name: Build wheel (Windows)
+          shell: powershell.exe
+          command: |
+            py -3.11 setup.py bdist_wheel
       - store_artifacts:
           path: dist/*.whl
       - persist_to_workspace:
@@ -80,33 +92,53 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install dependencies
+          name: Install dependencies (Windows)
+          shell: powershell.exe
           command: |
-            choco install python3 cmake opencv eigen visualstudio2022buildtools -y
-            choco install boost-msvc-14.3 -y --ignore-dependencies || echo "Boost install failed, will use vcpkg fallback"
-      - setup_python
+            choco install cmake visualstudio2022buildtools -y
+            # Pin Python exactly like GitHub Actions
+            choco install python --version=3.11.9 -y --force
+            # Match GitHub Actions: opencv + eigen + boost-msvc-14.3
+            choco install opencv eigen boost-msvc-14.3 -y
+            py -3.11 --version
+            & "C:\Program Files\CMake\bin\cmake.exe" --version
+      - run:
+          name: Install Python build deps (Windows)
+          shell: powershell.exe
+          command: |
+            py -3.11 -m pip install --upgrade pip
+            py -3.11 -m pip install setuptools wheel build
       - run:
           name: Download missing headers
+          shell: powershell.exe
           command: |
             curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
       - run:
-          name: Build C++ extension
+          name: Configure & build C++ extension (Windows)
+          shell: powershell.exe
           command: |
-            mkdir Vectorize\build
-            cd Vectorize\build
-            cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
-            cmake --build . --config Release
-            cd ..\..
+            New-Item -ItemType Directory -Force -Path Vectorize\build | Out-Null
+            Set-Location Vectorize\build
+            # Match GitHub Actions OpenCV_DIR
+            & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DOpenCV_DIR="C:/tools/opencv/build"
+            & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release
+            Set-Location ../..
       - run:
-          name: Build wheel
+          name: Build wheel (Windows)
+          shell: powershell.exe
           command: |
-            python setup_vectorize.py bdist_wheel
+            py -3.11 setup_vectorize.py bdist_wheel
       - run:
-          name: Bundle dependencies
+          name: Bundle dependencies (Windows)
+          shell: powershell.exe
           command: |
-            pip install delvewheel
-            cd dist
-            for %%f in (*.whl) do delvewheel repair "%%f" -w . --add-path "C:/ProgramData/chocolatey/lib/opencv/tools/opencv/build/x64/vc16/bin"
+            py -3.11 -m pip install delvewheel
+            Set-Location dist
+            Get-ChildItem -Filter *.whl | ForEach-Object {
+              Write-Host "Repairing wheel: $($_.Name)"
+              py -3.11 -m delvewheel repair $_.Name -w . --add-path "C:/tools/opencv/build/x64/vc16/bin"
+            }
+            Set-Location ..
       - store_artifacts:
           path: dist/*.whl
       - persist_to_workspace:
@@ -123,7 +155,7 @@ jobs:
           name: Install dependencies
           command: |
             sudo apt-get update
-            sudo apt-get install -y build-essential cmake libopencv-dev libeigen3-dev libboost-dev curl patchelf patchelf
+            sudo apt-get install -y build-essential cmake libopencv-dev libeigen3-dev libboost-dev curl patchelf
       - setup_python
       - run:
           name: Download missing headers
