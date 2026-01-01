@@ -6,6 +6,94 @@
 
 ---
 
+## ⚡ LATEST FIX (2026-01-01): Cycle Detection & Polyline Cutting ✅
+
+### 🐛 Problem: 400+ Fragmented Strokes Instead of 104
+**Root Cause:** Missing the entire **cycle detection and polyline cutting pipeline** (70+ lines of critical code from master lines 569-641).
+
+**What was happening:**
+- The PolyVector algorithm traces curves that create **topological cycles** (self-intersections, redundant paths)
+- Master version: Detects cycles → Cuts polylines at intersection points → Simplifies clean segments → **~104 strokes**
+- Our version: Skipped cycle cutting → Simplified with all redundant segments intact → **400+ fragmented strokes**
+
+### ✅ Fix Applied (polyvector_core.cpp lines 398-468)
+
+**1. Added Cycle Detection (lines 398-412):**
+```cpp
+// Set edge weights for cycle detection (matches master line 573-577)
+for (auto [eit, eend] = boost::edges(wG); eit != eend; ++eit) {
+    wG[*eit].weight = 1.0;
+}
+
+// Detect cycles: Tarjan's algorithm for small graphs (<350 edges), MST for large
+std::vector<edge_descriptor> removedEdges;
+if (boost::num_edges(wG) < 350) {
+    removedEdges = contractLoops2(wG, compMask, compVectorization);  // Hawick circuits
+} else {
+    removedEdges = contractLoops(wG, compMask, compVectorization);   // Min spanning tree
+}
+```
+
+**2. Added Polyline Cutting (lines 414-455):**
+```cpp
+// Find where cycles intersect with polylines (matches master line 591-599)
+std::vector<std::vector<std::pair<double, double>>> cutThosePieces(compVectorization.size());
+for (auto e : removedEdges) {
+    int curve = wG[e.m_source].clusterPoints[0].curve;
+    if (curve == wG[e.m_target].clusterPoints[0].curve) {
+        double s1 = wG[e.m_source].clusterPoints[0].segmentIdx;
+        double s2 = wG[e.m_target].clusterPoints[0].segmentIdx;
+        cutThosePieces[curve].push_back(std::minmax(s1, s2));
+    }
+}
+
+// Split polylines into segments at cut points (matches master line 604-633)
+// Creates separate polylines from each segment, removing redundant overlaps
+// THEN simplifies each segment independently (line 458-459)
+```
+
+**3. Removed Excessive Debug Output:**
+- **calculateGradient()**: Removed 7 debug print statements
+- **calculateWeight()**: Removed 5 debug print statements  
+- **vectorize_mat()**: Removed 10 debug print statements
+- **Total**: 22 lines of noisy debug output removed
+- **Kept**: Essential progress messages (COMPONENT X/Y, optimization status, stroke count)
+
+### 📊 Expected Results
+
+| Metric | Before Fix | After Fix |
+|--------|-----------|-----------|
+| **Stroke Count** | 300-400 | ~104-120 |
+| **Continuity** | Dashed/fragmented | Continuous curves |
+| **Topology** | Redundant overlaps | Clean, non-redundant |
+| **Log Output** | 100+ debug lines | Concise progress only |
+
+### 🔍 Verification
+
+**Image Inversion**: ✅ Confirmed correct (line 225)
+```cpp
+bwImg = cv::Scalar(255) - bwImg;  // Matches master line 388
+```
+
+**Threshold Type**: ✅ Confirmed correct (line 229)
+```cpp
+cv::threshold(bwImg, origMask, threshold, 255, cv::THRESH_BINARY);  // Matches master line 402
+```
+
+**Mask Repair**: ✅ Confirmed correct (lines 245-248)
+```cpp
+for (int i = 0; i < 3; ++i) {
+    repairMask(origMask);  // Matches master line 403-405
+}
+```
+
+**Component Detection**: ✅ Confirmed correct (line 251)
+```cpp
+auto componentMasks = computeComponentMasks(origMask);  // Matches master line 416
+```
+
+---
+
 ## 🎯 Problem Statement
 
 The Python-bound `src_polyvector` implementation had critical differences from the working `PolyVectorization-master`:

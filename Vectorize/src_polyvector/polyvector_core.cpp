@@ -39,31 +39,21 @@ static void calculateGradient(const cv::Mat& bwImg, int m, int n,
                                Eigen::MatrixXcd& tauTimesGmag,
                                Eigen::MatrixXd& gMag) {
     using namespace cv;
-    std::cout << "  DEBUG: calculateGradient entry - input: " << bwImg.rows << "x" 
-              << bwImg.cols << " type=" << bwImg.type() << std::endl;
     
     Mat grad_x, grad_y;
     const double scale = 1.0;
     const double delta = 0;
 
-    std::cout << "  DEBUG: Computing Sobel gradients..." << std::endl;
     Sobel(bwImg, grad_x, CV_32F, 1, 0, 3, scale, delta, BORDER_DEFAULT);
     Sobel(bwImg, grad_y, CV_32F, 0, 1, 3, scale, delta, BORDER_DEFAULT);
-    std::cout << "  DEBUG: Sobel completed - grad_x: " << grad_x.rows << "x" << grad_x.cols 
-              << " type=" << grad_x.type() << std::endl;
 
     Mat planes[] = {grad_x, grad_y};
     Mat cvG;
-    std::cout << "  DEBUG: Merging gradient planes..." << std::endl;
     merge(planes, 2, cvG);
-    std::cout << "  DEBUG: Merged cvG: " << cvG.rows << "x" << cvG.cols 
-              << " channels=" << cvG.channels() << " type=" << cvG.type() << std::endl;
     
     // OpenCV 4.x compatibility: Ensure g is not locked before conversion
     // cv2eigen may try to reallocate, which fails on locked Mats
-    std::cout << "  DEBUG: About to call cv2eigen..." << std::endl;
     cv2eigen(cvG, g);
-    std::cout << "  DEBUG: cv2eigen completed successfully!" << std::endl;
 
     tauTimesGmag = g * std::complex<double>(0.0, 1.0);
     gMag = tauTimesGmag.cwiseAbs();
@@ -140,8 +130,6 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
                             const Eigen::MatrixXd& gMag, int m, int n,
                             Eigen::MatrixXd& weight) {
     using namespace cv;
-    std::cout << "  DEBUG: calculateWeight entry - tauTimesGmag size: " << tauTimesGmag.rows() << "x" 
-              << tauTimesGmag.cols() << std::endl;
 
     Eigen::MatrixXcd eigTauTimesGmag2 = tauTimesGmag.array().pow(2);
 
@@ -150,10 +138,8 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
     Eigen::MatrixXd eigTauTimesGmag2Real = eigTauTimesGmag2.real(),
                     eigTauTimesGmag2Imag = eigTauTimesGmag2.imag();
     
-    std::cout << "  DEBUG: About to call eigen2cv for real/imag parts..." << std::endl;
     eigen2cv(eigTauTimesGmag2Real, eigTauTimesGmag2Re);
     eigen2cv(eigTauTimesGmag2Imag, eigTauTimesGmag2Im);
-    std::cout << "  DEBUG: Both eigen2cv calls completed!" << std::endl;
 
     // Use filter2D with custom kernel (NOT Laplacian!)
     Mat Lx, Ly;
@@ -161,7 +147,6 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
     kernel = Mat::ones(3, 3, CV_64F);
     kernel.at<double>(1, 1) = 0;  // Center is 0, neighbors are 1
     
-    std::cout << "  DEBUG: Applying filter2D..." << std::endl;
     filter2D(eigTauTimesGmag2Re, Lx, -1, kernel);
     filter2D(eigTauTimesGmag2Im, Ly, -1, kernel);
 
@@ -200,33 +185,22 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
         for (int j = 0; j < n; ++j)
             if (fabs(gMag(i, j)) < 1e-10)
                 weight(i, j) = 0;
-    
-    std::cout << "  DEBUG: calculateWeight completed!" << std::endl;
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
 vectorize_mat(const cv::Mat& input_image, double threshold) {
     using namespace cv;
     
-    std::cout << "\n=== POLYVECTORIZE DEBUG START ===" << std::endl;
-    std::cout << "Input image: " << input_image.rows << "x" << input_image.cols 
-              << " channels=" << input_image.channels() << " type=" << input_image.type() << std::endl;
-    
     std::vector<std::vector<std::pair<double, double>>> result;
     
     try {
-        std::cout << "DEBUG: Starting image preprocessing..." << std::endl;
-        
         // Convert to grayscale if needed
         cv::Mat bwImg;
         if (input_image.channels() == 3) {
-            std::cout << "DEBUG: Converting BGR to GRAY..." << std::endl;
             cvtColor(input_image, bwImg, COLOR_BGR2GRAY);
         } else if (input_image.channels() == 4) {
-            std::cout << "DEBUG: Converting BGRA to GRAY..." << std::endl;
             cvtColor(input_image, bwImg, COLOR_BGRA2GRAY);
         } else if (input_image.channels() == 1) {
-            std::cout << "DEBUG: Cloning single-channel image..." << std::endl;
             bwImg = input_image.clone();
         } else {
             throw std::runtime_error("Unsupported image format: " + std::to_string(input_image.channels()) + " channels");
@@ -234,12 +208,8 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         
         // Ensure it's 8-bit grayscale
         if (bwImg.type() != CV_8UC1) {
-            std::cout << "DEBUG: Converting to CV_8UC1..." << std::endl;
             bwImg.convertTo(bwImg, CV_8UC1);
         }
-        
-        std::cout << "DEBUG: Preprocessed image: " << bwImg.rows << "x" << bwImg.cols 
-                  << " channels=" << bwImg.channels() << " type=" << bwImg.type() << std::endl;
         
         int m = bwImg.rows;
         int n = bwImg.cols;
@@ -269,15 +239,8 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         Eigen::MatrixXcd g, tau, tauTimesGmag;
         Eigen::MatrixXd gMag, weight;
         
-        std::cout << "DEBUG: Calling calculateGradient..." << std::endl;
         calculateGradient(bwImg, m, n, g, tau, tauTimesGmag, gMag);
-        std::cout << "DEBUG: calculateGradient completed. Result size: " 
-                  << g.rows() << "x" << g.cols() << std::endl;
-        
-        std::cout << "DEBUG: Calling calculateWeight..." << std::endl;
         calculateWeight(tauTimesGmag, tau, gMag, m, n, weight);
-        std::cout << "DEBUG: calculateWeight completed. Result size: " 
-                  << weight.rows() << "x" << weight.cols() << std::endl;
 
         // Repair mask to fill small gaps (CRITICAL: matches master!)
         // This reduces fragmentation by connecting nearby regions
@@ -433,13 +396,68 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             std::tie(compVectorization, wG) = chopFakeEnds(compVectorization, radii, protectedEnds, 
                                                            isItASpecialDeg2Vertex, yJunctions);
 
-            // Simplify and smooth this component
-            std::vector<MyPolyline> compNewVectorization;
-            for (size_t i = 0; i < compVectorization.size(); ++i) {
-                MyPolyline simplified = simplify(compVectorization[i], 1e-2);
-                if (!simplified.empty()) {
-                    compNewVectorization.push_back(simplified);
+            // CRITICAL: Set edge weights for cycle detection (matches master line 573-577)
+            for (auto [eit, eend] = boost::edges(wG); eit != eend; ++eit) {
+                wG[*eit].weight = 1.0;
+            }
+
+            // CRITICAL: Find and remove cycles (matches master line 579-590)
+            std::cout << "Finding cycles: ";
+            std::vector<edge_descriptor> removedEdges;
+            if (boost::num_edges(wG) < 350) {
+                std::cout << "Using Tarjan's algorithm " << std::endl;
+                removedEdges = contractLoops2(wG, compMask, compVectorization);
+            } else {
+                std::cout << "Using min spanning trees algorithm " << std::endl;
+                removedEdges = contractLoops(wG, compMask, compVectorization);
+            }
+
+            // CRITICAL: Cut polylines at cycle intersections (matches master line 591-633)
+            std::vector<std::vector<std::pair<double, double>>> cutThosePieces(compVectorization.size());
+            for (auto e : removedEdges) {
+                int curve = wG[e.m_source].clusterPoints[0].curve;
+                if (curve == wG[e.m_target].clusterPoints[0].curve) {
+                    double s1 = wG[e.m_source].clusterPoints[0].segmentIdx;
+                    double s2 = wG[e.m_target].clusterPoints[0].segmentIdx;
+                    cutThosePieces[curve].push_back(std::minmax(s1, s2));
                 }
+            }
+
+            // Split polylines based on cut points
+            std::vector<MyPolyline> compNewVectorization;
+            for (int i = 0; i < compVectorization.size(); ++i) {
+                if (compVectorization[i].empty())
+                    continue;
+
+                std::vector<std::pair<double, double>> segments;
+                std::sort(cutThosePieces[i].begin(), cutThosePieces[i].end(), 
+                         [](const std::pair<double, double>& p1, const std::pair<double, double>& p2) {
+                             return p1.first < p2.first;
+                         });
+                segments.push_back({0.0, 0.0});
+                for (int j = 0; j < cutThosePieces[i].size(); ++j) {
+                    segments.back().second = cutThosePieces[i][j].first;
+                    segments.push_back({cutThosePieces[i][j].second, 0.0});
+                }
+                segments.back().second = compVectorization[i].size() - 1;
+
+                // Create new polylines from segments
+                for (int j = 0; j < segments.size(); ++j) {
+                    MyPolyline newPoly;
+                    if (fabs(segments[j].second - segments[j].first) > 1e-5) {
+                        for (int k = segments[j].first; k <= segments[j].second; ++k) {
+                            if (newPoly.empty() || (newPoly.back() - compVectorization[i][k]).norm() > 1e-6)
+                                newPoly.push_back(compVectorization[i][k]);
+                        }
+                    }
+                    if (!newPoly.empty())
+                        compNewVectorization.push_back(newPoly);
+                }
+            }
+
+            // Simplify and smooth (matches master line 635-638)
+            for (int i = 0; i < compNewVectorization.size(); ++i) {
+                compNewVectorization[i] = simplify(compNewVectorization[i], 1e-2);
             }
             
             smooth(compNewVectorization);
