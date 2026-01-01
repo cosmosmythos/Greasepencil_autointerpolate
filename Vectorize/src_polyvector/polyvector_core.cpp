@@ -414,18 +414,23 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
 
             // CRITICAL: Cut polylines at cycle intersections (matches master line 591-633)
             std::vector<std::vector<std::pair<double, double>>> cutThosePieces(compVectorization.size());
+            int totalCuts = 0;
             for (auto e : removedEdges) {
                 int curve = wG[e.m_source].clusterPoints[0].curve;
                 if (curve == wG[e.m_target].clusterPoints[0].curve) {
                     double s1 = wG[e.m_source].clusterPoints[0].segmentIdx;
                     double s2 = wG[e.m_target].clusterPoints[0].segmentIdx;
                     cutThosePieces[curve].push_back(std::minmax(s1, s2));
+                    totalCuts++;
                 }
             }
+            std::cout << "DEBUG: Total cuts to apply: " << totalCuts << " across " << compVectorization.size() << " curves" << std::endl;
 
             // Split polylines based on cut points
             std::vector<MyPolyline> compNewVectorization;
-            for (int i = 0; i < compVectorization.size(); ++i) {
+            int curvesWithCuts = 0;
+            int totalSegmentsCreated = 0;
+            for (size_t i = 0; i < compVectorization.size(); ++i) {
                 if (compVectorization[i].empty())
                     continue;
 
@@ -435,28 +440,35 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
                              return p1.first < p2.first;
                          });
                 segments.push_back({0.0, 0.0});
-                for (int j = 0; j < cutThosePieces[i].size(); ++j) {
+                for (size_t j = 0; j < cutThosePieces[i].size(); ++j) {
                     segments.back().second = cutThosePieces[i][j].first;
                     segments.push_back({cutThosePieces[i][j].second, 0.0});
                 }
                 segments.back().second = compVectorization[i].size() - 1;
+                
+                if (cutThosePieces[i].size() > 0) {
+                    curvesWithCuts++;
+                }
 
                 // Create new polylines from segments
-                for (int j = 0; j < segments.size(); ++j) {
+                for (size_t j = 0; j < segments.size(); ++j) {
                     MyPolyline newPoly;
                     if (fabs(segments[j].second - segments[j].first) > 1e-5) {
-                        for (int k = segments[j].first; k <= segments[j].second; ++k) {
+                        for (int k = static_cast<int>(segments[j].first); k <= static_cast<int>(segments[j].second); ++k) {
                             if (newPoly.empty() || (newPoly.back() - compVectorization[i][k]).norm() > 1e-6)
                                 newPoly.push_back(compVectorization[i][k]);
                         }
                     }
-                    if (!newPoly.empty())
+                    if (!newPoly.empty()) {
                         compNewVectorization.push_back(newPoly);
+                        totalSegmentsCreated++;
+                    }
                 }
             }
+            std::cout << "DEBUG: Split " << curvesWithCuts << " curves into " << totalSegmentsCreated << " segments (from " << compVectorization.size() << " input curves)" << std::endl;
 
             // Simplify and smooth (matches master line 635-638)
-            for (int i = 0; i < compNewVectorization.size(); ++i) {
+            for (size_t i = 0; i < compNewVectorization.size(); ++i) {
                 compNewVectorization[i] = simplify(compNewVectorization[i], 1e-2);
             }
             
