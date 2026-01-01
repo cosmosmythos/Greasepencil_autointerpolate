@@ -48,40 +48,10 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
     # Preprocessing
     threshold: IntProperty(
         name="Threshold",
-        description="Binarization threshold (0-255)",
-        default=128,
+        description="Background/foreground separation (0-255). Lower values detect more ink.",
+        default=90,
         min=0,
         max=255,
-    )
-    
-    auto_threshold: BoolProperty(
-        name="Auto Threshold",
-        description="Automatically detect threshold",
-        default=True,
-    )
-    
-    despeckle_size: IntProperty(
-        name="Despeckle",
-        description="Remove artifacts smaller than this pixel size",
-        default=10,
-        min=0,
-        max=100,
-    )
-    
-    blur_radius: IntProperty(
-        name="Smooth",
-        description="0=None, 10=Maximum (for sketchy/rough drawings)",
-        default=5,
-        min=0,
-        max=10,
-    )
-    
-    simplify_epsilon: FloatProperty(
-        name="Simplify",
-        description="Stroke simplification (higher = smoother, fewer points)",
-        default=2.0,
-        min=0.0,
-        max=10.0,
     )
     
     # Stroke
@@ -183,11 +153,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     
                     polylines = vectorization.process_image_to_polylines(
                         pixels,
-                        threshold=self.threshold,
-                        auto_threshold=self.auto_threshold,
-                        despeckle_size=self.despeckle_size,
-                        simplify_epsilon=self.simplify_epsilon,
-                        blur_radius=self.blur_radius
+                        threshold=self.threshold
                     )
                     
                     if len(polylines) > 0:
@@ -333,17 +299,12 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         box = layout.box()
         box.label(text="Stroke", icon='GREASEPENCIL')
         box.prop(self, "scale_factor")
-        box.prop(self, "simplify_epsilon")
         box.prop(self, "stroke_radius")
         box.prop(self, "target_layer")
         
         box = layout.box()
         box.label(text="Vectorization", icon='CURVE_DATA')
-        box.prop(self, "blur_radius")
-        box.prop(self, "despeckle_size")
-        box.prop(self, "auto_threshold")
-        if not self.auto_threshold:
-            box.prop(self, "threshold")
+        box.prop(self, "threshold")
         
         box = layout.box()
         box.label(text="Image Sequence", icon='SEQUENCE')

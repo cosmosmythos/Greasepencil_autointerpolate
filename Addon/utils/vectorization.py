@@ -27,11 +27,7 @@ def is_backend_available() -> bool:
 
 def process_image_to_polylines(
     image_array: np.ndarray,
-    threshold: int = 90,
-    auto_threshold: bool = False,
-    despeckle_size: int = 10,
-    simplify_epsilon: float = 2.0,
-    blur_radius: int = 0
+    threshold: int = 90
 ) -> List[np.ndarray]:
     """
     Process image and extract polylines using PolyVector algorithm.
@@ -43,10 +39,6 @@ def process_image_to_polylines(
         image_array: Input image (H, W, C) with float values 0-1
         threshold: Background/foreground threshold (0-255, default=90)
                    Lower values detect more ink
-        auto_threshold: Not used (kept for API compatibility)
-        despeckle_size: Not used (PolyVector handles noise internally)
-        simplify_epsilon: Not used (PolyVector has built-in simplification)
-        blur_radius: Not used (PolyVector handles smoothing internally)
     
     Returns:
         List of polylines as Nx2 numpy arrays
@@ -55,9 +47,8 @@ def process_image_to_polylines(
         RuntimeError: If PolyVector backend is not available
     
     Note:
-        The old parameters (auto_threshold, despeckle_size, etc.) are kept
-        for backward compatibility but are not used. PolyVector has its own
-        internal preprocessing and optimization.
+        PolyVector has built-in preprocessing, noise removal, simplification,
+        and smoothing. No additional parameters are needed.
     """
     if not _linevector_available:
         raise RuntimeError(
@@ -89,40 +80,3 @@ def process_image_to_polylines(
     return polylines
 
 
-def get_skeleton_preview(
-    image_array: np.ndarray,
-    threshold: int = 90,
-    auto_threshold: bool = False,
-    despeckle_size: int = 10,
-    blur_radius: int = 0
-) -> np.ndarray:
-    """
-    Get preview of vectorization (returns simple thresholded image).
-    
-    Note: PolyVector doesn't expose intermediate skeleton,
-    so we return a simple threshold for preview purposes.
-    
-    Returns:
-        Binary image as HxW numpy array
-    """
-    if not _linevector_available:
-        raise RuntimeError("LineVector backend not available")
-    
-    # Convert to grayscale if needed
-    if len(image_array.shape) == 3:
-        # Simple RGB to grayscale
-        gray = np.dot(image_array[..., :3], [0.299, 0.587, 0.114])
-    else:
-        gray = image_array
-    
-    # Convert to uint8
-    if gray.dtype == np.float32 or gray.dtype == np.float64:
-        if gray.max() <= 1.0:
-            gray = (gray * 255).astype(np.uint8)
-        else:
-            gray = gray.astype(np.uint8)
-    
-    # Threshold
-    binary = (gray < threshold).astype(np.uint8) * 255
-    
-    return binary
