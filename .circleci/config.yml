@@ -12,6 +12,38 @@ commands:
             pip install setuptools wheel build
 
 jobs:
+  # Baseline: build & run the original PolyVectorization-master CLI on Linux
+  polyvector_master_linux:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies (PolyVectorization-master)
+          command: |
+            sudo apt-get update
+            # Qt is required by the top-level CMakeLists (find_package Qt5 REQUIRED)
+            sudo apt-get install -y build-essential cmake \
+              qtbase5-dev \
+              libopencv-dev libeigen3-dev libboost-dev
+      - run:
+          name: Build PolyVectorization-master (CLI)
+          command: |
+            mkdir -p Vectorize/PolyVectorization-master/build
+            cd Vectorize/PolyVectorization-master/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+            cmake --build . -j 2
+            ls -la
+      - run:
+          name: Run PolyVectorization-master on sample input
+          command: |
+            cd Vectorize/PolyVectorization-master/build
+            # Run on a known sample input; produces ../sample_inputs/<name>.svg
+            ./polyvector_thing ../sample_inputs/puppy.png
+            ls -la ../sample_inputs/*.svg || true
+      - store_artifacts:
+          path: Vectorize/PolyVectorization-master/sample_inputs
+
   # Build Interpolate Modules
   build_interpolate_windows:
     machine:
@@ -292,6 +324,7 @@ jobs:
           path: out_zips
 
 workflows:
+  # Default workflow (your addon wheels)
   build_and_package:
     jobs:
       - build_interpolate_windows
@@ -304,3 +337,11 @@ workflows:
             - build_interpolate_linux
             - build_linevector_windows
             - build_linevector_linux
+
+  # Baseline workflow: build & run original PolyVectorization-master (no addon wheels)
+  polyvector_master_baseline:
+    jobs:
+      - polyvector_master_linux:
+          filters:
+            branches:
+              only: polyvector-master-only
