@@ -17,7 +17,10 @@ namespace polyvector {
  * @return Vector of polylines, each polyline is a vector of (x,y) points
  */
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_image(const std::string& image_path, double threshold = 90.0);
+vectorize_image(const std::string& image_path,
+                double threshold = 90.0,
+                int smooth_steps = 10,
+                double smooth_weight = 0.5);
 
 /**
  * Process image from OpenCV Mat directly
@@ -27,7 +30,10 @@ vectorize_image(const std::string& image_path, double threshold = 90.0);
  * @return Vector of polylines
  */
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_mat(const cv::Mat& input_image, double threshold = 90.0);
+vectorize_mat(const cv::Mat& input_image,
+              double threshold = 90.0,
+              int smooth_steps = 10,
+              double smooth_weight = 0.5);
 
 } // namespace polyvector
 

@@ -1,10 +1,18 @@
 #include "stdafx.h"
 #include "Smooth.h"
 
-void smooth(std::vector<MyPolyline>& curves)
+void smooth(std::vector<MyPolyline>& curves, int smoothSteps, double smoothWeight)
 {
-	const int numIter = 10;
-	const double lambda = 0.5;
+	// Clamp user inputs to safe ranges
+	if (smoothSteps < 0) smoothSteps = 0;
+	if (smoothSteps > 20) smoothSteps = 20;
+	if (smoothWeight < 0.0) smoothWeight = 0.0;
+	if (smoothWeight > 1.0) smoothWeight = 1.0;
+	if (smoothSteps == 0 || smoothWeight == 0.0)
+		return;
+
+	const int numIter = smoothSteps;
+	const double lambda = smoothWeight;
 	for (int i = 0; i < numIter; ++i)
 	{
 		for (int j = 0; j < curves.size(); ++j)

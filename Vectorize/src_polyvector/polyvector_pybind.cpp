@@ -46,17 +46,23 @@ cv::Mat numpy_to_mat(py::array_t<uint8_t> input) {
  * Process numpy array directly
  */
 std::vector<std::vector<std::pair<double, double>>> 
-process_numpy(py::array_t<uint8_t> image, double threshold) {
+process_numpy(py::array_t<uint8_t> image,
+              double threshold,
+              int smooth_steps,
+              double smooth_weight) {
     cv::Mat mat = numpy_to_mat(image);
-    return vectorize_mat(mat, threshold);
+    return vectorize_mat(mat, threshold, smooth_steps, smooth_weight);
 }
 
 /**
  * Process image file
  */
 std::vector<std::vector<std::pair<double, double>>> 
-process_file(const std::string& path, double threshold) {
-    return vectorize_image(path, threshold);
+process_file(const std::string& path,
+             double threshold,
+             int smooth_steps,
+             double smooth_weight) {
+    return vectorize_image(path, threshold, smooth_steps, smooth_weight);
 }
 
 } // namespace polyvector
@@ -77,6 +83,8 @@ PYBIND11_MODULE(gp_linevector, m) {
     m.def("vectorize_image", &polyvector::process_file,
           py::arg("image_path"),
           py::arg("threshold") = 90.0,
+          py::arg("smooth_steps") = 10,
+          py::arg("smooth_weight") = 0.5,
           R"doc(
               Vectorize an image file.
               

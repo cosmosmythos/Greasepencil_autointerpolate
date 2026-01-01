@@ -188,7 +188,7 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_mat(const cv::Mat& input_image, double threshold) {
+vectorize_mat(const cv::Mat& input_image, double threshold, int smooth_steps, double smooth_weight) {
     using namespace cv;
     
     std::vector<std::vector<std::pair<double, double>>> result;
@@ -425,13 +425,19 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             // CRITICAL: Find and remove cycles (matches master line 579-590)
             std::cout << "Finding cycles: ";
             std::vector<edge_descriptor> removedEdges;
-            if (boost::num_edges(wG) < 350) {
+            const auto wG_edges = (int)boost::num_edges(wG);
+            if (wG_edges < 350) {
                 std::cout << "Using Tarjan's algorithm " << std::endl;
                 removedEdges = contractLoops2(wG, compMask, compVectorization);
             } else {
                 std::cout << "Using min spanning trees algorithm " << std::endl;
                 removedEdges = contractLoops(wG, compMask, compVectorization);
             }
+            std::cout << "CycleStats: comp=" << compIdx
+                      << " wG_edges=" << wG_edges
+                      << " removedEdges=" << removedEdges.size()
+                      << " curves=" << compVectorization.size()
+                      << std::endl;
 
             // CRITICAL: Cut polylines at cycle intersections (matches master line 591-633)
             std::vector<std::vector<std::pair<double, double>>> cutThosePieces(compVectorization.size());
@@ -445,7 +451,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
                     totalCuts++;
                 }
             }
-            std::cout << "DEBUG: Total cuts to apply: " << totalCuts << " across " << compVectorization.size() << " curves" << std::endl;
+            std::cout << "CycleStats: cuts=" << totalCuts << " curves=" << compVectorization.size() << std::endl;
 
             // Split polylines based on cut points
             std::vector<MyPolyline> compNewVectorization;
@@ -486,14 +492,17 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
                     }
                 }
             }
-            std::cout << "DEBUG: Split " << curvesWithCuts << " curves into " << totalSegmentsCreated << " segments (from " << compVectorization.size() << " input curves)" << std::endl;
+            std::cout << "CycleStats: curvesWithCuts=" << curvesWithCuts
+                      << " segments=" << totalSegmentsCreated
+                      << " inputCurves=" << compVectorization.size()
+                      << std::endl;
 
             // Simplify and smooth (matches master line 635-638)
             for (size_t i = 0; i < compNewVectorization.size(); ++i) {
                 compNewVectorization[i] = simplify(compNewVectorization[i], 1e-2);
             }
             
-            smooth(compNewVectorization);
+            smooth(compNewVectorization, smooth_steps, smooth_weight);
 
             // Accumulate results from this component
             allVectorization.insert(allVectorization.end(), 
@@ -526,7 +535,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_image(const std::string& image_path, double threshold) {
+vectorize_image(const std::string& image_path, double threshold, int smooth_steps, double smooth_weight) {
     cv::Mat image = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
     
     if (image.empty()) {
@@ -534,7 +543,7 @@ vectorize_image(const std::string& image_path, double threshold) {
         return {};
     }
     
-    return vectorize_mat(image, threshold);
+    return vectorize_mat(image, threshold, smooth_steps, smooth_weight);
 }
 
 } // namespace polyvector
