@@ -239,7 +239,14 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         }
 
         double beta = FRAME_FIELD_REGULARIZER_WEIGHT;
-        Eigen::VectorXcd X = optimize(bwImg, weight, tau, beta, origMask, indices);
+        // Use fast linear solver first (like master does), fall back to iterative if it fails
+        std::cout << "Optimizing..." << std::flush;
+        Eigen::VectorXcd X = optimizeByLinearSolve(bwImg, weight, tau, beta, origMask, indices);
+        if (X.size() == 0) {
+            std::cout << " linear solver failed, using iterative..." << std::flush;
+            X = optimize(bwImg, weight, tau, beta, origMask, indices);
+        }
+        std::cout << "done." << std::endl;
 
         // Safety: if optimization diverged (NaN/Inf), do NOT proceed to roots/tracing.
         // This prevents crashes in root finding/tracing when the frame field is invalid.

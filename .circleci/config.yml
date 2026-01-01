@@ -41,6 +41,22 @@ jobs:
             # Run on a known sample input; produces ../sample_inputs/<name>.svg
             ./polyvector_thing ../sample_inputs/puppy.png
             ls -la ../sample_inputs/*.svg || true
+
+      - run:
+          name: Fix SVG xlink namespace for viewer compatibility
+          command: |
+            # The upstream output uses xlink:href but does not declare xmlns:xlink.
+            # Patch the generated SVG(s) so they open in Inkscape/Illustrator/browsers.
+            for f in Vectorize/PolyVectorization-master/sample_inputs/*.svg; do
+              [ -f "$f" ] || continue
+              if grep -q "xlink:href" "$f" && ! grep -q "xmlns:xlink" "$f"; then
+                echo "Patching xlink namespace in $f"
+                # Insert xmlns:xlink into the <svg ...> tag
+                sed -i 's#<svg \([^>]*\)xmlns="http://www.w3.org/2000/svg"#<svg \1xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"#' "$f"
+              fi
+            done
+            head -n 5 Vectorize/PolyVectorization-master/sample_inputs/*.svg | head -n 20 || true
+
       - store_artifacts:
           path: Vectorize/PolyVectorization-master/sample_inputs
 
