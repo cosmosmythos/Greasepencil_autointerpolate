@@ -9,7 +9,7 @@ project(polyvector_thing)
 # Find includes in corresponding build directories
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
-# Instruct CMake to run moc automatically when needed.
+# Instruct CMake to run moc automatically when needed .
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 add_executable(polyvector_thing)
