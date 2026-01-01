@@ -125,6 +125,11 @@ This section logs the key fixes applied during the debugging session to bring `V
 ### CI / packaging robustness
 
 - **`4390db0`** — Wheel packaging: find ABI-tagged extension binaries (`gp_linevector*.pyd` / `gp_linevector*.so`).
+- **`22b874f`** — Add concise cycle/loop investigation stats (`CycleStats` + contractible loop counts; no spam).
+- **`6cc9363`** — Add smoothing controls end-to-end:
+  - `smooth_steps` (0–20, default 10)
+  - `smooth_weight` (0.0–1.0, default 0.5)
+  - Remove threshold UI and fix threshold=90 like master (users tune contrast beforehand).
 
 ### Current parity vs Ubuntu baseline (puppy.png)
 
