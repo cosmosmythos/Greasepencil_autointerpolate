@@ -1,0 +1,525 @@
+8; 296, 389; 296, 390; 297, 362; 297, 363; 297, 366; 297, 367; 297, 389; 297, 390; 298, 362; 298, 363; 299, 362; 299, 363; 300, 362; 300, 363;
+done (0 singularities removed)
+Done.
+Done. 2643 curves
+Computing Reeb graph...
+done in 0.271 seconds.
+[connectStuffAroundSingularities]: Connecting vertex 182 to 176
+[connectStuffAroundSingularities]: Connecting vertex 364 to 326
+[connectStuffAroundSingularities]: Connecting vertex 389 to 609
+[connectStuffAroundSingularities]: Connecting vertex 561 to 623
+[connectStuffAroundSingularities]: Connecting vertex 623 to 561
+[connectStuffAroundSingularities]: Connecting vertex 1110 to 1195
+[connectStuffAroundSingularities]: Connecting vertex 1195 to 1110
+[connectStuffAroundSingularities]: Connecting vertex 1335 to 1370
+[connectStuffAroundSingularities]: Connecting vertex 1401 to 1504
+[connectStuffAroundSingularities]: Connecting vertex 1504 to 1401
+[connectStuffAroundSingularities]: Connecting vertex 1741 to 1742
+[connectStuffAroundSingularities]: Connecting vertex 1742 to 1741
+[connectStuffAroundSingularities]: Connecting vertex 1806 to 1834
+[connectStuffAroundSingularities]: Connecting vertex 2708 to 2833
+[connectStuffAroundSingularities]: Connecting vertex 2944 to 3148
+[connectStuffAroundSingularities]: Connecting vertex 3031 to 3296
+[connectStuffAroundSingularities]: Connecting vertex 3114 to 3256
+[connectStuffAroundSingularities]: Connecting vertex 3296 to 3031
+[connectStuffAroundSingularities]: Connecting vertex 3908 to 3965
+[connectStuffAroundSingularities]: Connecting vertex 3963 to 3958
+[connectStuffAroundSingularities]: Connecting vertex 4041 to 3943
+[connectStuffAroundSingularities]: Connecting vertex 4104 to 3963
+[connectStuffAroundSingularities]: Connecting vertex 4861 to 4820
+Reeb graph: 5286 vertices, 2697 edges.
+Computing min spaning trees...done.
+Computing loops...done, found 515 edges to remove
+Contracting loops...done.
+all done.
+Removing short branches...done.
+Splitting stuff... chains done... Hole: 5090 5273 4934 4924
+FAILED to adjust
+Adjusted to: 5090 5273 4934 4924
+CONNECTING vertex 4924 to 5273(73 shared curves)
+CONNECTING vertex 4934 to 5090(0 shared curves)
+Processing deg 4 verts: CONNECTING vertex 9 to 32(3 shared curves)
+CONNECTING vertex 75 to 1(0 shared curves)
+Deg 4 vertex: 74, filling the hole
+CONNECTING vertex 2610 to 2373(28 shared curves)
+CONNECTING vertex 2384 to 2429(24 shared curves)
+Deg 4 vertex: 2600, filling the hole
+CONNECTING vertex 4611 to 4676(13 shared curves)
+CONNECTING vertex 4418 to 4820(0 shared curves)
+Deg 4 vertex: 4850, filling the hole
+CONNECTING vertex 5131 to 5161(113 shared curves)
+CONNECTING vertex 5163 to 5181(0 shared curves)
+Deg 4 vertex: 4925, filling the hole
+done.
+[topoGraphEmbedding]: starting... Computing lots of distances..
+done in 0.669 seconds. dgeseses
+TOPO GRAPH: 68 - 11
+1 - 139
+216 - 244
+108 - 167
+167 - 116
+167 - 170
+451 - 291
+658 - 357
+451 - 628
+404 - 405
+451 - 581
+1093 - 631
+1046 - 777
+804 - 747
+1379 - 1113
+1827 - 1252
+1383 - 1651
+1412 - 1341
+1406 - 1647
+1726 - 1671
+1978 - 1892
+2075 - 1901
+1946 - 1925
+2134 - 2154
+2177 - 2488
+2219 - 2191
+2488 - 3339
+2667 - 2833
+2488 - 2487
+2606 - 2587
+2688 - 2643
+2680 - 3239
+3282 - 2973
+2710 - 2975
+2975 - 2973
+2973 - 2695
+2833 - 2761
+3038 - 2710
+2900 - 2891
+2710 - 2815
+2833 - 2839
+3047 - 2979
+3066 - 3279
+3072 - 3141
+3239 - 3460
+3129 - 3199
+3452 - 3453
+3522 - 3331
+3500 - 3521
+3636 - 3431
+3406 - 4183
+3819 - 3239
+3544 - 3942
+3646 - 3827
+4149 - 4047
+4170 - 4197
+4209 - 4185
+4258 - 4354
+4354 - 3975
+4292 - 4287
+4254 - 4327
+4354 - 4369
+4436 - 4558
+4820 - 4402
+4744 - 4628
+4578 - 4641
+4820 - 4905
+5083 - 4981
+5068 - 4820
+5133 - 5095
+5146 - 4945
+5133 - 5105
+5133 - 5135
+5169 - 5165
+1058 - 920
+1867 - 1856
+Special vertices for deg-3 separation: 2975
+
+Starting component 0, seedPt: 167 (size: 16), a regular seed
+
+
+16 locs...167-108
+167-116
+167-170
+Vertex 167 decided to attach to 116 vertex 0 sample
+Reconstructing the path... 41
+1
+45
+done.
+
+Starting component 1, seedPt: 451 (size: 35), a regular seed
+
+
+35 locs...451-291
+451-628
+451-581
+Vertex 451 decided to attach to 374 vertex 6 sample
+Reconstructing the path... 150
+207
+19
+done.
+
+Starting component 2, seedPt: 2488 (size: 84), a regular seed
+
+
+84 locs...2488-2177
+2488-3339
+2488-2487
+Vertex 2488 decided to attach to 2468 vertex 15 sample
+Reconstructing the path... 251
+339
+76
+done.
+
+Starting component 3, seedPt: 2710 (size: 15), a regular seed
+
+
+15 locs...2710-2975
+2710-3038
+2710-2815
+Vertex 2710 decided to attach to 2815 vertex 0 sample
+Reconstructing the path... 50
+260
+1
+done.
+
+Starting component 4, seedPt: 2833 (size: 39), a regular seed
+
+
+39 locs...2833-2667
+2833-2761
+2833-2839
+Vertex 2833 decided to attach to 2761 vertex 0 sample
+Reconstructing the path... 409
+1
+133
+done.
+
+Starting component 5, seedPt: 2973 (size: 33), a regular seed
+
+
+33 locs...2973-3282
+2973-2975
+2973-2695
+Vertex 2973 decided to attach to 2973 vertex 10 sample
+Reconstructing the path... 218
+2
+32
+done.
+
+Starting component 6, seedPt: 3239 (size: 84), a regular seed
+
+
+84 locs...3239-2680
+3239-3460
+3239-3819
+Vertex 3239 decided to attach to 3460 vertex 2 sample
+Reconstructing the path... 420
+1
+204
+done.
+
+Starting component 7, seedPt: 4354 (size: 19), a regular seed
+
+
+19 locs...4354-4258
+4354-3975
+4354-4369
+Vertex 4354 decided to attach to 4258 vertex 0 sample
+Reconstructing the path... 1
+476
+213
+done.
+
+Starting component 8, seedPt: 4820 (size: 32), a regular seed
+
+
+32 locs...4820-4402
+4820-4905
+4820-5068
+Vertex 4820 decided to attach to 4820 vertex 3 sample
+Reconstructing the path... 416
+77
+406
+done.
+
+Starting component 9, seedPt: 5133 (size: 23), a regular seed
+
+
+23 locs...5133-5095
+5133-5105
+5133-5135
+Vertex 5133 decided to attach to 5105 vertex 0 sample
+Reconstructing the path... 25
+1
+23
+done.
+All done in 0.769 seconds.
+Finding cycles: Using Tarjan's algorithm
+TOTAL # loops: 70
+FOUND A CONTRACTIBLE LOOP: 8 134 74 75
+FOUND A CONTRACTIBLE LOOP: 8 75 74 134
+FOUND A CONTRACTIBLE LOOP: 12 13 172 21
+FOUND A CONTRACTIBLE LOOP: 12 21 172 13
+FOUND A CONTRACTIBLE LOOP: 14 127 129 132 15 131 133 130 128 126
+FOUND A CONTRACTIBLE LOOP: 14 127 129 132 133 130 128 126
+FOUND A CONTRACTIBLE LOOP: 14 127 129 130 128 126
+FOUND A CONTRACTIBLE LOOP: 14 127 128 126
+FOUND A CONTRACTIBLE LOOP: 14 126 128 130 133 131 15 132 129 127
+FOUND A CONTRACTIBLE LOOP: 14 126 128 130 133 132 129 127
+FOUND A CONTRACTIBLE LOOP: 14 126 128 130 129 127
+FOUND A CONTRACTIBLE LOOP: 14 126 128 127
+FOUND A CONTRACTIBLE LOOP: 15 132 129 127 128 130 133 131
+FOUND A CONTRACTIBLE LOOP: 15 132 129 130 133 131
+FOUND A CONTRACTIBLE LOOP: 15 132 133 131
+FOUND A CONTRACTIBLE LOOP: 15 131 133 130 128 127 129 132
+FOUND A CONTRACTIBLE LOOP: 15 131 133 130 129 132
+FOUND A CONTRACTIBLE LOOP: 15 131 133 132
+FOUND A CONTRACTIBLE LOOP: 16 136 135 140
+FOUND A CONTRACTIBLE LOOP: 16 140 135 136
+FOUND A CONTRACTIBLE LOOP: 30 156 112 113
+FOUND A CONTRACTIBLE LOOP: 30 113 112 156
+FOUND A CONTRACTIBLE LOOP: 36 178 170
+FOUND A CONTRACTIBLE LOOP: 36 170 178
+FOUND A CONTRACTIBLE LOOP: 58 166 165 167
+FOUND A CONTRACTIBLE LOOP: 58 167 165 166
+FOUND A CONTRACTIBLE LOOP: 62 145 63 147 146 144
+FOUND A CONTRACTIBLE LOOP: 62 145 146 144
+FOUND A CONTRACTIBLE LOOP: 62 144 146 147 63 145
+FOUND A CONTRACTIBLE LOOP: 62 144 146 145
+FOUND A CONTRACTIBLE LOOP: 63 145 146 147
+FOUND A CONTRACTIBLE LOOP: 63 147 146 145
+FOUND A CONTRACTIBLE LOOP: 64 149 65 151 150 148
+FOUND A CONTRACTIBLE LOOP: 64 149 150 148
+FOUND A CONTRACTIBLE LOOP: 64 148 150 151 65 149
+FOUND A CONTRACTIBLE LOOP: 64 148 150 149
+FOUND A CONTRACTIBLE LOOP: 65 149 150 151
+FOUND A CONTRACTIBLE LOOP: 65 151 150 149
+FOUND A CONTRACTIBLE LOOP: 78 154 79 153 155 152
+FOUND A CONTRACTIBLE LOOP: 78 154 155 152
+FOUND A CONTRACTIBLE LOOP: 78 152 155 153 79 154
+FOUND A CONTRACTIBLE LOOP: 78 152 155 154
+FOUND A CONTRACTIBLE LOOP: 79 154 155 153
+FOUND A CONTRACTIBLE LOOP: 79 153 155 154
+FOUND A CONTRACTIBLE LOOP: 82 83 138 137
+FOUND A CONTRACTIBLE LOOP: 82 137 138 83
+FOUND A CONTRACTIBLE LOOP: 114 115 174 173
+FOUND A CONTRACTIBLE LOOP: 114 173 174 115
+FOUND A CONTRACTIBLE LOOP: 119 157 158 176 160
+FOUND A CONTRACTIBLE LOOP: 119 157 158 175 170 159 177 176 160
+FOUND A CONTRACTIBLE LOOP: 119 157 159 170 175 158 176 160
+FOUND A CONTRACTIBLE LOOP: 119 157 159 177 176 160
+FOUND A CONTRACTIBLE LOOP: 119 160 176 158 175 170 159 157
+FOUND A CONTRACTIBLE LOOP: 119 160 176 158 157
+FOUND A CONTRACTIBLE LOOP: 119 160 176 177 159 170 175 158 157
+FOUND A CONTRACTIBLE LOOP: 119 160 176 177 159 157
+FOUND A CONTRACTIBLE LOOP: 123 171 170
+FOUND A CONTRACTIBLE LOOP: 123 170 171
+FOUND A CONTRACTIBLE LOOP: 127 129 132 133 130 128
+FOUND A CONTRACTIBLE LOOP: 127 129 130 128
+FOUND A CONTRACTIBLE LOOP: 127 128 130 133 132 129
+FOUND A CONTRACTIBLE LOOP: 127 128 130 129
+FOUND A CONTRACTIBLE LOOP: 129 132 133 130
+FOUND A CONTRACTIBLE LOOP: 129 130 133 132
+FOUND A CONTRACTIBLE LOOP: 157 158 176 177 159
+FOUND A CONTRACTIBLE LOOP: 157 158 175 170 159
+FOUND A CONTRACTIBLE LOOP: 157 159 170 175 158
+FOUND A CONTRACTIBLE LOOP: 157 159 177 176 158
+FOUND A CONTRACTIBLE LOOP: 158 176 177 159 170 175
+FOUND A CONTRACTIBLE LOOP: 158 175 170 159 177 176
+DEBUG: Total cuts to apply: 24 across 64 curves
+DEBUG: Split 14 curves into 64 segments (from 64 input curves)
+COMPONENT 3 / 7
+Optimizing...nnz = 428
+  Computing polynomial energy matrix... done.
+  Computing regularization matrix... done.
+  Computing Laplacian... done.
+  Assembling system matrix... done (matrix size: 856x856).
+  Solving linear system (ConjugateGradient)... factored... solved in 203 iterations, error=1.64395e-16
+done.
+Finding roots.. Singularities:
+Done.
+Done. 254 curves
+Computing Reeb graph...
+done in 0.025 seconds.
+[connectStuffAroundSingularities]: Connecting vertex 0 to 87
+[connectStuffAroundSingularities]: Connecting vertex 357 to 378
+[connectStuffAroundSingularities]: Connecting vertex 378 to 357
+[connectStuffAroundSingularities]: Connecting vertex 430 to 408
+Reeb graph: 508 vertices, 419 edges.
+Computing min spaning trees...done.
+Computing loops...done, found 77 edges to remove
+Contracting loops...done.
+all done.
+Removing short branches...done.
+Splitting stuff... chains done... Processing deg 4 verts: done.
+[topoGraphEmbedding]: starting... Computing lots of distances..
+done in 0.118 seconds.  edgeses
+TOPO GRAPH: 186 - 139
+380 - 139
+139 - 121
+392 - 416
+410 - 441
+507 - 425
+Special vertices for deg-3 separation:
+
+Starting component 0, seedPt: 139 (size: 175), a regular seed
+
+
+175 locs...139-186
+139-380
+139-121
+Vertex 139 decided to attach to 2 vertex 2 sample
+Reconstructing the path... 205
+887
+139
+done.
+All done in 0.128 seconds.
+Finding cycles: Using Tarjan's algorithm
+TOTAL # loops: 2
+FOUND A CONTRACTIBLE LOOP: 5 10 9 8
+FOUND A CONTRACTIBLE LOOP: 5 8 9 10
+DEBUG: Total cuts to apply: 2 across 5 curves
+DEBUG: Split 2 curves into 4 segments (from 5 input curves)
+COMPONENT 4 / 7
+Optimizing...nnz = 495
+  Computing polynomial energy matrix... done.
+  Computing regularization matrix... done.
+  Computing Laplacian... done.
+  Assembling system matrix... done (matrix size: 990x990).
+  Solving linear system (ConjugateGradient)... factored... solved in 174 iterations, error=1.95655e-16
+done.
+Finding roots.. Singularities: 315, 412; 315, 413; 316, 412; 316, 413; 316, 414; 316, 415; 317, 411; 317, 412; 317, 414; 317, 415; 318, 411; 318, 412; 318, 414; 318, 415; 326, 417; 326, 418; 326, 419; 327, 417; 327, 418; 327, 419; 330, 411; 330, 412; 331, 411; 331, 412; 331, 413; 332, 411; 332, 412; 332, 413; 332, 414; 333, 411; 333, 412; 333, 413; 333, 414;
+nnz = 495
+  Computing polynomial energy matrix... done.
+  Computing regularization matrix... done.
+  Computing Laplacian... done.
+  Assembling system matrix... done (matrix size: 990x990).
+  Solving linear system (ConjugateGradient)... factored... solved in 190 iterations, error=1.92456e-16
+Singularities: 315, 412; 315, 413; 316, 412; 316, 413; 316, 414; 316, 415; 317, 411; 317, 412; 317, 414; 317, 415; 318, 411; 318, 412; 318, 414; 318, 415; 326, 417; 326, 418; 326, 419; 327, 417; 327, 418; 327, 419; 330, 413; 330, 414; 331, 413; 331, 414; 332, 411; 332, 412; 332, 413; 332, 414; 333, 411; 333, 412; 333, 413; 333, 414;
+done (1 singularities removed)
+nnz = 495
+  Computing polynomial energy matrix... done.
+  Computing regularization matrix... done.
+  Computing Laplacian... done.
+  Assembling system matrix... done (matrix size: 990x990).
+  Solving linear system (ConjugateGradient)... factored... solved in 191 iterations, error=1.55655e-16
+Singularities: 315, 412; 315, 413; 316, 412; 316, 413; 316, 414; 316, 415; 317, 414; 317, 415; 318, 414; 318, 415; 326, 417; 326, 418; 326, 419; 327, 417; 327, 418; 327, 419; 330, 413; 330, 414; 331, 413; 331, 414; 332, 411; 332, 412; 332, 413; 332, 414; 333, 411; 333, 412; 333, 413; 333, 414;
+done (4 singularities removed)
+Done.
+Done. 316 curves
+Computing Reeb graph...
+done in 0.081 seconds.
+[connectStuffAroundSingularities]: Connecting vertex 512 to 622
+Reeb graph: 632 vertices, 493 edges.
+Computing min spaning trees...done.
+Computing loops...done, found 140 edges to remove
+Contracting loops...done.
+all done.
+Removing short branches...done.
+Splitting stuff... chains done... Processing deg 4 verts: CONNECTING vertex 347 to 351(63 shared curves)
+CONNECTING vertex 353 to 331(0 shared curves)
+Deg 4 vertex: 355, filling the hole
+CONNECTING vertex 408 to 404(16 shared curves)
+CONNECTING vertex 526 to 594(0 shared curves)
+Deg 4 vertex: 405, filling the hole
+done.
+[topoGraphEmbedding]: starting... Computing lots of distances..
+done in 0.179 seconds. edgesess
+TOPO GRAPH: 6 - 1
+1 - 361
+325 - 76
+423 - 19
+136 - 227
+448 - 423
+350 - 1
+353 - 357
+398 - 520
+423 - 630
+532 - 379
+478 - 560
+516 - 489
+Special vertices for deg-3 separation:
+
+Starting component 0, seedPt: 1 (size: 40), a regular seed
+
+
+40 locs...1-6
+1-361
+1-350
+Vertex 1 decided to attach to 350 vertex 0 sample
+Reconstructing the path... 64
+37
+1
+done.
+
+Starting component 1, seedPt: 423 (size: 66), a regular seed
+
+
+66 locs...423-19
+423-448
+423-630
+Vertex 423 decided to attach to 448 vertex 0 sample
+Reconstructing the path... 362
+1
+183
+done.
+All done in 0.197 seconds.
+Finding cycles: Using Tarjan's algorithm
+TOTAL # loops: 0
+DEBUG: Total cuts to apply: 0 across 11 curves
+DEBUG: Split 0 curves into 10 segments (from 11 input curves)
+COMPONENT 5 / 7
+Optimizing...nnz = 5
+  Computing polynomial energy matrix... done.
+  Computing regularization matrix... done.
+  Computing Laplacian... done.
+  Assembling system matrix... done (matrix size: 10x10).
+  Solving linear system (ConjugateGradient)... factored... solved in 12 iterations, error=2.67715e-17
+done.
+Finding roots.. Singularities:
+Done.
+Done. 5 curves24
+Computing Reeb graph...
+done in 0.001 seconds.
+Reeb graph: 10 vertices, 0 edges.
+Computing min spaning trees...done.
+Computing loops...done, found 0 edges to remove
+Contracting loops...done.
+all done.
+Removing short branches...done.
+Splitting stuff... chains done... Processing deg 4 verts: done.
+[topoGraphEmbedding]: starting... Computing lots of distances..
+done in 0.001 seconds.
+TOPO GRAPH: Special vertices for deg-3 separation:
+All done in 0.001 seconds.
+Finding cycles: Using Tarjan's algorithm
+TOTAL # loops: 0
+DEBUG: Total cuts to apply: 0 across 0 curves
+DEBUG: Split 0 curves into 0 segments (from 0 input curves)
+COMPONENT 6 / 7
+Optimizing...nnz = 5
+  Computing polynomial energy matrix... done.
+  Computing regularization matrix... done.
+  Computing Laplacian... done.
+  Assembling system matrix... done (matrix size: 10x10).
+  Solving linear system (ConjugateGradient)... factored... solved in 12 iterations, error=1.54095e-17
+done.
+Finding roots.. Singularities:
+Done.
+Done. 5 curves24
+Computing Reeb graph...
+done in 0.001 seconds.
+Reeb graph: 10 vertices, 0 edges.
+Computing min spaning trees...done.
+Computing loops...done, found 0 edges to remove
+Contracting loops...done.
+all done.
+Removing short branches...done.
+Splitting stuff... chains done... Processing deg 4 verts: done.
+[topoGraphEmbedding]: starting... Computing lots of distances..
+done in 0.001 seconds.
+TOPO GRAPH: Special vertices for deg-3 separation:
+All done in 0.001 seconds.
+Finding cycles: Using Tarjan's algorithm
+TOTAL # loops: 0
+DEBUG: Total cuts to apply: 0 across 0 curves
+DEBUG: Split 0 curves into 0 segments (from 0 input curves)
+Simplifying and smoothing...
+Vectorization complete: 400 strokes

@@ -225,15 +225,9 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         // This is essential for correct mask generation
         bwImg = cv::Scalar(255) - bwImg;
 
-        // Create mask based on threshold (now uses THRESH_BINARY like master)
+        // Create mask based on threshold (matches master line 402)
         cv::Mat origMask;
         cv::threshold(bwImg, origMask, threshold, 255, cv::THRESH_BINARY);
-        
-        // Morphological operations
-        Mat element = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
-        Mat tempMask;
-        morphologyEx(origMask, tempMask, MORPH_CLOSE, element);
-        morphologyEx(tempMask, origMask, MORPH_OPEN, element);
 
         // Calculate gradient and weight
         Eigen::MatrixXcd g, tau, tauTimesGmag;
