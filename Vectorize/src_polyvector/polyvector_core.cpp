@@ -89,6 +89,36 @@ static void calculateGradient(const cv::Mat& bwImg, int m, int n,
     tau = tauTimesGmag.array() / gMagNoZeros.array();
 }
 
+static void repairMask(cv::Mat& mask) {
+    int m = mask.rows;
+    int n = mask.cols;
+    std::vector<std::pair<int, int>> newPixels;
+    
+    for (int i = 0; i < m; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (mask.at<uchar>(i, j) == 0) {
+                int nn = 0;
+                for (int i1 = -1; i1 < 2; ++i1) {
+                    for (int j1 = -1; j1 < 2; ++j1) {
+                        if ((i1 == j1) || (i1 + i < 0) || (i1 + i >= m) || 
+                            (j1 + j < 0) || (j1 + j >= n))
+                            continue;
+
+                        if (mask.at<uchar>(i1 + i, j1 + j) != 0)
+                            nn++;
+                    }
+                }
+                if (nn >= 5) {
+                    newPixels.push_back({i, j});
+                }
+            }
+        }
+    }
+
+    for (auto p : newPixels)
+        mask.at<uchar>(p.first, p.second) = 255;
+}
+
 static std::vector<cv::Mat> computeComponentMasks(const cv::Mat& binMask) {
     CV_Assert(!binMask.empty());
     CV_Assert(binMask.type() == CV_8U);
@@ -244,6 +274,12 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         calculateWeight(tauTimesGmag, tau, gMag, m, n, weight);
         std::cout << "DEBUG: calculateWeight completed. Result size: " 
                   << weight.rows() << "x" << weight.cols() << std::endl;
+
+        // Repair mask to fill small gaps (CRITICAL: matches master!)
+        // This reduces fragmentation by connecting nearby regions
+        for (int i = 0; i < 3; ++i) {
+            repairMask(origMask);
+        }
 
         // Split into connected components (KEY: matches master!)
         auto componentMasks = computeComponentMasks(origMask);
