@@ -258,11 +258,42 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         }
 
         // Find roots
-        std::cout << "Finding roots..." << std::endl;
+        std::cout << "Finding roots.. " << std::flush;
         std::array<Eigen::MatrixXcd, 2> roots = findRoots(X, origMask);
 
+        // Iteratively remove singularities (matches master exactly)
+        auto singularities = findSingularities(roots, X, indices, origMask);
+        bool improved;
+        int totalNSingularities = 0;
+        do {
+            int origSingularityCount = singularities.size();
+
+            bool somethingNew = false;
+            for (auto s : singularities) {
+                if (weight(s[0], s[1]) > 1e-5) {
+                    somethingNew = true;
+                    weight(s[0], s[1]) = 0;
+                    totalNSingularities++;
+                }
+            }
+            if (!somethingNew)
+                break;
+
+            X = optimizeByLinearSolve(bwImg, weight, tau, beta, origMask, indices);
+            if (X.size() == 0) {
+                X = optimize(bwImg, weight, tau, beta, origMask, indices);
+            }
+            roots = findRoots(X, origMask);
+            singularities = findSingularities(roots, X, indices, origMask);
+
+            std::cout << "done (" << origSingularityCount - (int)singularities.size() << " singularities removed)" << std::endl;
+            improved = origSingularityCount - singularities.size() > 0;
+        } while (improved);
+
+        std::cout << "Done. " << std::endl;
+
         // Trace polylines
-        std::cout << "Tracing polylines..." << std::endl;
+        std::cout << "Tracing... " << std::flush;
         std::map<std::array<int, 2>, std::vector<PixelInfo>> pixelInfo;
         std::vector<std::array<bool, 2>> endedWithASingularity;
         
@@ -274,10 +305,6 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             std::cout << "No polylines traced" << std::endl;
             return result;
         }
-
-        // Find singularities
-        std::set<std::array<int, 2>> singularities = findSingularities(roots, X, indices, origMask);
-        std::cout << "Found " << singularities.size() << " singularities" << std::endl;
 
         // Build Almost Reeb Graph
         std::cout << "Building graph topology..." << std::endl;
