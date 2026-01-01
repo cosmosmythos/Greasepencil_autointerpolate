@@ -284,6 +284,13 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
 
             // Iteratively remove singularities
             auto singularities = findSingularities(compRoots, X, indices, compMask);
+            
+            // Print initial singularities (matches master line 453)
+            std::cout << "Singularities: ";
+            for (auto s : singularities) {
+                std::cout << s[0] << ", " << s[1] << "; ";
+            }
+            std::cout << std::endl;
             bool improved;
             do {
                 int origSingularityCount = singularities.size();
@@ -309,15 +316,16 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
                 improved = origSingularityCount - singularities.size() > 0;
             } while (improved);
 
-            std::cout << "Done. " << std::endl;
+            std::cout << "Done." << std::endl;
 
             // Trace polylines for this component
-            std::cout << "Tracing... " << std::flush;
             std::map<std::array<int, 2>, std::vector<PixelInfo>> pixelInfo;
             std::vector<std::array<bool, 2>> endedWithASingularity;
             
             auto compPolys = traceAll(bwImg, compMask, compMask, compRoots, X, indices, 
                                       pixelInfo, endedWithASingularity);
+            
+            std::cout << "Done. " << compPolys.size() << " curves" << std::endl;
 
             if (compPolys.empty()) {
                 std::cout << "No polylines traced for component " << compIdx << std::endl;
