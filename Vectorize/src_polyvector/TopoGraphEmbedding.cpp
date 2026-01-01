@@ -405,11 +405,27 @@ bool Distances::reconstructPath(int fixedVertex, int fixedVertexSample, int embe
 	int curVtx = endVtx;
 	std::vector<std::pair<int, int>> result;
 
+	// Defensive reconstruction: avoid map default-insert and out-of-bounds.
+	// Any failure here should return false rather than corrupting memory.
+	auto itSeed = parent[seedIdx].find(startVtxTag);
+	if (itSeed == parent[seedIdx].end())
+		return false;
+	const auto& predVec = itSeed->second;
+	if (curVtx < 0 || curVtx >= (int)predVec.size())
+		return false;
+	if (startVtx < 0 || startVtx >= (int)predVec.size())
+		return false;
+
 	while ((curVtx != startVtx) && (result.size() < 10000))
 	{
+		if (curVtx < 0 || curVtx >= (int)indexToClusterAndPt[seedIdx].size())
+			return false;
 		auto clusterAndPt = indexToClusterAndPt[seedIdx][curVtx];
 		result.push_back(clusterAndPt);
-		int nextCandidate = parent[seedIdx][startVtxTag][curVtx];
+		int nextCandidate = predVec[curVtx];
+		// If predecessor points to itself or invalid, bail.
+		if (nextCandidate == curVtx || nextCandidate < 0 || nextCandidate >= (int)predVec.size())
+			break;
 		curVtx = nextCandidate;
 	}
 	result.push_back({ v1,clP1 });
@@ -586,7 +602,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			for (int ii = 0; ii < adjTopoEdges.size(); ++ii)
 			{
 				auto e = adjTopoEdges[ii];
-				std::cout << e.first << "-" << e.second << std::endl;
+				PV_VLOG(e.first << "-" << e.second);
 				size_t tag = d.clusterAndPtToIndex[seedIdx][std::make_pair(e.second, g[e.second].clusterPoints.size() / 2)];
 
 				if (d.seedType[seedIdx] == Distances::ST_LOOP)
@@ -625,7 +641,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 
 			double myMin = 1000;
 			int myWinner = -1;
-			for (int i = 0; i < potentialLocations.size(); ++i)
+			for (int i = 0; i < (int)potentialLocations.size(); ++i)
 			{
 				if (myMin > sums[i])
 				{
@@ -634,7 +650,13 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 				}
 			}
 
-			result[theVertex] = potentialLocations[myWinner];
+			// If no candidate was chosen (shouldn't happen, but does in rare cases),
+			// fall back to mid-cluster location.
+			if (myWinner < 0 || myWinner >= (int)potentialLocations.size()) {
+				result[theVertex] = { theVertex, (int)g[theVertex].clusterPoints.size() / 2 };
+			} else {
+				result[theVertex] = potentialLocations[myWinner];
+			}
 			PV_VLOG("Vertex " << theVertex << " decided to attach to " << potentialLocations[myWinner].first << " vertex " << potentialLocations[myWinner].second << " sample");
 		}
 		else
