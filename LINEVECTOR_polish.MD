@@ -130,6 +130,10 @@ This section logs the key fixes applied during the debugging session to bring `V
   - `smooth_steps` (0–20, default 10)
   - `smooth_weight` (0.0–1.0, default 0.5)
   - Remove threshold UI and fix threshold=90 like master (users tune contrast beforehand).
+- **`5fcd075`** — Add optional preprocessing Gaussian blur:
+  - UI: `Blur Pixels` (0–10) between Stroke and Vectorization
+  - Backend: applies `cv::GaussianBlur` before inversion/threshold
+  - Default 0 preserves master behavior; values 2–10 can reduce noise/gaps on sketchy input.
 
 ### Current parity vs Ubuntu baseline (puppy.png)
 
