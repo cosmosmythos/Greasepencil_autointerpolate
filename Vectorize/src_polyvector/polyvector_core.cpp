@@ -255,12 +255,16 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             cv::Mat& compMask = componentMasks[compIdx];
             
             // Calculate indices for this component
+            // IMPORTANT: Indices order must match master + FindRoots packing order.
+            // Master uses j-major (for j in [0..n), for i in [0..m)).
             Eigen::MatrixXi indices = Eigen::MatrixXi::Constant(m, n, -1);
             int nnz = 0;
-            for (int i = 0; i < m; ++i) {
-                for (int j = 0; j < n; ++j) {
-                    if (compMask.at<uchar>(i, j) != 0)
-                        indices(i, j) = nnz++;
+            for (int j = 0; j < n; ++j) {
+                for (int i = 0; i < m; ++i) {
+                    if (compMask.at<uchar>(i, j) != 0) {
+                        indices(i, j) = nnz;
+                        nnz++;
+                    }
                 }
             }
 
