@@ -58,6 +58,23 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
     )
     
     # Stroke
+    smooth_steps: IntProperty(
+        name="Smooth Steps",
+        description="Number of smoothing iterations applied to vectorized strokes (0-20)",
+        default=10,
+        min=0,
+        max=20,
+    )
+
+    smooth_weight: FloatProperty(
+        name="Smooth Weight",
+        description="Smoothing strength per iteration (0.0-1.0)",
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        precision=3,
+    )
+
     stroke_radius: FloatProperty(
         name="Stroke Radius",
         description="Radius of strokes",
@@ -157,7 +174,8 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     
                     polylines = vectorization.process_image_to_polylines(
                         pixels,
-                        threshold=self.threshold
+                        smooth_steps=self.smooth_steps,
+                        smooth_weight=self.smooth_weight,
                     )
                     
                     if len(polylines) > 0:
@@ -313,6 +331,8 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         box.label(text="Stroke", icon='GREASEPENCIL')
         box.prop(self, "scale_factor")
         box.prop(self, "stroke_radius")
+        box.prop(self, "smooth_steps")
+        box.prop(self, "smooth_weight")
         box.prop(self, "target_layer")
         
         box = layout.box()
