@@ -3,7 +3,7 @@ project(gp_linevector)
 
 set(CMAKE_CXX_STANDARD 17)
 
-message(STATUS "Building GP LineVector module for Blender 4.3")
+message(STATUS "Building GP LineVector module for Blender 4.3+")
 message(STATUS "PolyVector-based line art vectorization")
 
 # ============================================================================
