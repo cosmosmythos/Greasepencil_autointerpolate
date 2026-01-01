@@ -135,26 +135,41 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 	int nnz = countNonZero(mask);
 	std::cout << "nnz = " << nnz << std::endl;
 
+	std::cout << "  Computing polynomial energy matrix..." << std::flush;
 	auto [A, b] = polynomial_energy_matrix(weight, tauNormalized, mask, indices);
+	std::cout << " done." << std::endl;
 
+	std::cout << "  Computing regularization matrix..." << std::flush;
 	Eigen::MatrixXd onesMatrix;
 	onesMatrix = Eigen::MatrixXd(m, n);
 	onesMatrix.setOnes();
 	Eigen::MatrixXcd g = tauNormalized * std::complex<double>(0, 1);
 	auto [A2, b2] = polynomial_energy_matrix(onesMatrix, g, mask, indices);
+	std::cout << " done." << std::endl;
 
+	std::cout << "  Computing Laplacian..." << std::flush;
 	Eigen::SparseMatrix<double> L = laplacian_matrix(mask, indices, computeSmartWeights(weight,mask,indices).second);
+	std::cout << " done." << std::endl;
 	
+	std::cout << "  Assembling system matrix..." << std::flush;
 	const double alpha = FRAME_FIELD_REGULARIZER_WEIGHT;
 	Eigen::SparseMatrix<std::complex<double>> totalMatrix = 2 * (A + alpha*A2) + beta * 2.0 * L.cast<std::complex<double>>();
 	Eigen::VectorXcd totalRhs = -2 * b.conjugate() - 2 * alpha * b2.conjugate();
+	std::cout << " done (matrix size: " << totalMatrix.rows() << "x" << totalMatrix.cols() << ")." << std::endl;
 
+	std::cout << "  Solving linear system (ConjugateGradient)..." << std::flush;
 	Eigen::ConjugateGradient<Eigen::SparseMatrix<std::complex<double>>, Eigen::Lower | Eigen::Upper> cg;
+	cg.setMaxIterations(1000);
+	cg.setTolerance(1e-6);
 	cg.compute(totalMatrix);
+	std::cout << " factored..." << std::flush;
 
 	Eigen::VectorXcd result = cg.solve(totalRhs);
+	std::cout << " solved in " << cg.iterations() << " iterations, error=" << cg.error() << std::endl;
+	
 	if (cg.info() != Eigen::Success) {
 		// solving failed
+		std::cout << "  WARNING: Linear solver did not converge!" << std::endl;
 		return Eigen::VectorXcd();
 	}
 	else
