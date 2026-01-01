@@ -296,9 +296,11 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             // Print initial singularities (truncate to keep logs readable)
             std::cout << "Singularities (count=" << singularities.size() << "): ";
             const size_t maxPrint = POLYVECTOR_VERBOSE_LOGS ? singularities.size() : 20;
-            for (size_t si = 0; si < singularities.size() && si < maxPrint; ++si) {
-                auto s = singularities[si];
+            size_t si = 0;
+            for (const auto& s : singularities) {
+                if (si >= maxPrint) break;
                 std::cout << s[0] << ", " << s[1] << "; ";
+                ++si;
             }
             if (!POLYVECTOR_VERBOSE_LOGS && singularities.size() > maxPrint) {
                 std::cout << "...";
