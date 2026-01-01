@@ -188,7 +188,7 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_mat(const cv::Mat& input_image, double threshold, int smooth_steps, double smooth_weight) {
+vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int smooth_steps, double smooth_weight) {
     using namespace cv;
     
     std::vector<std::vector<std::pair<double, double>>> result;
@@ -209,6 +209,14 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int smooth_steps, do
         // Ensure it's 8-bit grayscale
         if (bwImg.type() != CV_8UC1) {
             bwImg.convertTo(bwImg, CV_8UC1);
+        }
+
+        // Optional preprocessing: Gaussian blur (applied before inversion/threshold)
+        if (blur_pixels < 0) blur_pixels = 0;
+        if (blur_pixels > 10) blur_pixels = 10;
+        if (blur_pixels > 0) {
+            const int k = 2 * blur_pixels + 1; // kernel must be odd
+            cv::GaussianBlur(bwImg, bwImg, cv::Size(k, k), 0.0);
         }
         
         int m = bwImg.rows;

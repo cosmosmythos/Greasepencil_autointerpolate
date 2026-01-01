@@ -48,10 +48,11 @@ cv::Mat numpy_to_mat(py::array_t<uint8_t> input) {
 std::vector<std::vector<std::pair<double, double>>> 
 process_numpy(py::array_t<uint8_t> image,
               double threshold,
+              int blur_pixels,
               int smooth_steps,
               double smooth_weight) {
     cv::Mat mat = numpy_to_mat(image);
-    return vectorize_mat(mat, threshold, smooth_steps, smooth_weight);
+    return vectorize_mat(mat, threshold, blur_pixels, smooth_steps, smooth_weight);
 }
 
 /**
@@ -105,6 +106,7 @@ PYBIND11_MODULE(gp_linevector, m) {
     m.def("vectorize_array", &polyvector::process_numpy,
           py::arg("image"),
           py::arg("threshold") = 90.0,
+          py::arg("blur_pixels") = 0,
           py::arg("smooth_steps") = 10,
           py::arg("smooth_weight") = 0.5,
           R"doc(

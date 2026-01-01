@@ -32,6 +32,7 @@ vectorize_image(const std::string& image_path,
 std::vector<std::vector<std::pair<double, double>>> 
 vectorize_mat(const cv::Mat& input_image,
               double threshold = 90.0,
+              int blur_pixels = 0,
               int smooth_steps = 10,
               double smooth_weight = 0.5);
 
