@@ -285,6 +285,13 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             // Iteratively remove singularities
             auto singularities = findSingularities(compRoots, X, indices, compMask);
             
+            // DEBUG: Check what findSingularities returned
+            std::cout << "DEBUG: singularities.size() = " << singularities.size() << std::endl;
+            std::cout << "DEBUG: compRoots[0].size() = " << compRoots[0].size() << std::endl;
+            std::cout << "DEBUG: compRoots[1].size() = " << compRoots[1].size() << std::endl;
+            std::cout << "DEBUG: X.size() = " << X.size() << std::endl;
+            std::cout << "DEBUG: indices non-zero count = " << nnz << std::endl;
+            
             // Print initial singularities (matches master line 453)
             std::cout << "Singularities: ";
             for (auto s : singularities) {
