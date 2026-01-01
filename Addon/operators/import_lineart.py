@@ -57,6 +57,15 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         options={'HIDDEN'},
     )
     
+    # Preprocessing
+    blur_pixels: IntProperty(
+        name="Blur Pixels",
+        description="Gaussian blur radius in pixels applied before vectorization (0 disables)",
+        default=0,
+        min=0,
+        max=10,
+    )
+
     # Stroke
     smooth_steps: IntProperty(
         name="Smooth Steps",
@@ -174,6 +183,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     
                     polylines = vectorization.process_image_to_polylines(
                         pixels,
+                        blur_pixels=self.blur_pixels,
                         smooth_steps=self.smooth_steps,
                         smooth_weight=self.smooth_weight,
                     )
@@ -332,6 +342,10 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         box.prop(self, "scale_factor")
         box.prop(self, "stroke_radius")
         box.prop(self, "target_layer")
+
+        box = layout.box()
+        box.label(text="Preprocessing", icon='IMAGE')
+        box.prop(self, "blur_pixels")
 
         box = layout.box()
         box.label(text="Vectorization", icon='CURVE_DATA')

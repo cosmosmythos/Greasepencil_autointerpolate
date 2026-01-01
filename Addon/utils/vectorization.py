@@ -27,6 +27,7 @@ def is_backend_available() -> bool:
 
 def process_image_to_polylines(
     image_array: np.ndarray,
+    blur_pixels: int = 0,
     smooth_steps: int = 10,
     smooth_weight: float = 0.5,
 ) -> List[np.ndarray]:
@@ -38,6 +39,7 @@ def process_image_to_polylines(
     
     Args:
         image_array: Input image (H, W, C) with float values 0-1
+        blur_pixels: Gaussian blur radius in pixels applied before vectorization (0 disables)
         smooth_steps: Smoothing iterations (0-20). Default 10.
         smooth_weight: Smoothing strength (0.0-1.0). Default 0.5.
     
@@ -73,6 +75,7 @@ def process_image_to_polylines(
     strokes = gp_linevector.vectorize_array(
         image_array,
         threshold=90,
+        blur_pixels=int(blur_pixels),
         smooth_steps=int(smooth_steps),
         smooth_weight=float(smooth_weight),
     )
