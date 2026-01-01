@@ -251,9 +251,13 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
 
         std::cout << "Processing image: " << m << "x" << n << std::endl;
 
-        // Create mask based on threshold
-        cv::Mat origMask = bwImg < threshold;
-        origMask = origMask.clone(); // Ensure we own the memory
+        // CRITICAL: Invert image before thresholding (matches master line 388!)
+        // This is essential for correct mask generation
+        bwImg = cv::Scalar(255) - bwImg;
+
+        // Create mask based on threshold (now uses THRESH_BINARY like master)
+        cv::Mat origMask;
+        cv::threshold(bwImg, origMask, threshold, 255, cv::THRESH_BINARY);
         
         // Morphological operations
         Mat element = getStructuringElement(MORPH_ELLIPSE, Size(3, 3));
