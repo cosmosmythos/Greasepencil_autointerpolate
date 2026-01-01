@@ -89,6 +89,23 @@ static void calculateGradient(const cv::Mat& bwImg, int m, int n,
     tau = tauTimesGmag.array() / gMagNoZeros.array();
 }
 
+static std::vector<cv::Mat> computeComponentMasks(const cv::Mat& binMask) {
+    CV_Assert(!binMask.empty());
+    CV_Assert(binMask.type() == CV_8U);
+
+    // labels: CV_32S, values 0..numLabels-1 where 0 is background.
+    cv::Mat labels;
+    int numLabels = cv::connectedComponents(binMask, labels, 8, CV_32S);
+
+    std::vector<cv::Mat> masks;
+    masks.reserve(std::max(0, numLabels - 1));
+    for (int lbl = 1; lbl < numLabels; ++lbl) { // skip label 0 (background)
+        cv::Mat comp = (labels == lbl);  // yields CV_8U with 0 or 255
+        masks.push_back(comp);
+    }
+    return masks;
+}
+
 static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::MatrixXcd& tau,
                             const Eigen::MatrixXd& gMag, int m, int n,
                             Eigen::MatrixXd& weight) {
@@ -228,171 +245,175 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         std::cout << "DEBUG: calculateWeight completed. Result size: " 
                   << weight.rows() << "x" << weight.cols() << std::endl;
 
-        // Find singularities and optimize
-        std::cout << "Optimizing frame field..." << std::endl;
-        Eigen::MatrixXi indices = Eigen::MatrixXi::Constant(m, n, -1);
-        int curIndex = 0;
-        for (int i = 0; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                if (origMask.at<uchar>(i, j) != 0)
-                    indices(i, j) = curIndex++;
-            }
-        }
+        // Split into connected components (KEY: matches master!)
+        auto componentMasks = computeComponentMasks(origMask);
+        std::cout << "Found " << componentMasks.size() << " connected component(s)." << std::endl;
 
         double beta = FRAME_FIELD_SMOOTHNESS_WEIGHT;
-        // Use fast linear solver first (like master does), fall back to iterative if it fails
-        std::cout << "Optimizing..." << std::flush;
-        Eigen::VectorXcd X = optimizeByLinearSolve(bwImg, weight, tau, beta, origMask, indices);
-        if (X.size() == 0) {
-            std::cout << " linear solver failed, using iterative..." << std::flush;
-            X = optimize(bwImg, weight, tau, beta, origMask, indices);
-        }
-        std::cout << "done." << std::endl;
+        std::vector<MyPolyline> allVectorization;
 
-        // Safety: if optimization diverged (NaN/Inf), do NOT proceed to roots/tracing.
-        // This prevents crashes in root finding/tracing when the frame field is invalid.
-        if (X.size() == 0) {
-            throw std::runtime_error("Optimization failed (empty result)");
-        }
-        if (!X.allFinite()) {
-            throw std::runtime_error("Optimization diverged (NaN/Inf in field)");
-        }
-
-        // Find roots
-        std::cout << "Finding roots.. " << std::flush;
-        std::array<Eigen::MatrixXcd, 2> roots = findRoots(X, origMask);
-
-        // Iteratively remove singularities (matches master exactly)
-        auto singularities = findSingularities(roots, X, indices, origMask);
-        bool improved;
-        int totalNSingularities = 0;
-        do {
-            int origSingularityCount = singularities.size();
-
-            bool somethingNew = false;
-            for (auto s : singularities) {
-                if (weight(s[0], s[1]) > 1e-5) {
-                    somethingNew = true;
-                    weight(s[0], s[1]) = 0;
-                    totalNSingularities++;
+        // Process each component separately (THIS IS THE FIX!)
+        for (size_t compIdx = 0; compIdx < componentMasks.size(); ++compIdx) {
+            std::cout << "COMPONENT " << compIdx << " / " << componentMasks.size() << std::endl;
+            cv::Mat& compMask = componentMasks[compIdx];
+            
+            // Calculate indices for this component
+            Eigen::MatrixXi indices = Eigen::MatrixXi::Constant(m, n, -1);
+            int nnz = 0;
+            for (int i = 0; i < m; ++i) {
+                for (int j = 0; j < n; ++j) {
+                    if (compMask.at<uchar>(i, j) != 0)
+                        indices(i, j) = nnz++;
                 }
             }
-            if (!somethingNew)
-                break;
 
-            X = optimizeByLinearSolve(bwImg, weight, tau, beta, origMask, indices);
+            // Optimize for this component
+            std::cout << "Optimizing..." << std::flush;
+            Eigen::VectorXcd X = optimizeByLinearSolve(bwImg, weight, tau, beta, compMask, indices);
             if (X.size() == 0) {
-                X = optimize(bwImg, weight, tau, beta, origMask, indices);
+                X = optimize(bwImg, weight, tau, beta, compMask, indices);
             }
-            roots = findRoots(X, origMask);
-            singularities = findSingularities(roots, X, indices, origMask);
+            std::cout << "done. " << std::endl;
 
-            std::cout << "done (" << origSingularityCount - (int)singularities.size() << " singularities removed)" << std::endl;
-            improved = origSingularityCount - singularities.size() > 0;
-        } while (improved);
+            // Safety check
+            if (X.size() == 0 || !X.allFinite()) {
+                std::cout << "Component " << compIdx << " optimization failed, skipping." << std::endl;
+                continue;
+            }
 
-        std::cout << "Done. " << std::endl;
+            // Find roots for this component
+            std::cout << "Finding roots.. " << std::flush;
+            auto compRoots = findRoots(X, compMask);
 
-        // Trace polylines
-        std::cout << "Tracing... " << std::flush;
-        std::map<std::array<int, 2>, std::vector<PixelInfo>> pixelInfo;
-        std::vector<std::array<bool, 2>> endedWithASingularity;
-        
-        cv::Mat extMask = origMask.clone();
-        std::vector<MyPolyline> polys = traceAll(bwImg, origMask, extMask, roots, X, indices, 
-                                                  pixelInfo, endedWithASingularity);
+            // Iteratively remove singularities
+            auto singularities = findSingularities(compRoots, X, indices, compMask);
+            bool improved;
+            do {
+                int origSingularityCount = singularities.size();
 
-        if (polys.empty()) {
-            std::cout << "No polylines traced" << std::endl;
-            return result;
-        }
-
-        // Build Almost Reeb Graph
-        std::cout << "Building graph topology..." << std::endl;
-        G graph = computeAlmostReebGraph(origMask, roots, polys, pixelInfo, singularities, indices, X, endedWithASingularity);
-
-        // Graph processing pipeline (matches main.cpp exactly)
-        std::cout << "Processing graph..." << std::endl;
-        
-        // Phase 1: Contract singularities and connect
-        contractSingularityBranches(graph);
-        simpleThresholds(graph);
-        connectStuffAroundSingularities(graph, origMask, polys, singularities, roots, endedWithASingularity);
-        
-        // Phase 2: Set edge weights and contract loops
-        for (auto e : boost::make_iterator_range(boost::edges(graph))) {
-            graph[e].weight = 1;
-        }
-        contractLoops(graph, origMask, polys);
-        
-        // Phase 3: Remove branches and split
-        std::map<edge_descriptor, size_t> ignore;
-        removeBranchesFilter1(graph, false, ignore);
-        splitEmUpCorrectly(graph);
-        
-        // Phase 4: Contract special degree-2 vertices
-        bool chopped = true;
-        while (chopped) {
-            chopped = false;
-            for (size_t v = 0; v < boost::num_vertices(graph); ++v) {
-                if ((boost::degree(v, graph) == 2) && 
-                    (graph[v].nextToSingularity || graph[v].clusterCurveHitSingularity)) {
-                    std::vector<size_t> verts;
-                    auto [eit, eend] = boost::out_edges(v, graph);
-                    for (; eit != eend; ++eit) {
-                        verts.push_back(eit->m_target);
+                bool somethingNew = false;
+                for (auto s : singularities) {
+                    if (weight(s[0], s[1]) > 1e-5) {
+                        somethingNew = true;
+                        weight(s[0], s[1]) = 0;
                     }
-                    boost::clear_vertex(v, graph);
-                    auto e = boost::add_edge(verts[0], verts[1], graph);
-                    graph[e.first].edgeCurve = -1;
                 }
-                if (chopped) break;
-            }
-        }
-        
-        // Phase 5: Remove edges between high-valence vertices
-        chopped = true;
-        while (chopped) {
-            chopped = false;
-            for (auto [eit, eend] = boost::edges(graph); eit != eend; ++eit) {
-                if (boost::degree(eit->m_source, graph) > 2 && 
-                    boost::degree(eit->m_target, graph) > 2) {
-                    boost::remove_edge(*eit, graph);
-                    chopped = true;
+                if (!somethingNew)
                     break;
+
+                X = optimizeByLinearSolve(bwImg, weight, tau, beta, compMask, indices);
+                if (X.size() == 0) {
+                    X = optimize(bwImg, weight, tau, beta, compMask, indices);
+                }
+                compRoots = findRoots(X, compMask);
+                singularities = findSingularities(compRoots, X, indices, compMask);
+
+                std::cout << "done (" << origSingularityCount - (int)singularities.size() << " singularities removed)" << std::endl;
+                improved = origSingularityCount - singularities.size() > 0;
+            } while (improved);
+
+            std::cout << "Done. " << std::endl;
+
+            // Trace polylines for this component
+            std::cout << "Tracing... " << std::flush;
+            std::map<std::array<int, 2>, std::vector<PixelInfo>> pixelInfo;
+            std::vector<std::array<bool, 2>> endedWithASingularity;
+            
+            auto compPolys = traceAll(bwImg, compMask, compMask, compRoots, X, indices, 
+                                      pixelInfo, endedWithASingularity);
+
+            if (compPolys.empty()) {
+                std::cout << "No polylines traced for component " << compIdx << std::endl;
+                continue;
+            }
+
+            // Build Almost Reeb Graph for this component
+            G reebGraph = computeAlmostReebGraph(compMask, compRoots, compPolys, pixelInfo, 
+                                                  singularities, indices, X, endedWithASingularity);
+
+            // Graph processing pipeline (matches main.cpp exactly)
+            contractSingularityBranches(reebGraph);
+            simpleThresholds(reebGraph);
+            connectStuffAroundSingularities(reebGraph, compMask, compPolys, singularities, compRoots, endedWithASingularity);
+            
+            for (auto e : boost::make_iterator_range(boost::edges(reebGraph))) {
+                reebGraph[e].weight = 1;
+            }
+            contractLoops(reebGraph, compMask, compPolys);
+            
+            std::map<edge_descriptor, size_t> ignore;
+            removeBranchesFilter1(reebGraph, false, ignore);
+            splitEmUpCorrectly(reebGraph);
+            
+            // Contract special degree-2 vertices
+            bool chopped = true;
+            while (chopped) {
+                chopped = false;
+                for (size_t v = 0; v < boost::num_vertices(reebGraph); ++v) {
+                    if ((boost::degree(v, reebGraph) == 2) && 
+                        (reebGraph[v].nextToSingularity || reebGraph[v].clusterCurveHitSingularity)) {
+                        std::vector<size_t> verts;
+                        auto [eit, eend] = boost::out_edges(v, reebGraph);
+                        for (; eit != eend; ++eit) {
+                            verts.push_back(eit->m_target);
+                        }
+                        boost::clear_vertex(v, reebGraph);
+                        auto e = boost::add_edge(verts[0], verts[1], reebGraph);
+                        reebGraph[e.first].edgeCurve = -1;
+                    }
+                    if (chopped) break;
                 }
             }
-        }
-
-        // Optimize embedding
-        std::cout << "Optimizing embedding..." << std::endl;
-        std::vector<MyPolyline> newPolys;
-        std::vector<std::vector<double>> radii;
-        std::vector<std::array<bool, 2>> protectedEnds;
-        std::vector<std::pair<PointOnCurve, PointOnCurve>> yJunctions;
-        std::vector<std::array<bool, 2>> isItASpecialDeg2Vertex;
-        std::tie(newPolys, radii, protectedEnds, isItASpecialDeg2Vertex, yJunctions) = 
-            topoGraphEmbedding(graph, polys, bwImg);
-        
-        // Chop fake ends
-        G wG;
-        std::tie(newPolys, wG) = chopFakeEnds(newPolys, radii, protectedEnds, isItASpecialDeg2Vertex, yJunctions);
-
-        // Simplify and smooth (simplified - no component splitting)
-        std::cout << "Simplifying and smoothing..." << std::endl;
-        std::vector<MyPolyline> newVectorization;
-        
-        for (size_t i = 0; i < newPolys.size(); ++i) {
-            MyPolyline simplified = simplify(newPolys[i], 1e-2);
-            if (!simplified.empty()) {
-                newVectorization.push_back(simplified);
+            
+            // Remove edges between high-valence vertices
+            chopped = true;
+            while (chopped) {
+                chopped = false;
+                for (auto [eit, eend] = boost::edges(reebGraph); eit != eend; ++eit) {
+                    if (boost::degree(eit->m_source, reebGraph) > 2 && 
+                        boost::degree(eit->m_target, reebGraph) > 2) {
+                        boost::remove_edge(*eit, reebGraph);
+                        chopped = true;
+                        break;
+                    }
+                }
             }
+
+            // Optimize embedding for this component
+            std::vector<MyPolyline> compVectorization;
+            std::vector<std::vector<double>> radii;
+            std::vector<std::array<bool, 2>> protectedEnds;
+            std::vector<std::pair<PointOnCurve, PointOnCurve>> yJunctions;
+            std::vector<std::array<bool, 2>> isItASpecialDeg2Vertex;
+            std::tie(compVectorization, radii, protectedEnds, isItASpecialDeg2Vertex, yJunctions) = 
+                topoGraphEmbedding(reebGraph, compPolys, bwImg);
+            
+            // Chop fake ends
+            G wG;
+            std::tie(compVectorization, wG) = chopFakeEnds(compVectorization, radii, protectedEnds, 
+                                                           isItASpecialDeg2Vertex, yJunctions);
+
+            // Simplify and smooth this component
+            std::vector<MyPolyline> compNewVectorization;
+            for (size_t i = 0; i < compVectorization.size(); ++i) {
+                MyPolyline simplified = simplify(compVectorization[i], 1e-2);
+                if (!simplified.empty()) {
+                    compNewVectorization.push_back(simplified);
+                }
+            }
+            
+            smooth(compNewVectorization);
+
+            // Accumulate results from this component
+            allVectorization.insert(allVectorization.end(), 
+                                   compNewVectorization.begin(), 
+                                   compNewVectorization.end());
         }
-        
-        smooth(newVectorization);
+
+        std::cout << "Simplifying and smoothing..." << std::endl;
 
         // Convert to output format
-        for (const auto& poly : newVectorization) {
+        for (const auto& poly : allVectorization) {
             if (!poly.empty()) {
                 std::vector<std::pair<double, double>> points;
                 for (const auto& p : poly) {
