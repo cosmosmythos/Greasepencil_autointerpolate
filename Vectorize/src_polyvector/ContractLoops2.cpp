@@ -39,6 +39,7 @@ std::vector<edge_descriptor> contractLoops2(G& g, const cv::Mat & origMask, cons
 	PV_LOG("TOTAL # loops: " << loops.size());
 	// Avoid dumping thousands of loops into Blender console
 	const bool printLoops = POLYVECTOR_VERBOSE_LOGS;
+	int contractibleCount = 0;
 	for (int i = 0; i < loops.size(); ++i)
 	{
 		const auto& loop = loops[i];
@@ -52,6 +53,7 @@ std::vector<edge_descriptor> contractLoops2(G& g, const cv::Mat & origMask, cons
 		if (isLoopContractible(edge_loop, origMask, g, polys, realLoop))
 		{
 			contractibleLoops.push_back(edge_loop);
+			contractibleCount++;
 
 			if (printLoops) {
 				PV_VLOG_NL("FOUND A CONTRACTIBLE LOOP: ");
@@ -63,7 +65,10 @@ std::vector<edge_descriptor> contractLoops2(G& g, const cv::Mat & origMask, cons
 		}
 	}
 
+	PV_LOG("Contractible loops: " << contractibleCount);
+	PV_LOG("Edges to cut (removedEdges) will be computed from contractible loops...");
 	auto removedEdges = contract_edges(contractibleLoops, g);
+	PV_LOG("removedEdges.size() = " << removedEdges.size());
 	std::vector<edge_descriptor> result;
 	result.insert(result.end(), removedEdges.begin(), removedEdges.end());
 	return result;
