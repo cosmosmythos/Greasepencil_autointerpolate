@@ -42,6 +42,11 @@ Eigen::VectorXcd optimize(cv::Mat & bwImg, const Eigen::MatrixXd & weight, const
 
 	std::cout << "Done in " << niter << " iterations" << std::endl;
 	std::cout << "f(x) = " << fx << std::endl;
+	// Safety: detect numerical divergence early
+	if (!std::isfinite(fx)) {
+		std::cout << "Error: Optimization diverged (f(x) is not finite)." << std::endl;
+		return Eigen::VectorXcd();
+	}
 
 #else
 	using namespace Ipopt;
@@ -87,6 +92,10 @@ Eigen::VectorXcd optimize(cv::Mat & bwImg, const Eigen::MatrixXd & weight, const
 	}
 #endif
 	Eigen::VectorXcd x_complex = X.head(X.size() / 2) + std::complex<double>(0, 1)*X.tail(X.size() / 2);
+	if (!x_complex.allFinite()) {
+		std::cout << "Error: Optimization produced non-finite field values." << std::endl;
+		return Eigen::VectorXcd();
+	}
 	return x_complex;
 }
 

@@ -96,6 +96,17 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, int m, int n,
               << tauTimesGmag.cols() << std::endl;
 
     Eigen::MatrixXcd eigTauTimesGmag2 = tauTimesGmag.array().pow(2);
+    // Numerical stability (paper-aligned): avoid division by zero / near-zero.
+    // Low-gradient regions are intentionally set to zero in calculateGradient; here we clamp
+    // the denominator so weights become large instead of NaN/Inf.
+    const double EPSILON = 1e-12;
+    for (int i = 0; i < eigTauTimesGmag2.rows(); ++i) {
+        for (int j = 0; j < eigTauTimesGmag2.cols(); ++j) {
+            if (std::abs(eigTauTimesGmag2(i, j)) < EPSILON) {
+                eigTauTimesGmag2(i, j) = std::complex<double>(EPSILON, 0.0);
+            }
+        }
+    }
 
     Mat eigTauTimesGmag2Re, eigTauTimesGmag2Im;
     Eigen::MatrixXd eigTauTimesGmag2Real = eigTauTimesGmag2.real(),
@@ -230,6 +241,15 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         double beta = FRAME_FIELD_REGULARIZER_WEIGHT;
         Eigen::VectorXcd X = optimize(bwImg, weight, tau, beta, origMask, indices);
 
+        // Safety: if optimization diverged (NaN/Inf), do NOT proceed to roots/tracing.
+        // This prevents crashes in root finding/tracing when the frame field is invalid.
+        if (X.size() == 0) {
+            throw std::runtime_error("Optimization failed (empty result)");
+        }
+        if (!X.allFinite()) {
+            throw std::runtime_error("Optimization diverged (NaN/Inf in field)");
+        }
+
         // Find roots
         std::cout << "Finding roots..." << std::endl;
         std::array<Eigen::MatrixXcd, 2> roots = findRoots(X, origMask);
@@ -350,7 +370,9 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
         std::cout << "Vectorization complete: " << result.size() << " strokes" << std::endl;
 
     } catch (const std::exception& e) {
+        // Propagate as Python exception (pybind11 converts std::runtime_error)
         std::cerr << "Error during vectorization: " << e.what() << std::endl;
+        throw;
     }
 
     return result;
