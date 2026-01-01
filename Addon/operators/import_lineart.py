@@ -331,13 +331,14 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         box.label(text="Stroke", icon='GREASEPENCIL')
         box.prop(self, "scale_factor")
         box.prop(self, "stroke_radius")
-        box.prop(self, "smooth_steps")
-        box.prop(self, "smooth_weight")
         box.prop(self, "target_layer")
-        
+
         box = layout.box()
         box.label(text="Vectorization", icon='CURVE_DATA')
-        box.label(text="Threshold: 90 (fixed)")
+        box.prop(self, "smooth_steps")
+        box.prop(self, "smooth_weight")
+
+        # Threshold is fixed internally to master default (90). No UI needed.
         
         box = layout.box()
         box.label(text="Image Sequence", icon='SEQUENCE')
