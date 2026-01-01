@@ -238,7 +238,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             }
         }
 
-        double beta = FRAME_FIELD_REGULARIZER_WEIGHT;
+        double beta = FRAME_FIELD_SMOOTHNESS_WEIGHT;
         // Use fast linear solver first (like master does), fall back to iterative if it fails
         std::cout << "Optimizing..." << std::flush;
         Eigen::VectorXcd X = optimizeByLinearSolve(bwImg, weight, tau, beta, origMask, indices);
