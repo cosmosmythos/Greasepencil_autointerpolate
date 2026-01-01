@@ -94,6 +94,49 @@ auto componentMasks = computeComponentMasks(origMask);  // Matches master line 4
 
 ---
 
+## ✅ 2026-01-01 Session Timeline (What Changed & Why)
+
+This section logs the key fixes applied during the debugging session to bring `Vectorize/src_polyvector` in line with the proven Ubuntu baseline (`PolyVectorization-master`).
+
+### Key algorithm/output fixes
+
+- **`23926bb`** — Add `repairMask()` preprocessing (helps restore correct connected-components count).
+- **`0249320`** — Add **image inversion** `bwImg = 255 - bwImg` (matches master; required for correct foreground polarity).
+- **`0698cd4`** — Add missing **cycle detection + polyline cutting** block (master main.cpp lines 573–641). This prevents redundant overlapping segments from exploding stroke count.
+- **`767c8b8`** — Remove **morphology close/open** that was **not** in master and was merging components.
+- **`bff66cb`** — **Critical fix:** indices mapping order mismatch.
+  - Master builds `indices(i,j)` in **j-major** order (for `j` then `i`).
+  - Our code was i-major, while `FindRoots` packs/unpacks `X` in j-major order.
+  - Result pre-fix: scrambled field `X` → huge singularities → broken topology → fragmented strokes.
+  - Result post-fix: Component 0 metrics converge to master and final strokes dropped to ~113.
+
+### Stability / crash fixes
+
+- **`fc44644`** — Fix `TopoGraphEmbedding` crash / garbage vertex IDs:
+  - avoid `std::map::operator[]` default-insert for parent lookup
+  - validate predecessor vectors and indices
+  - handle `myWinner == -1` safely
+
+### Logging + developer ergonomics
+
+- **`79165bb`** — Add `POLYVECTOR_VERBOSE_LOGS` gating + reduce Blender console spam.
+- **`4f24bc2`** — Fix singularity logging compile error: `findSingularities()` returns `std::set` (not indexable).
+
+### CI / packaging robustness
+
+- **`4390db0`** — Wheel packaging: find ABI-tagged extension binaries (`gp_linevector*.pyd` / `gp_linevector*.so`).
+
+### Current parity vs Ubuntu baseline (puppy.png)
+
+After `bff66cb` (indices order fix), key numbers match closely:
+- Component 0 curves: **8618** (Ubuntu: 8671)
+- Component 0 Reeb graph: **17236v / 18278e** (Ubuntu: 17342v / 18292e)
+- Final strokes: **113** (Ubuntu: ~104)
+
+Remaining differences are now “small deltas” likely due to platform/compiler/OpenCV numeric differences and/or postprocessing thresholds, not missing pipeline steps.
+
+---
+
 ## 🎯 Problem Statement
 
 The Python-bound `src_polyvector` implementation had critical differences from the working `PolyVectorization-master`:
