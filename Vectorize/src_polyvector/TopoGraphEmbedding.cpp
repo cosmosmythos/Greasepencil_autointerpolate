@@ -635,7 +635,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			}
 
 			result[theVertex] = potentialLocations[myWinner];
-			std::cout << "Vertex " << theVertex << " decided to attach to " << potentialLocations[myWinner].first << " vertex " << potentialLocations[myWinner].second << " sample" << std::endl;
+			PV_VLOG("Vertex " << theVertex << " decided to attach to " << potentialLocations[myWinner].first << " vertex " << potentialLocations[myWinner].second << " sample");
 		}
 		else
 		{
@@ -650,7 +650,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			}
 		}
 
-		std::cout << "Reconstructing the path... ";
+		PV_VLOG_NL("Reconstructing the path... ");
 		std::vector<std::vector<std::pair<int, int>>> paths;
 
 		std::vector<MyPolyline> newPolylines;
@@ -666,7 +666,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			newRadii.push_back({});
 			newPolylines.push_back(d.convertToActualPolyline(g, path, polys, newRadii.back()));
 
-			std::cout << newPolylines.back().size() << std::endl;
+			PV_VLOG(newPolylines.back().size());
 
 		}
 

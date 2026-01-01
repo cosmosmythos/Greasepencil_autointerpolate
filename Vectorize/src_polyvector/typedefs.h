@@ -3,6 +3,19 @@
 
 #define QT_NO_DEBUG_OUTPUT 1
 
+// --- Logging control for Blender addon builds ---
+// Default: keep logs concise to avoid overwhelming Blender console.
+// Set to 1 at compile time to enable verbose tracing:
+//   -DPOLYVECTOR_VERBOSE_LOGS=1
+#ifndef POLYVECTOR_VERBOSE_LOGS
+#define POLYVECTOR_VERBOSE_LOGS 0
+#endif
+
+#define PV_LOG(msg) do { std::cout << msg << std::endl; } while(0)
+#define PV_LOG_NL(msg) do { std::cout << msg; } while(0)
+#define PV_VLOG(msg) do { if (POLYVECTOR_VERBOSE_LOGS) { std::cout << msg << std::endl; } } while(0)
+#define PV_VLOG_NL(msg) do { if (POLYVECTOR_VERBOSE_LOGS) { std::cout << msg; } } while(0)
+
 #include "Eigen/Dense"
 #include "opencv2/core/core.hpp"
 #include <vector>

@@ -285,17 +285,23 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
             // Iteratively remove singularities
             auto singularities = findSingularities(compRoots, X, indices, compMask);
             
-            // DEBUG: Check what findSingularities returned
-            std::cout << "DEBUG: singularities.size() = " << singularities.size() << std::endl;
-            std::cout << "DEBUG: compRoots[0].size() = " << compRoots[0].size() << std::endl;
-            std::cout << "DEBUG: compRoots[1].size() = " << compRoots[1].size() << std::endl;
-            std::cout << "DEBUG: X.size() = " << X.size() << std::endl;
-            std::cout << "DEBUG: indices non-zero count = " << nnz << std::endl;
+            // DEBUG: keep concise (always useful)
+            std::cout << "DEBUG: singularities=" << singularities.size()
+                      << " roots0=" << compRoots[0].size()
+                      << " roots1=" << compRoots[1].size()
+                      << " X=" << X.size()
+                      << " nnz=" << nnz
+                      << std::endl;
             
-            // Print initial singularities (matches master line 453)
-            std::cout << "Singularities: ";
-            for (auto s : singularities) {
+            // Print initial singularities (truncate to keep logs readable)
+            std::cout << "Singularities (count=" << singularities.size() << "): ";
+            const size_t maxPrint = POLYVECTOR_VERBOSE_LOGS ? singularities.size() : 20;
+            for (size_t si = 0; si < singularities.size() && si < maxPrint; ++si) {
+                auto s = singularities[si];
                 std::cout << s[0] << ", " << s[1] << "; ";
+            }
+            if (!POLYVECTOR_VERBOSE_LOGS && singularities.size() > maxPrint) {
+                std::cout << "...";
             }
             std::cout << std::endl;
             bool improved;
