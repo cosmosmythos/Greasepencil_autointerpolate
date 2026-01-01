@@ -295,7 +295,8 @@ Distances::Distances(const G & g, const std::vector<std::pair<size_t, size_t>>& 
 		//std::cout << " and " << edges.size() << " edges" << std::endl;
 		int N = nSamples[seedIdx];
 
-		std::vector <int> d(N, (std::numeric_limits <double>::max)());
+		// Use int sentinel (avoid double->int overflow warning)
+		std::vector<int> d(N, std::numeric_limits<int>::max());
 
 		for (int j : adjChains[seed])
 		{
@@ -331,7 +332,8 @@ Distances::Distances(const G & g, const std::vector<std::pair<size_t, size_t>>& 
 					e = { e.second, e.first };
 			}
 
-			printf("Creating graph with %d edges\r", orientedEdges.size());
+			// Avoid noisy printf + format warnings in CI
+			PV_VLOG("Creating graph with " << orientedEdges.size() << " edges");
 
 			graphs[seedIdx][v] = std::make_shared<MyWeirdGraph>(&orientedEdges[0], orientedEdges.size() + &orientedEdges[0], N);
 
