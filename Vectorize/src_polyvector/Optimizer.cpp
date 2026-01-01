@@ -159,8 +159,6 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 
 	std::cout << "  Solving linear system (ConjugateGradient)..." << std::flush;
 	Eigen::ConjugateGradient<Eigen::SparseMatrix<std::complex<double>>, Eigen::Lower | Eigen::Upper> cg;
-	cg.setMaxIterations(1000);
-	cg.setTolerance(1e-6);
 	cg.compute(totalMatrix);
 	std::cout << " factored..." << std::flush;
 
