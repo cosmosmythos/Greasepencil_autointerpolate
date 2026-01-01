@@ -108,12 +108,12 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 				}
 				else
 				{
-					std::cout << "Incontractible loop: ";
-					for (const auto& e : loop)
-					{
-						std::cout << e.m_source << " ";
-					}
-					std::cout << std::endl;
+					// std::cout << "Incontractible loop: ";
+					// for (const auto& e : loop)
+					// {
+					// 	std::cout << e.m_source << " ";
+					// }
+					// std::cout << std::endl;
 					incontractibleLoops.push_back(loop);
 					origEdgeForIncontractibleLoops.push_back(*it);
 					realIncontractibleLoops.push_back(realLoops.back());

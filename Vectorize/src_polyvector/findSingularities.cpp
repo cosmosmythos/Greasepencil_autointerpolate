@@ -47,7 +47,8 @@ bool isItASingularity(const Eigen::Vector2d& p, const std::array<std::complex<do
 
 std::set<std::array<int,2>> findSingularities(std::array<Eigen::MatrixXcd, 2>& roots, Eigen::VectorXcd& X, const Eigen::MatrixXi& indices, const cv::Mat& origMask)
 {
-	std::cout << "Singularities: ";
+	// Singularity printing moved to polyvector_core.cpp for better control
+	// std::cout << "Singularities: ";
 	std::set<std::array<int, 2>> singularities;
 	int m = origMask.rows, n = origMask.cols;
 

@@ -334,7 +334,7 @@ void connectStuffAroundSingularities(G& g, const cv::Mat & origMask, const std::
 			if (bestV != -1)
 			{
 				newEdges.push_back({ v,(size_t)bestV });
-				std::cout << "[connectStuffAroundSingularities]: Connecting vertex " << v << " to " << bestV << std::endl;
+				// std::cout << "[connectStuffAroundSingularities]: Connecting vertex " << v << " to " << bestV << std::endl;
 			}
 		}
 	}
