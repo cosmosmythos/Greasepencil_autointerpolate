@@ -50,10 +50,26 @@ class CMakeBuild(build_ext):
                 print(f"Found binary at: {location}")
                 break
         
-        # If not found, search recursively
+        # If not found, search recursively (also accept version-suffixed extension modules)
         if source_binary is None:
             print(f"Searching for {binary_name} recursively in {vectorize_dir}")
             for path in vectorize_dir.rglob(binary_name):
+                source_binary = path
+                print(f"Found binary at: {path}")
+                break
+
+        # Windows builds sometimes produce a version-tagged .pyd (e.g. gp_linevector.cp311-win_amd64.pyd)
+        if source_binary is None and sys.platform == "win32":
+            print(f"Searching for gp_linevector*.pyd recursively in {vectorize_dir}")
+            for path in vectorize_dir.rglob("gp_linevector*.pyd"):
+                source_binary = path
+                print(f"Found binary at: {path}")
+                break
+
+        # Linux builds might produce ABI-tagged .so (e.g. gp_linevector.cpython-311-x86_64-linux-gnu.so)
+        if source_binary is None and sys.platform != "win32":
+            print(f"Searching for gp_linevector*.so recursively in {vectorize_dir}")
+            for path in vectorize_dir.rglob("gp_linevector*.so"):
                 source_binary = path
                 print(f"Found binary at: {path}")
                 break
