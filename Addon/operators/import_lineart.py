@@ -46,12 +46,15 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
     )
     
     # Preprocessing
+    # Threshold is fixed to 90 (PolyVectorization-master default). Users should tune contrast beforehand.
+    # This is intentionally not exposed as a UI parameter to reduce confusion and ensure consistency.
     threshold: IntProperty(
         name="Threshold",
-        description="Background/foreground separation (0-255). Lower values detect more ink.",
+        description="(Fixed) Background/foreground separation. Kept for backward compatibility.",
         default=90,
         min=0,
         max=255,
+        options={'HIDDEN'},
     )
     
     # Stroke
@@ -61,6 +64,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         default=0.01,
         min=0.001,
         max=0.1,
+        precision=3,
     )
     
     scale_factor: FloatProperty(
