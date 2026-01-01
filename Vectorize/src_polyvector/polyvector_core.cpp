@@ -89,71 +89,72 @@ static void calculateGradient(const cv::Mat& bwImg, int m, int n,
     tau = tauTimesGmag.array() / gMagNoZeros.array();
 }
 
-static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, int m, int n,
+static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::MatrixXcd& tau,
+                            const Eigen::MatrixXd& gMag, int m, int n,
                             Eigen::MatrixXd& weight) {
     using namespace cv;
     std::cout << "  DEBUG: calculateWeight entry - tauTimesGmag size: " << tauTimesGmag.rows() << "x" 
               << tauTimesGmag.cols() << std::endl;
 
     Eigen::MatrixXcd eigTauTimesGmag2 = tauTimesGmag.array().pow(2);
-    // Numerical stability (paper-aligned): avoid division by zero / near-zero.
-    // Low-gradient regions are intentionally set to zero in calculateGradient; here we clamp
-    // the denominator so weights become large instead of NaN/Inf.
-    const double EPSILON = 1e-12;
-    for (int i = 0; i < eigTauTimesGmag2.rows(); ++i) {
-        for (int j = 0; j < eigTauTimesGmag2.cols(); ++j) {
-            if (std::abs(eigTauTimesGmag2(i, j)) < EPSILON) {
-                eigTauTimesGmag2(i, j) = std::complex<double>(EPSILON, 0.0);
-            }
-        }
-    }
 
+    // Convert to cv::Mat for filter2D
     Mat eigTauTimesGmag2Re, eigTauTimesGmag2Im;
     Eigen::MatrixXd eigTauTimesGmag2Real = eigTauTimesGmag2.real(),
                     eigTauTimesGmag2Imag = eigTauTimesGmag2.imag();
     
-    // OpenCV 4.x compatibility: Release Mats before eigen2cv to avoid locked type errors
     std::cout << "  DEBUG: About to call eigen2cv for real/imag parts..." << std::endl;
-    if (!eigTauTimesGmag2Re.empty()) {
-        std::cout << "  DEBUG: Releasing eigTauTimesGmag2Re..." << std::endl;
-        eigTauTimesGmag2Re.release();
-    }
-    if (!eigTauTimesGmag2Im.empty()) {
-        std::cout << "  DEBUG: Releasing eigTauTimesGmag2Im..." << std::endl;
-        eigTauTimesGmag2Im.release();
-    }
-    std::cout << "  DEBUG: Calling eigen2cv for real part..." << std::endl;
     eigen2cv(eigTauTimesGmag2Real, eigTauTimesGmag2Re);
-    std::cout << "  DEBUG: Calling eigen2cv for imag part..." << std::endl;
     eigen2cv(eigTauTimesGmag2Imag, eigTauTimesGmag2Im);
     std::cout << "  DEBUG: Both eigen2cv calls completed!" << std::endl;
 
-    Mat eigTauTimesGmag2ReLaplacian, eigTauTimesGmag2ImLaplacian;
-    std::cout << "  DEBUG: Computing Laplacians..." << std::endl;
-    // OpenCV 4.x: Ensure destination depth >= source depth.
-    // eigTauTimesGmag2Re/Im are created from Eigen doubles, so treat as 64F.
-    Laplacian(eigTauTimesGmag2Re, eigTauTimesGmag2ReLaplacian, CV_64F, 1, 1, 0);
-    Laplacian(eigTauTimesGmag2Im, eigTauTimesGmag2ImLaplacian, CV_64F, 1, 1, 0);
-    std::cout << "  DEBUG: Laplacian completed - about to call cv2eigen..." << std::endl;
+    // Use filter2D with custom kernel (NOT Laplacian!)
+    Mat Lx, Ly;
+    Mat kernel;
+    kernel = Mat::ones(3, 3, CV_64F);
+    kernel.at<double>(1, 1) = 0;  // Center is 0, neighbors are 1
+    
+    std::cout << "  DEBUG: Applying filter2D..." << std::endl;
+    filter2D(eigTauTimesGmag2Re, Lx, -1, kernel);
+    filter2D(eigTauTimesGmag2Im, Ly, -1, kernel);
 
-    Eigen::MatrixXd lapRe, lapIm;
-    // OpenCV 4.x compatibility: cv2eigen on output from Laplacian should be safe
-    // but we ensure clean state anyway
-    std::cout << "  DEBUG: Calling cv2eigen for Laplacian real..." << std::endl;
-    cv2eigen(eigTauTimesGmag2ReLaplacian, lapRe);
-    std::cout << "  DEBUG: Calling cv2eigen for Laplacian imag..." << std::endl;
-    cv2eigen(eigTauTimesGmag2ImLaplacian, lapIm);
-    std::cout << "  DEBUG: cv2eigen Laplacian calls completed!" << std::endl;
+    Eigen::MatrixXd Lx_eig, Ly_eig;
+    cv2eigen(Lx, Lx_eig);
+    cv2eigen(Ly, Ly_eig);
 
-    Eigen::MatrixXcd laplacian(m, n);
-    for (int i = 0; i < m; ++i) {
-        for (int j = 0; j < n; ++j) {
-            laplacian(i, j) = std::complex<double>(lapRe(i, j), lapIm(i, j));
-        }
-    }
+    Eigen::MatrixXcd mse = Lx_eig + std::complex<double>(0, 1) * Ly_eig;
+    Eigen::MatrixXd mseNorm = mse.cwiseAbs();
+    
+    // Normalize
+    for (int i = 0; i < m; ++i)
+        for (int j = 0; j < n; ++j)
+            if (mseNorm(i, j) < 1e-10)
+                mseNorm(i, j) = 1;
 
-    weight = (laplacian.array() / eigTauTimesGmag2.array()).cwiseAbs();
-    weight = weight.cwiseMin(1e10);
+    mse = mse.array() / mseNorm.array();
+
+    // Subtract tau^2
+    Eigen::MatrixXcd tau2 = tau.array().pow(2);
+    mse = mse - tau2;
+
+    // Zero out low gradient regions
+    for (int i = 0; i < m; ++i)
+        for (int j = 0; j < n; ++j)
+            if (fabs(gMag(i, j)) < 1e-10)
+                mse(i, j) = 0;
+
+    weight = mse.cwiseAbs();
+
+    // CRITICAL: Invert the weight! (1 - normalized)
+    weight = Eigen::MatrixXd::Ones(m, n) - weight / weight.maxCoeff();
+
+    // Final cleanup: zero out low gradient
+    for (int i = 0; i < m; ++i)
+        for (int j = 0; j < n; ++j)
+            if (fabs(gMag(i, j)) < 1e-10)
+                weight(i, j) = 0;
+    
+    std::cout << "  DEBUG: calculateWeight completed!" << std::endl;
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
@@ -223,7 +224,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold) {
                   << g.rows() << "x" << g.cols() << std::endl;
         
         std::cout << "DEBUG: Calling calculateWeight..." << std::endl;
-        calculateWeight(tauTimesGmag, m, n, weight);
+        calculateWeight(tauTimesGmag, tau, gMag, m, n, weight);
         std::cout << "DEBUG: calculateWeight completed. Result size: " 
                   << weight.rows() << "x" << weight.cols() << std::endl;
 
