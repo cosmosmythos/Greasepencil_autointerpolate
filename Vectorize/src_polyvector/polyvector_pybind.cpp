@@ -105,6 +105,8 @@ PYBIND11_MODULE(gp_linevector, m) {
     m.def("vectorize_array", &polyvector::process_numpy,
           py::arg("image"),
           py::arg("threshold") = 90.0,
+          py::arg("smooth_steps") = 10,
+          py::arg("smooth_weight") = 0.5,
           R"doc(
               Vectorize a numpy array image.
               

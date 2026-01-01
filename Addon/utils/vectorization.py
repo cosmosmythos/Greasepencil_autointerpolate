@@ -27,7 +27,8 @@ def is_backend_available() -> bool:
 
 def process_image_to_polylines(
     image_array: np.ndarray,
-    threshold: int = 90
+    smooth_steps: int = 10,
+    smooth_weight: float = 0.5,
 ) -> List[np.ndarray]:
     """
     Process image and extract polylines using PolyVector algorithm.
@@ -37,8 +38,8 @@ def process_image_to_polylines(
     
     Args:
         image_array: Input image (H, W, C) with float values 0-1
-        threshold: Background/foreground threshold (0-255, default=90)
-                   Lower values detect more ink
+        smooth_steps: Smoothing iterations (0-20). Default 10.
+        smooth_weight: Smoothing strength (0.0-1.0). Default 0.5.
     
     Returns:
         List of polylines as Nx2 numpy arrays
@@ -68,7 +69,13 @@ def process_image_to_polylines(
         image_array = image_array.astype(np.uint8)
     
     # Call LineVector
-    strokes = gp_linevector.vectorize_array(image_array, threshold=threshold)
+    # Threshold is intentionally fixed to 90 (master default). Users should adjust image contrast beforehand.
+    strokes = gp_linevector.vectorize_array(
+        image_array,
+        threshold=90,
+        smooth_steps=int(smooth_steps),
+        smooth_weight=float(smooth_weight),
+    )
     
     # Convert to numpy arrays
     polylines = []

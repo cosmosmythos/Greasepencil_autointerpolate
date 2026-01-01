@@ -235,16 +235,25 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     positions.extend([scaled_x, 0.0, scaled_z])
             
             attrs = drawing.attributes
+
+            # Ensure required point-domain attributes exist (GPv3)
+            # Some Blender builds do not create 'radius'/'opacity' by default.
+            if 'radius' not in attrs:
+                attrs.new(name='radius', type='FLOAT', domain='POINT')
+            if 'opacity' not in attrs:
+                attrs.new(name='opacity', type='FLOAT', domain='POINT')
+
             if 'position' in attrs:
                 attrs['position'].data.foreach_set('vector', positions)
                 drawing.tag_positions_changed()
-            
+
+            # Set per-point radius and opacity
             if 'radius' in attrs:
-                attrs['radius'].data.foreach_set('value', [self.stroke_radius] * total_points)
-            
+                attrs['radius'].data.foreach_set('value', [float(self.stroke_radius)] * total_points)
+
             if 'opacity' in attrs:
                 attrs['opacity'].data.foreach_set('value', [1.0] * total_points)
-            
+
             return len(valid_polylines)
             
         except Exception as e:
@@ -308,7 +317,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         
         box = layout.box()
         box.label(text="Vectorization", icon='CURVE_DATA')
-        box.prop(self, "threshold")
+        box.label(text="Threshold: 90 (fixed)")
         
         box = layout.box()
         box.label(text="Image Sequence", icon='SEQUENCE')
