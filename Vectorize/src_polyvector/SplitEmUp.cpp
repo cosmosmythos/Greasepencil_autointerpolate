@@ -244,8 +244,7 @@ void splitEmUpCorrectly(G& g)
 				{
 					auto it = newAdjacencies.find(vtx);
 					assert(it != newAdjacencies.end());
-					if (it == newAdjacencies.end())
-						// Removed: ERROR 1 logging (no action taken)
+					if (it == newAdjacencies.end()) { /* ERROR 1 */ }
 
 					auto it2 = it->second.find(i);
 					assert(it2 != it->second.end());
