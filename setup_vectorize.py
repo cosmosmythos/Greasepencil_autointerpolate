@@ -38,10 +38,10 @@ class CMakeBuild(build_ext):
         
         # Look for the binary in common build directories
         possible_locations = [
-            vectorize_dir / "output" / "Release" / binary_name,
+            vectorize_dir / "output" / binary_name,  # Primary: CMakeLists.txt outputs here directly
+            vectorize_dir / "output" / "Release" / binary_name,  # Fallback: MSVC sometimes creates subdirs
             vectorize_dir / "build" / "Release" / binary_name,
             vectorize_dir / "build" / binary_name,
-            vectorize_dir / "output" / binary_name,  # Added for macOS/Linux
         ]
         
         # Also search recursively as a fallback
@@ -78,10 +78,22 @@ class CMakeBuild(build_ext):
         
         if source_binary is None:
             # Print directory structure for debugging
-            print("Directory structure:")
-            for path in vectorize_dir.rglob("*"):
-                if path.is_file():
-                    print(f"  {path.relative_to(vectorize_dir)}")
+            print(f"\n❌ ERROR: Could not find built binary: {binary_name}")
+            print(f"\nSearched in these locations:")
+            for loc in possible_locations:
+                print(f"  - {loc} {'✓ EXISTS' if loc.exists() else '✗ NOT FOUND'}")
+            
+            print(f"\nAll .pyd/.so files in {vectorize_dir}:")
+            found_any = False
+            for path in vectorize_dir.rglob("*.pyd"):
+                print(f"  {path.relative_to(vectorize_dir)}")
+                found_any = True
+            for path in vectorize_dir.rglob("*.so"):
+                print(f"  {path.relative_to(vectorize_dir)}")
+                found_any = True
+            if not found_any:
+                print("  (none found)")
+            
             raise RuntimeError(f"Could not find built binary: {binary_name}")
         
         # Copy to package location with standard name (no version suffix)

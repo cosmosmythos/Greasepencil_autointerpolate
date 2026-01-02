@@ -179,6 +179,14 @@ jobs:
             & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release
             Set-Location ..\..
       - run:
+          name: Verify binary location (Windows)
+          shell: powershell.exe
+          command: |
+            Write-Host "Searching for gp_linevector.pyd in Vectorize directory:"
+            Get-ChildItem -Path Vectorize -Recurse -Filter "*.pyd" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "  Found: $($_.FullName)"
+            }
+      - run:
           name: Build wheel (Windows)
           shell: powershell.exe
           command: |

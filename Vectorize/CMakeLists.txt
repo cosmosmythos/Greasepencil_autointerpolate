@@ -120,23 +120,47 @@ if(UNIX AND NOT APPLE)
     message(STATUS "Enabled static linking for Linux cross-distro compatibility")
 endif()
 
-# Cross-platform extension suffix
-if(WIN32)
-    set_target_properties(gp_linevector PROPERTIES SUFFIX ".pyd")
-elseif(UNIX AND NOT APPLE)
-    set_target_properties(gp_linevector PROPERTIES
-        PREFIX ""  # Remove 'lib' prefix
-        SUFFIX ".so"
-        INSTALL_RPATH "$ORIGIN"
-        BUILD_WITH_INSTALL_RPATH ON
-    )
-else()
-    # macOS
-    set_target_properties(gp_linevector PROPERTIES SUFFIX ".so")
-endif()
+# Ensure output directory exists
+file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/output")
 
-# macOS Architecture Support
-if(APPLE)
+# ============================================================================
+# CONFIGURE OUTPUT PROPERTIES (PLATFORM-SPECIFIC)
+# ============================================================================
+
+if(WIN32)
+    # Windows: .pyd extension, output to Vectorize/output directly (no Release subdirs)
+    set_target_properties(gp_linevector PROPERTIES 
+        OUTPUT_NAME "gp_linevector"
+        SUFFIX ".pyd"
+        # For pybind11 MODULE libraries on Windows, use RUNTIME_OUTPUT_DIRECTORY
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+    )
+    
+    # For multi-config generators (Visual Studio), override per-config directories
+    # to prevent CMake from creating Release/Debug subdirectories
+    if(MSVC)
+        foreach(config ${CMAKE_CONFIGURATION_TYPES})
+            string(TOUPPER ${config} config_upper)
+            set_target_properties(gp_linevector PROPERTIES
+                LIBRARY_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
+                RUNTIME_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
+                ARCHIVE_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
+            )
+        endforeach()
+    endif()
+    
+elseif(APPLE)
+    # macOS: .so extension, universal binary support
+    set_target_properties(gp_linevector PROPERTIES
+        OUTPUT_NAME "gp_linevector"
+        SUFFIX ".so"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+        MACOSX_DEPLOYMENT_TARGET "10.15"
+    )
+    
     # Respect CMAKE_OSX_ARCHITECTURES if set by workflow
     # Otherwise default to universal binary for local builds
     if(NOT DEFINED CMAKE_OSX_ARCHITECTURES OR CMAKE_OSX_ARCHITECTURES STREQUAL "")
@@ -151,31 +175,18 @@ if(APPLE)
         message(STATUS "Building macOS for architecture: ${CMAKE_OSX_ARCHITECTURES}")
     endif()
     
+else()
+    # Linux: .so extension, static linking for cross-distro compatibility
     set_target_properties(gp_linevector PROPERTIES
-        MACOSX_DEPLOYMENT_TARGET "10.15"
+        OUTPUT_NAME "gp_linevector"
+        PREFIX ""  # Remove 'lib' prefix
+        SUFFIX ".so"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
+        INSTALL_RPATH "$ORIGIN"
+        BUILD_WITH_INSTALL_RPATH ON
     )
 endif()
-
-# Ensure output directory exists
-file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/output")
-
-# Set output properties
-# On Windows MSVC, explicitly set output for all configurations to avoid Release/Debug subdirs
-if(MSVC)
-    foreach(config ${CMAKE_CONFIGURATION_TYPES})
-        string(TOUPPER ${config} config_upper)
-        set_target_properties(gp_linevector PROPERTIES
-            LIBRARY_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
-            RUNTIME_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
-        )
-    endforeach()
-endif()
-
-set_target_properties(gp_linevector PROPERTIES 
-    OUTPUT_NAME "gp_linevector"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"
-)
 
 # ============================================================================
 # COMPILER OPTIMIZATION FLAGS
