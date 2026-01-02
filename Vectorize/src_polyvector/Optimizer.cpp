@@ -161,43 +161,18 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 	// Falls back to iterative if system is too large or direct solver fails
 	PV_VLOG_NL("  Solving linear system...");
 	
-	const int systemSize = totalMatrix.rows();
-	const bool useDirect = (systemSize < 100000); // Direct solver efficient up to ~100k unknowns
-	
-	Eigen::VectorXcd result;
-	
-	if (useDirect) {
-		// Direct solver: SimplicialLDLT (works for complex symmetric/Hermitian)
-		Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double>>> directSolver;
-		directSolver.compute(totalMatrix);
-		
-		if (directSolver.info() == Eigen::Success) {
-			result = directSolver.solve(totalRhs);
-			std::cout << " solved (direct LDLT)" << std::endl;  // Keep: useful performance indicator
-			
-			if (directSolver.info() == Eigen::Success && result.allFinite()) {
-				return result;
-			} else {
-				std::cout << "  WARNING: Direct solver succeeded but result is invalid, falling back to CG..." << std::endl;
-			}
-		} else {
-			std::cout << " direct solver failed, falling back to CG..." << std::endl;
-		}
-	}
-	
-	// Fallback to iterative solver (for large systems or if direct fails)
 	Eigen::ConjugateGradient<Eigen::SparseMatrix<std::complex<double>>, Eigen::Lower | Eigen::Upper> cg;
 	cg.compute(totalMatrix);
-	result = cg.solve(totalRhs);
-	std::cout << " solved (CG: " << cg.iterations() << " iters, error=" << cg.error() << ")" << std::endl;  // Keep: fallback indicator
+	PV_VLOG("factored...");
+	Eigen::VectorXcd result = cg.solve(totalRhs);
+	PV_VLOG("solved in " << cg.iterations() << " iterations, error=" << cg.error());
 	
 	if (cg.info() != Eigen::Success) {
-		// solving failed
 		std::cout << "  WARNING: Linear solver did not converge!" << std::endl;
 		return Eigen::VectorXcd();
 	}
-	else
-		return result;
+	
+	return result;
 }
 
 Eigen::VectorXcd optimizeByLinearSolve_holdingSomeFixed(cv::Mat& bwImg, const Eigen::MatrixXd& weight, const Eigen::MatrixXcd& tauNormalized, double beta, cv::Mat& mask, cv::Mat& fixedMask, const Eigen::MatrixXi& indices, const Eigen::MatrixXi& fixedIndices, const Eigen::VectorXcd& Xfixed)
