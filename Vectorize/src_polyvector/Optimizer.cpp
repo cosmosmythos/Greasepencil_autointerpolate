@@ -173,7 +173,7 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 		
 		if (directSolver.info() == Eigen::Success) {
 			result = directSolver.solve(totalRhs);
-			std::cout << " solved (direct LDLT)" << std::endl;
+			std::cout << " solved (direct LDLT)" << std::endl;  // Keep: useful performance indicator
 			
 			if (directSolver.info() == Eigen::Success && result.allFinite()) {
 				return result;
@@ -189,7 +189,7 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 	Eigen::ConjugateGradient<Eigen::SparseMatrix<std::complex<double>>, Eigen::Lower | Eigen::Upper> cg;
 	cg.compute(totalMatrix);
 	result = cg.solve(totalRhs);
-	std::cout << " solved (CG: " << cg.iterations() << " iters, error=" << cg.error() << ")" << std::endl;
+	std::cout << " solved (CG: " << cg.iterations() << " iters, error=" << cg.error() << ")" << std::endl;  // Keep: fallback indicator
 	
 	if (cg.info() != Eigen::Success) {
 		// solving failed
