@@ -28,9 +28,6 @@ def is_backend_available() -> bool:
 def process_image_to_polylines(
     image_array: np.ndarray,
     blur_pixels: int = 0,
-    smooth_steps: int = 10,
-    smooth_weight: float = 0.5,
-    simplify_epsilon: float = 0.01,
     verbose: bool = False,
 ) -> List[np.ndarray]:
     """
@@ -42,11 +39,6 @@ def process_image_to_polylines(
     Args:
         image_array: Input image (H, W, C) with float values 0-1
         blur_pixels: Gaussian blur radius in pixels applied before vectorization (0 disables)
-        smooth_steps: Smoothing iterations (0-20). Default 10.
-        smooth_weight: Smoothing strength (0.0-1.0). Default 0.5.
-        simplify_epsilon: Douglas-Peucker point reduction tolerance (default=0.01)
-                         Higher = fewer points (faster, less detail)
-                         Lower = more points (slower, more detail)
         verbose: Enable detailed debug logging (default=False)
     
     Returns:
@@ -56,10 +48,8 @@ def process_image_to_polylines(
         RuntimeError: If PolyVector backend is not available
     
     Note:
-        For optimization:
-        - Increase simplify_epsilon (0.05-0.1) to reduce point count by 50-80%
-        - Set verbose=False for production (significantly faster)
-        - Default settings balance quality and performance
+        Smoothing (10 iterations, weight 0.5) and simplification (epsilon 1e-2)
+        are hardcoded to exactly match PolyVectorization master.
     """
     if not _linevector_available:
         raise RuntimeError(
@@ -78,15 +68,11 @@ def process_image_to_polylines(
     if image_array.dtype != np.uint8:
         image_array = image_array.astype(np.uint8)
     
-    # Call LineVector with optimization parameters
-    # Threshold is intentionally fixed to 90 (master default). Users should adjust image contrast beforehand.
+    # Call LineVector (threshold=90 matches master default)
     strokes = gp_linevector.vectorize_array(
         image_array,
         threshold=90,
         blur_pixels=int(blur_pixels),
-        smooth_steps=int(smooth_steps),
-        smooth_weight=float(smooth_weight),
-        simplify_epsilon=float(simplify_epsilon),
         verbose=bool(verbose),
     )
     

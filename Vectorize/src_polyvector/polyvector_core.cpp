@@ -195,7 +195,7 @@ static thread_local bool g_verbose_mode = false;
 #define PV_RUNTIME_VLOG_NL(msg) do { if (g_verbose_mode) { std::cout << msg; } } while(0)
 
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int smooth_steps, double smooth_weight, double simplify_epsilon, bool verbose) {
+vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, bool verbose) {
     using namespace cv;
     
     // Set runtime verbose mode
@@ -228,10 +228,6 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
             const int k = 2 * blur_pixels + 1; // kernel must be odd
             cv::GaussianBlur(bwImg, bwImg, cv::Size(k, k), 0.0);
         }
-        
-        // Clamp and validate simplify_epsilon
-        if (simplify_epsilon < 0.0) simplify_epsilon = 0.0;
-        if (simplify_epsilon > 10.0) simplify_epsilon = 10.0;
         
         int m = bwImg.rows;
         int n = bwImg.cols;
@@ -515,13 +511,12 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
                       << " segments=" << totalSegmentsCreated
                       << " inputCurves=" << compVectorization.size());
 
-            // Simplify and smooth (matches master line 635-638)
-            // Use configurable epsilon for Douglas-Peucker simplification
+            // Simplify and smooth (matches master line 636-638 EXACTLY)
             for (size_t i = 0; i < compNewVectorization.size(); ++i) {
-                compNewVectorization[i] = simplify(compNewVectorization[i], simplify_epsilon);
+                compNewVectorization[i] = simplify(compNewVectorization[i], 1e-2);
             }
             
-            smooth(compNewVectorization, smooth_steps, smooth_weight);
+            smooth(compNewVectorization);
 
             // Accumulate results from this component
             allVectorization.insert(allVectorization.end(), 
@@ -552,7 +547,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_image(const std::string& image_path, double threshold, int smooth_steps, double smooth_weight, double simplify_epsilon, bool verbose) {
+vectorize_image(const std::string& image_path, double threshold, bool verbose) {
     cv::Mat image = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
     
     if (image.empty()) {
@@ -560,7 +555,7 @@ vectorize_image(const std::string& image_path, double threshold, int smooth_step
         return {};
     }
     
-    return vectorize_mat(image, threshold, 0, smooth_steps, smooth_weight, simplify_epsilon, verbose);
+    return vectorize_mat(image, threshold, 0, verbose);
 }
 
 } // namespace polyvector

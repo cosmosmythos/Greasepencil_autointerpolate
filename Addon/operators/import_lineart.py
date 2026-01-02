@@ -202,9 +202,6 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     polylines = vectorization.process_image_to_polylines(
                         pixels,
                         blur_pixels=self.blur_pixels,
-                        smooth_steps=self.smooth_steps,
-                        smooth_weight=self.smooth_weight,
-                        simplify_epsilon=self.simplify_epsilon,
                         verbose=self.verbose_logging,
                     )
                     
@@ -367,13 +364,9 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         box.label(text="Preprocessing", icon='IMAGE')
         box.prop(self, "blur_pixels")
 
-        box = layout.box()
-        box.label(text="Vectorization", icon='CURVE_DATA')
-        box.prop(self, "smooth_steps")
-        box.prop(self, "smooth_weight")
-        box.prop(self, "simplify_epsilon")
-
-        # Threshold is fixed internally to master default (90). No UI needed.
+        # Note: Smoothing (10 iters, 0.5 weight) and simplification (1e-2) 
+        # are hardcoded to match PolyVectorization master exactly.
+        # Threshold is fixed at 90 (master default).
         
         box = layout.box()
         box.label(text="Advanced", icon='PREFERENCES')
