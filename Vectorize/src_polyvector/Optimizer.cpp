@@ -157,13 +157,39 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 	Eigen::VectorXcd totalRhs = -2 * b.conjugate() - 2 * alpha * b2.conjugate();
 	std::cout << " done (matrix size: " << totalMatrix.rows() << "x" << totalMatrix.cols() << ")." << std::endl;
 
-	std::cout << "  Solving linear system (ConjugateGradient)..." << std::flush;
+	// Try direct solver first (faster for moderate-size systems, ~10x speedup per Research.md)
+	// Falls back to iterative if system is too large or direct solver fails
+	std::cout << "  Solving linear system..." << std::flush;
+	
+	const int systemSize = totalMatrix.rows();
+	const bool useDirect = (systemSize < 100000); // Direct solver efficient up to ~100k unknowns
+	
+	Eigen::VectorXcd result;
+	
+	if (useDirect) {
+		// Direct solver: SimplicialLDLT (works for complex symmetric/Hermitian)
+		Eigen::SimplicialLDLT<Eigen::SparseMatrix<std::complex<double>>> directSolver;
+		directSolver.compute(totalMatrix);
+		
+		if (directSolver.info() == Eigen::Success) {
+			result = directSolver.solve(totalRhs);
+			std::cout << " solved (direct LDLT)" << std::endl;
+			
+			if (directSolver.info() == Eigen::Success && result.allFinite()) {
+				return result;
+			} else {
+				std::cout << "  WARNING: Direct solver succeeded but result is invalid, falling back to CG..." << std::endl;
+			}
+		} else {
+			std::cout << " direct solver failed, falling back to CG..." << std::endl;
+		}
+	}
+	
+	// Fallback to iterative solver (for large systems or if direct fails)
 	Eigen::ConjugateGradient<Eigen::SparseMatrix<std::complex<double>>, Eigen::Lower | Eigen::Upper> cg;
 	cg.compute(totalMatrix);
-	std::cout << " factored..." << std::flush;
-
-	Eigen::VectorXcd result = cg.solve(totalRhs);
-	std::cout << " solved in " << cg.iterations() << " iterations, error=" << cg.error() << std::endl;
+	result = cg.solve(totalRhs);
+	std::cout << " solved (CG: " << cg.iterations() << " iters, error=" << cg.error() << ")" << std::endl;
 	
 	if (cg.info() != Eigen::Success) {
 		// solving failed

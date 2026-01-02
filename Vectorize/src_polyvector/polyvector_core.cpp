@@ -272,6 +272,8 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
         std::vector<MyPolyline> allVectorization;
 
         // Process each component separately (THIS IS THE FIX!)
+        // NOTE: Parallelization would require thread-safe accumulation of allVectorization
+        // For now, keep serial processing (components are typically few)
         for (size_t compIdx = 0; compIdx < componentMasks.size(); ++compIdx) {
             PV_RUNTIME_VLOG("COMPONENT " << compIdx << " / " << componentMasks.size());
             cv::Mat& compMask = componentMasks[compIdx];

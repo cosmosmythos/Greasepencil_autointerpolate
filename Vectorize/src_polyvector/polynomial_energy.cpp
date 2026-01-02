@@ -17,7 +17,9 @@ std::pair<double,Eigen::VectorXcd> polynomial_energy(const Eigen::VectorXcd & X,
 	int m = mask.rows;
 	int n = mask.cols;
 	
-//#pragma omp parallel for
+	// Re-enabled OpenMP: safe because each thread writes to unique energies[idx]
+	// where idx = indices(i,j) and indices are unique per pixel
+#pragma omp parallel for
 	for (int j=0; j<n; ++j)
 		for (int i = 0; i<m; ++i)
 		{
