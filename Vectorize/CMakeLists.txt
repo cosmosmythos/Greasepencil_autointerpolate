@@ -160,6 +160,17 @@ endif()
 file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/output")
 
 # Set output properties
+# On Windows MSVC, explicitly set output for all configurations to avoid Release/Debug subdirs
+if(MSVC)
+    foreach(config ${CMAKE_CONFIGURATION_TYPES})
+        string(TOUPPER ${config} config_upper)
+        set_target_properties(gp_linevector PROPERTIES
+            LIBRARY_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
+            RUNTIME_OUTPUT_DIRECTORY_${config_upper} "${CMAKE_SOURCE_DIR}/output"
+        )
+    endforeach()
+endif()
+
 set_target_properties(gp_linevector PROPERTIES 
     OUTPUT_NAME "gp_linevector"
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/output"

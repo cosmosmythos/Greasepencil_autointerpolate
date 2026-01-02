@@ -26,7 +26,9 @@ class CMakeBuild(build_ext):
         # This just copies the pre-built binary to the right location
         
         # Find the built binary
+        # Code is in Vectorize/ subdirectory (multi-module project structure)
         vectorize_dir = Path(__file__).parent / "Vectorize"
+        print(f"Looking for binary in: {vectorize_dir}")
         
         # Platform-specific binary names
         if sys.platform == "win32":

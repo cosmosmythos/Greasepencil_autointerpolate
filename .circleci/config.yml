@@ -177,7 +177,7 @@ jobs:
             # Match GitHub Actions OpenCV_DIR
             & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DOpenCV_DIR="C:/tools/opencv/build"
             & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release
-            Set-Location ../..
+            Set-Location ..\..
       - run:
           name: Build wheel (Windows)
           shell: powershell.exe
