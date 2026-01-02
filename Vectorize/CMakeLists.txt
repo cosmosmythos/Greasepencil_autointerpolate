@@ -167,6 +167,32 @@ set_target_properties(gp_linevector PROPERTIES
 )
 
 # ============================================================================
+# COMPILER OPTIMIZATION FLAGS
+# ============================================================================
+
+# Enable maximum optimization for production builds
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # GCC or Clang
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
+    message(STATUS "Compiler flags (GCC/Clang): ${CMAKE_CXX_FLAGS}")
+    
+    # Optional: Enable fast math (trades precision for speed)
+    # Uncomment if you need maximum performance and can tolerate minor FP differences
+    # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
+    
+elseif(MSVC)
+    # Visual Studio
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /fp:fast")
+    
+    # Auto-detect CPU features (VS 2017+)
+    if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|X86")
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
+    endif()
+    
+    message(STATUS "Compiler flags (MSVC): ${CMAKE_CXX_FLAGS}")
+endif()
+
+# ============================================================================
 # OPENMP (OPTIONAL)
 # ============================================================================
 
