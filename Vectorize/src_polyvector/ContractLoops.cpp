@@ -9,14 +9,14 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 
 	std::vector<std::vector<cv::Point2f>> realIncontractibleLoops;
 
-	std::cout << "Reeb graph: " << num_vertices(g) << " vertices, " << num_edges(g) << " edges." << std::endl;
+	PV_VLOG("Reeb graph: " << num_vertices(g) << " vertices, " << num_edges(g) << " edges.");
 
 	int c = 0;
 	//do
 	//{
 		std::map<size_t, std::vector < graph_traits < G >::vertex_descriptor >> p;
 
-		std::cout << "Computing min spaning trees...";
+		PV_VLOG_NL("Computing min spaning trees...");
 		size_t treeRoot = 0;
 		//create a boolean map if an edge is in the sp tree
 
@@ -44,7 +44,7 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 				if (!vertexCovered[treeRoot])
 					break;
 		}
-		std::cout << "done. " << std::endl;
+		PV_VLOG("done.");
 
 		//now for every edge not in the tree, find the smallest loop containing it
 		auto eii = edges(g);
@@ -61,7 +61,7 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 		std::vector<edge_descriptor> origEdge, origEdgeForIncontractibleLoops;
 
 
-		std::cout << "Computing loops...";
+		PV_VLOG_NL("Computing loops...");
 		c = 0;
 		int tmpLoopIdx = 0;
 		for (auto it = eii.first; it != eii.second; ++it)
@@ -121,9 +121,9 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 				++tmpLoopIdx;
 			}
 		}
-		std::cout << "done, found " << c << " edges to remove" << std::endl;
+		PV_VLOG("done, found " << c << " edges to remove");
 
-		std::cout << "Contracting loops...";
+		PV_VLOG_NL("Contracting loops...");
 		/*for (int i = 0; i < loops.size(); ++i)
 		{
 			std::cout << "Loop " << i << std::endl;
@@ -136,10 +136,10 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 		auto removedEdges = contract_edges(loops, g);
 		if (!removedEdges.empty())
 			result.insert(result.end(), removedEdges.begin(), removedEdges.end());
-		std::cout << "done." << std::endl;
+		PV_VLOG("done.");
 	//} while (c != 0);
 	
 
-	std::cout << "all done." << std::endl;
+	PV_VLOG("all done.");
 	return result;
 }

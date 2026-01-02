@@ -373,7 +373,7 @@ Distances::Distances(const G & g, const std::vector<std::pair<size_t, size_t>>& 
 			boost::dijkstra_shortest_paths(*graphs[seedIdx][v], myIdx, predecessor_map(predMap).distance_map(distMap));
 		}
 	}
-	std::cout << "done in " << double(begin + clock()) / CLOCKS_PER_SEC << " seconds. " << std::endl;
+	PV_VLOG("done in " << double(begin + clock()) / CLOCKS_PER_SEC << " seconds.");
 
 
 }
@@ -502,7 +502,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 {
 	std::vector<std::pair<PointOnCurve, PointOnCurve>> yJunctionInfo;
 	std::clock_t begin = -std::clock();
-	std::cout << "[topoGraphEmbedding]: starting... ";
+	PV_VLOG_NL("[topoGraphEmbedding]: starting... ");
 	std::map<edge_descriptor, size_t> myChain;
 	auto chains = chainDecomposition(g, myChain);
 
@@ -510,11 +510,11 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 	auto tGraph = topoGraphHighValenceSeparated(g, chainsSeparated);
 	Distances d(g, tGraph, chainsSeparated, bwImg);
 
-	std::cout << "TOPO GRAPH: ";
+	PV_VLOG_NL("TOPO GRAPH: ");
 	for (const auto& e : tGraph)
-		std::cout << e.first << " - " << e.second << std::endl;
+		PV_VLOG(e.first << " - " << e.second);
 
-	std::cout << "Special vertices for deg-3 separation: ";
+	PV_VLOG_NL("Special vertices for deg-3 separation: ");
 	std::set<size_t> separationVertices;
 	for (const auto& e : tGraph)
 	{
@@ -524,8 +524,8 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			separationVertices.insert(e.second);
 	}
 	for (size_t s : separationVertices)
-		std::cout << s << " ";
-	std::cout << std::endl;
+		PV_VLOG_NL(s << " ");
+	PV_VLOG("");
 
 	std::map<size_t, std::pair<size_t, int>> result;
 	std::vector<MyPolyline> actualResult;
@@ -553,32 +553,30 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 		}
 
 		std::vector<std::pair<size_t, int>> potentialLocations;
-		std::cout << std::endl << "Starting component " << seedIdx << ", seedPt: " << theVertex << " (size: " << d.vertexSets[seedIdx].size() << "), ";
+		PV_VLOG_NL("\nStarting component " << seedIdx << ", seedPt: " << theVertex << " (size: " << d.vertexSets[seedIdx].size() << "), ");
 
 		switch (d.seedType[seedIdx])
 		{
 		case Distances::ST_REGULAR:
-			std::cout << "a regular seed" << std::endl;
+			PV_VLOG("a regular seed");
 			break;
 		case Distances::ST_LOOP:
-			std::cout << "a seed with a loop" << std::endl;
+			PV_VLOG("a seed with a loop");
 			break;
 		case Distances::ST_VAL2:
-			std::cout << "a valence 2 seed" << std::endl;
+			PV_VLOG("a valence 2 seed");
 			break;
 		case Distances::ST_ADJ_TO_ANOTHER_SEED:
-			std::cout << "adjacent to another seed" << std::endl;
+			PV_VLOG("adjacent to another seed");
 			break;
 		}
-
-		std::cout << std::endl << std::endl;
 
 		for (size_t v : d.vertexSets[seedIdx])
 		{
 			potentialLocations.push_back(std::make_pair(v, g[v].clusterPoints.size() / 2)); //todo: replace with a median
 		}
 
-		std::cout << potentialLocations.size() << " locs...";
+		PV_VLOG_NL(potentialLocations.size() << " locs...");
 
 		std::vector<std::pair<size_t, size_t>> adjTopoEdges;
 		std::vector<int> myAdjChains;
@@ -780,10 +778,10 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			}
 		}
 
-		std::cout << "done." << std::endl;
+		PV_VLOG("done.");
 	}
 
-	std::cout << "All done in " << double(begin + clock()) / CLOCKS_PER_SEC << " seconds. " << std::endl;
+	PV_VLOG("All done in " << double(begin + clock()) / CLOCKS_PER_SEC << " seconds.");
 
 	isItASpecialDeg2Vertex.resize(actualResult.size());
 	for (size_t s : separationVertices)

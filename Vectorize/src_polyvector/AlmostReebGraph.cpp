@@ -349,7 +349,7 @@ void connectStuffAroundSingularities(G& g, const cv::Mat & origMask, const std::
 G computeAlmostReebGraph(const cv::Mat & origMask, const std::array<Eigen::MatrixXcd, 2>& roots, const std::vector<MyPolyline>& polys, std::map<std::array<int, 2>, std::vector<PixelInfo>>& pixelInfo, const std::set<std::array<int, 2>>& singularities, const Eigen::MatrixXi& indices, const Eigen::VectorXcd& X, const std::vector<std::array<bool,2>>& endedWithASingularity)
 {
 	std::clock_t begin = -std::clock();
-	std::cout << "Computing Reeb graph...";
+	PV_VLOG_NL("Computing Reeb graph...");
 	//int clusterIdx = 0;
 	G resultList;
 	typedef std::pair<G::vertex_descriptor, double> ClusterAndItsIntersection;
@@ -427,7 +427,7 @@ G computeAlmostReebGraph(const cv::Mat & origMask, const std::array<Eigen::Matri
 		}
 	}
 
-	std::cout << "done in " << double(begin + clock()) / CLOCKS_PER_SEC << " seconds. " << std::endl;
+	PV_VLOG("done in " << double(begin + clock()) / CLOCKS_PER_SEC << " seconds.");
 	return resultList;
 }
 

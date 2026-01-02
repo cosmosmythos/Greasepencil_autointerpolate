@@ -33,7 +33,7 @@ double chainLength(const G& g, const std::vector<edge_descriptor>& chain, bool i
 
 void removeBranchesFilter1(G& g, bool onlyAtIntersections, const std::map<edge_descriptor,size_t>& myChainsBeforeSharpCornersSplit)
 {
-	std::cout << "Removing short branches...";
+	PV_VLOG_NL("Removing short branches...");
 	int n = boost::num_vertices(g);
 	bool somethingDeleted = true;
 
@@ -197,5 +197,5 @@ void removeBranchesFilter1(G& g, bool onlyAtIntersections, const std::map<edge_d
 			}
 		}
 	}
-	std::cout << "done." << std::endl;
+	PV_VLOG("done.");
 }

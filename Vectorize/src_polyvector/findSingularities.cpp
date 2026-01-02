@@ -84,12 +84,10 @@ std::set<std::array<int,2>> findSingularities(std::array<Eigen::MatrixXcd, 2>& r
 	{
 		for (const auto& p : ls)
 		{
-			if (singularities.find(p) == singularities.end())
-				std::cout << p[0] << ", " << p[1] << "; ";
 			singularities.insert(p);
 		}
 	}
-	std::cout << std::endl;
 
+	// Singularity printing is now handled in polyvector_core.cpp with verbose control
 	return singularities;
 }

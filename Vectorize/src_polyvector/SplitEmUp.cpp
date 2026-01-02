@@ -5,7 +5,7 @@
 #include "ContractDeg2.h"
 void splitEmUpCorrectly(G& g)
 {
-	std::cout << "Splitting stuff... ";
+	PV_VLOG_NL("Splitting stuff... ");
 	//1. Break into chains, record their adjacencies into another graph
 	//2. For each chain in that little graph, if its degree is 3, 'open up' the chain
 	//3. If degree is 4, split the chain into two
@@ -23,7 +23,7 @@ void splitEmUpCorrectly(G& g)
 			myChain[e] = i;
 	}
 
-	std::cout << "chains done... ";
+	PV_VLOG_NL("chains done... ");
 	//2. For each chain in that little graph, if its degree is 3, 'open up' the chain
 
 	auto avgTangent = [&](int chainIdx, bool end)
@@ -365,7 +365,7 @@ void splitEmUpCorrectly(G& g)
 		}
 	}
 
-	std::cout << "Processing deg 4 verts: ";
+	PV_VLOG_NL("Processing deg 4 verts: ");
 	//similar processing for valence for vertices
 	//I could have not duplicated the code, but I don't want to mess with the logic above
 	for (size_t v = 0; v < boost::num_vertices(g); ++v)
@@ -388,7 +388,7 @@ void splitEmUpCorrectly(G& g)
 		}
 	}
 
-	std::cout << "done." << std::endl;
+PV_VLOG("done.");
 }
 
 
