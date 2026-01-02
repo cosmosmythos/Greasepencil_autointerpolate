@@ -211,7 +211,7 @@ void splitEmUpCorrectly(G& g)
 		if (haveSharedCurves)
 		{
 			//failed, return everything
-			std::cout << "FAILED to adjust" << std::endl;
+			PV_VLOG("FAILED to adjust");
 			v1 = initialV1;
 			v2 = initialV2;
 		}
@@ -245,14 +245,14 @@ void splitEmUpCorrectly(G& g)
 					auto it = newAdjacencies.find(vtx);
 					assert(it != newAdjacencies.end());
 					if (it == newAdjacencies.end())
-						std::cout << "ERROR 1" << std::endl;
+						// Removed: ERROR 1 logging (no action taken)
 
 					auto it2 = it->second.find(i);
 					assert(it2 != it->second.end());
 
 					if (it2 == it->second.end())
 					{
-						std::cout << "ERROR 2, size: " << it->second.size() << ", vtx = " << vtx << std::endl;
+						// Removed: ERROR 2 logging (no action taken)
 					}
 
 					activeVerts[dir] = { it2->second };
@@ -283,10 +283,10 @@ void splitEmUpCorrectly(G& g)
 				}
 			}
 
-			std::cout << "Hole: ";
+			PV_VLOG_NL("Hole: ");
 			for (size_t v : pseudoHole)
-				std::cout << v << " ";
-			std::cout << std::endl;
+				PV_VLOG_NL(v << " ");
+			PV_VLOG("");
 
 			if (pseudoHole.size() != 4)
 			{
@@ -304,10 +304,10 @@ void splitEmUpCorrectly(G& g)
 			adjustYJunction(pseudoHole[2], pseudoHole[3], myChainVertices.back());
 			std::vector<std::pair<int, int>> prohibitedEdges = { {pseudoHole[0], pseudoHole[1]},{ pseudoHole[2], pseudoHole[3] } };
 
-			std::cout << "Adjusted to: ";
+			PV_VLOG_NL("Adjusted to: ");
 			for (size_t v : pseudoHole)
-				std::cout << v << " ";
-			std::cout << std::endl;
+				PV_VLOG_NL(v << " ");
+			PV_VLOG("");
 
 			for (int i = 0; i < 4; ++i)
 				connectedTo[pseudoHole[i]] = connectedTo[origHole[i]];
@@ -384,7 +384,7 @@ void splitEmUpCorrectly(G& g)
 				createEdge(e.first, e.second);
 			}
 
-			std::cout << "Deg 4 vertex: " << v << ", filling the hole" << std::endl;
+			PV_VLOG("Deg 4 vertex: " << v << ", filling the hole");
 		}
 	}
 

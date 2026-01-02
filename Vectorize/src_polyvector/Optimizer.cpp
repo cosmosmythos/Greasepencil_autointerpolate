@@ -133,33 +133,33 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 	int m = bwImg.rows;
 	int n = bwImg.cols;
 	int nnz = countNonZero(mask);
-	std::cout << "nnz = " << nnz << std::endl;
+	PV_VLOG("nnz = " << nnz);
 
-	std::cout << "  Computing polynomial energy matrix..." << std::flush;
+	PV_VLOG_NL("  Computing polynomial energy matrix...");
 	auto [A, b] = polynomial_energy_matrix(weight, tauNormalized, mask, indices);
-	std::cout << " done." << std::endl;
+	PV_VLOG("done.");
 
-	std::cout << "  Computing regularization matrix..." << std::flush;
+	PV_VLOG_NL("  Computing regularization matrix...");
 	Eigen::MatrixXd onesMatrix;
 	onesMatrix = Eigen::MatrixXd(m, n);
 	onesMatrix.setOnes();
 	Eigen::MatrixXcd g = tauNormalized * std::complex<double>(0, 1);
 	auto [A2, b2] = polynomial_energy_matrix(onesMatrix, g, mask, indices);
-	std::cout << " done." << std::endl;
+	PV_VLOG("done.");
 
-	std::cout << "  Computing Laplacian..." << std::flush;
+	PV_VLOG_NL("  Computing Laplacian...");
 	Eigen::SparseMatrix<double> L = laplacian_matrix(mask, indices, computeSmartWeights(weight,mask,indices).second);
-	std::cout << " done." << std::endl;
+	PV_VLOG("done.");
 	
-	std::cout << "  Assembling system matrix..." << std::flush;
+	PV_VLOG_NL("  Assembling system matrix...");
 	const double alpha = FRAME_FIELD_REGULARIZER_WEIGHT;
 	Eigen::SparseMatrix<std::complex<double>> totalMatrix = 2 * (A + alpha*A2) + beta * 2.0 * L.cast<std::complex<double>>();
 	Eigen::VectorXcd totalRhs = -2 * b.conjugate() - 2 * alpha * b2.conjugate();
-	std::cout << " done (matrix size: " << totalMatrix.rows() << "x" << totalMatrix.cols() << ")." << std::endl;
+	PV_VLOG("done (matrix size: " << totalMatrix.rows() << "x" << totalMatrix.cols() << ").");
 
 	// Try direct solver first (faster for moderate-size systems, ~10x speedup per Research.md)
 	// Falls back to iterative if system is too large or direct solver fails
-	std::cout << "  Solving linear system..." << std::flush;
+	PV_VLOG_NL("  Solving linear system...");
 	
 	const int systemSize = totalMatrix.rows();
 	const bool useDirect = (systemSize < 100000); // Direct solver efficient up to ~100k unknowns

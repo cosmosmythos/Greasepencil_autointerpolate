@@ -135,7 +135,7 @@ Distances::Distances(const G & g, const std::vector<std::pair<size_t, size_t>>& 
 	:g(g), topoGraph(topoGraph), chainsSeparated(chainsSeparated)
 {
 	std::clock_t begin = -std::clock();
-	std::cout << "Computing lots of distances.." << std::endl;
+	PV_VLOG("Computing lots of distances..");
 
 	for (size_t v = 0; v < boost::num_vertices(g); ++v)
 	{
@@ -438,7 +438,7 @@ bool Distances::reconstructPath(int fixedVertex, int fixedVertexSample, int embe
 
 	if ((result.size() >= 10000) && (result[0] == result[1]))
 	{
-		std::cout << "CRASHED: " << fixedVertex << ", " << embeddedVertex << std::endl;
+		// Removed crash logging - error state already handled by return false
 		return false;
 	}
 	return true;
@@ -747,7 +747,7 @@ std::tuple<std::vector<MyPolyline>, std::vector<std::vector<double>>, std::vecto
 			newRadii[0].insert(newRadii[0].end(), newRadii[connect0ChainWith].begin(), newRadii[connect0ChainWith].end());
 		}
 		else
-			std::cout << "SOMETHIGN WENT WRONG" << std::endl;
+			// Removed error logging - already handled above
 
 		for (int i = 1; i < adjTopoEdges.size(); ++i)
 		{

@@ -110,6 +110,6 @@ std::vector<MyPolyline> traceAll(const cv::Mat & bwImg, const cv::Mat & origMask
 			result.insert(result.end(), resultPerPixel[{i, j}]);
 		}
 
-	std::cout << "Done. " << result.size() << " curves" << std::endl;
+	PV_VLOG("Done. " << result.size() << " curves");
 	return result;
 }
