@@ -37,11 +37,12 @@ class CMakeBuild(build_ext):
             binary_name = "gp_linevector.so"
         
         # Look for the binary in common build directories
+        # Order matches actual build output locations
         possible_locations = [
-            vectorize_dir / "output" / binary_name,  # Primary: CMakeLists.txt outputs here directly
-            vectorize_dir / "output" / "Release" / binary_name,  # Fallback: MSVC sometimes creates subdirs
-            vectorize_dir / "build" / "Release" / binary_name,
-            vectorize_dir / "build" / binary_name,
+            vectorize_dir / "output" / "Release" / binary_name,  # Windows MSVC Release build
+            vectorize_dir / "output" / binary_name,  # Linux/macOS single-config build
+            vectorize_dir / "build" / "Release" / binary_name,   # Alternative MSVC location
+            vectorize_dir / "build" / binary_name,               # Alternative single-config location
         ]
         
         # Also search recursively as a fallback
@@ -78,10 +79,11 @@ class CMakeBuild(build_ext):
         
         if source_binary is None:
             # Print directory structure for debugging
-            print(f"\n❌ ERROR: Could not find built binary: {binary_name}")
+            print(f"\nERROR: Could not find built binary: {binary_name}")
             print(f"\nSearched in these locations:")
             for loc in possible_locations:
-                print(f"  - {loc} {'✓ EXISTS' if loc.exists() else '✗ NOT FOUND'}")
+                exists = "EXISTS" if loc.exists() else "NOT FOUND"
+                print(f"  - {loc} [{exists}]")
             
             print(f"\nAll .pyd/.so files in {vectorize_dir}:")
             found_any = False
@@ -93,6 +95,24 @@ class CMakeBuild(build_ext):
                 found_any = True
             if not found_any:
                 print("  (none found)")
+            
+            print(f"\nAll files in output directory:")
+            output_dir = vectorize_dir / "output"
+            if output_dir.exists():
+                for path in output_dir.rglob("*"):
+                    if path.is_file():
+                        print(f"  {path.relative_to(vectorize_dir)}")
+            else:
+                print("  output/ directory does not exist")
+            
+            print(f"\nAll files in build directory:")
+            build_dir = vectorize_dir / "build"
+            if build_dir.exists():
+                for path in build_dir.rglob("*"):
+                    if path.is_file() and (path.suffix in ['.pyd', '.so', '.dll', '.lib', '.pdb', '.exp']):
+                        print(f"  {path.relative_to(vectorize_dir)}")
+            else:
+                print("  build/ directory does not exist")
             
             raise RuntimeError(f"Could not find built binary: {binary_name}")
         

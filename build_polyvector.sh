@@ -9,11 +9,24 @@ set -e
 
 echo "=== Building GP LineVector (PolyVector) ==="
 
-# Check Python version
-PYTHON_VERSION=$(python3 --version 2>&1)
-if [[ ! "$PYTHON_VERSION" =~ "Python 3.11" ]]; then
-    echo "⚠ Warning: Python 3.11 recommended for Blender 4.3+ compatibility"
-    echo "Current: $PYTHON_VERSION"
+# Check Python version - require Python 3.11
+PYTHON_CMD=""
+if command -v python3.11 &> /dev/null; then
+    PYTHON_CMD="python3.11"
+    echo "✓ Found Python 3.11: $(python3.11 --version)"
+elif command -v python3 &> /dev/null; then
+    PYTHON_VERSION=$(python3 --version 2>&1)
+    if [[ "$PYTHON_VERSION" =~ "Python 3.11" ]]; then
+        PYTHON_CMD="python3"
+        echo "✓ Found Python 3.11: $PYTHON_VERSION"
+    else
+        echo "❌ Python 3.11 is required for Blender 4.3+ compatibility"
+        echo "Found: $PYTHON_VERSION"
+        exit 1
+    fi
+else
+    echo "❌ Python 3 not found"
+    exit 1
 fi
 
 # Download missing headers
@@ -61,10 +74,15 @@ echo "==> Configuring CMake..."
 mkdir -p Vectorize/build
 cd Vectorize/build
 
+# Get Python 3.11 executable path for CMake
+PYTHON_EXE=$($PYTHON_CMD -c "import sys; print(sys.executable)")
+echo "Python executable: $PYTHON_EXE"
+
 # Configure CMake
 CMAKE_ARGS=(
     ..
     -DCMAKE_BUILD_TYPE=Release
+    -DPython3_EXECUTABLE="$PYTHON_EXE"
 )
 
 # macOS: Add Homebrew paths if available
@@ -105,10 +123,10 @@ echo ""
 echo "==> Building Python wheel..."
 
 # Install build dependencies
-python3 -m pip install --upgrade pip setuptools wheel build
+$PYTHON_CMD -m pip install --upgrade pip setuptools wheel build
 
 # Build wheel
-python3 setup_vectorize.py bdist_wheel
+$PYTHON_CMD setup_vectorize.py bdist_wheel
 
 echo ""
 echo "=== Build Complete ==="

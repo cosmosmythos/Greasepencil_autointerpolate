@@ -86,9 +86,13 @@ jobs:
           name: Build C++ extension (Windows)
           shell: powershell.exe
           command: |
+            # Get Python 3.11 executable path
+            $PythonExe = py -3.11 -c "import sys; print(sys.executable)"
+            Write-Host "Using Python: $PythonExe"
+            
             New-Item -ItemType Directory -Force -Path Executable\build | Out-Null
             Set-Location Executable\build
-            & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+            & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExe"
             & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release
             Set-Location ../..
       - run:
@@ -158,6 +162,17 @@ jobs:
             py -3.11 -m pip install --upgrade pip
             py -3.11 -m pip install setuptools wheel build
       - run:
+          name: Verify Python configuration (Windows)
+          shell: powershell.exe
+          command: |
+            Write-Host "=== Python Configuration ===" -ForegroundColor Cyan
+            Write-Host "Python version from py -3.11:"
+            py -3.11 --version
+            py -3.11 -c "import sys; print(f'Executable: {sys.executable}'); print(f'Include: {sys.base_prefix}/include'); print(f'Libs: {sys.base_prefix}/libs')"
+            
+            Write-Host "`nPython paths:"
+            py -3.11 -c "import sysconfig; print(f'Include dir: {sysconfig.get_path(\"include\")}'); print(f'Platinclude: {sysconfig.get_path(\"platinclude\")}'); print(f'Library: {sysconfig.get_config_var(\"LIBRARY\")}')"
+      - run:
           name: Ensure simple_svg header exists
           shell: powershell.exe
           command: |
@@ -172,11 +187,30 @@ jobs:
           name: Configure & build C++ extension (Windows)
           shell: powershell.exe
           command: |
+            $ErrorActionPreference = "Stop"
             New-Item -ItemType Directory -Force -Path Vectorize\build | Out-Null
             Set-Location Vectorize\build
-            # Match GitHub Actions OpenCV_DIR
-            & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DOpenCV_DIR="C:/tools/opencv/build"
-            & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release
+            
+            Write-Host "=== Running CMake Configure ===" -ForegroundColor Cyan
+            # Get Python 3.11 executable path
+            $PythonExe = py -3.11 -c "import sys; print(sys.executable)"
+            Write-Host "Using Python: $PythonExe"
+            
+            # Match GitHub Actions OpenCV_DIR and explicitly set Python paths
+            & "C:\Program Files\CMake\bin\cmake.exe" .. -G "Visual Studio 17 2022" -A x64 -DOpenCV_DIR="C:/tools/opencv/build" -DPython3_EXECUTABLE="$PythonExe"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "CMake configuration failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host "=== Running CMake Build ===" -ForegroundColor Cyan
+            & "C:\Program Files\CMake\bin\cmake.exe" --build . --config Release --verbose
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "CMake build failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+            }
+            
+            Write-Host "=== Build completed successfully ===" -ForegroundColor Green
             Set-Location ..\..
       - run:
           name: Verify binary location (Windows)
@@ -185,6 +219,29 @@ jobs:
             Write-Host "Searching for gp_linevector.pyd in Vectorize directory:"
             Get-ChildItem -Path Vectorize -Recurse -Filter "*.pyd" -ErrorAction SilentlyContinue | ForEach-Object {
               Write-Host "  Found: $($_.FullName)"
+            }
+            
+            Write-Host "`nSearching for any .dll files (dependencies):"
+            Get-ChildItem -Path Vectorize -Recurse -Filter "*.dll" -ErrorAction SilentlyContinue | ForEach-Object {
+              Write-Host "  Found: $($_.FullName)"
+            }
+            
+            Write-Host "`nContents of Vectorize/output directory:"
+            if (Test-Path "Vectorize\output") {
+              Get-ChildItem -Path "Vectorize\output" -Recurse | ForEach-Object {
+                Write-Host "  $($_.FullName)"
+              }
+            } else {
+              Write-Host "  (directory does not exist)"
+            }
+            
+            Write-Host "`nContents of Vectorize/build/Release directory:"
+            if (Test-Path "Vectorize\build\Release") {
+              Get-ChildItem -Path "Vectorize\build\Release" -Recurse | ForEach-Object {
+                Write-Host "  $($_.FullName)"
+              }
+            } else {
+              Write-Host "  (directory does not exist)"
             }
       - run:
           name: Build wheel (Windows)

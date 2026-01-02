@@ -278,7 +278,8 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             
 #pragma omp for schedule(dynamic)
 #endif
-        for (size_t compIdx = 0; compIdx < componentMasks.size(); ++compIdx) {
+        // Use int for OpenMP loop variable (MSVC requirement: C3016)
+        for (int compIdx = 0; compIdx < static_cast<int>(componentMasks.size()); ++compIdx) {
             PV_RUNTIME_VLOG("COMPONENT " << compIdx << " / " << componentMasks.size());
             cv::Mat& compMask = componentMasks[compIdx];
             

@@ -27,11 +27,27 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Building GP LineVector (PolyVector) ===" -ForegroundColor Cyan
 
-# Check Python version
-$pythonVersion = python --version 2>&1
-if ($pythonVersion -notmatch "Python 3\.11") {
-    Write-Warning "Python 3.11 recommended for Blender 4.3+ compatibility"
-    Write-Host "Current: $pythonVersion"
+# Check Python version and get Python 3.11 path
+$Python311 = $null
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    # Try py launcher first (Windows)
+    $pythonVersion = py -3.11 --version 2>&1
+    if ($pythonVersion -match "Python 3\\.11") {
+        $Python311 = "py -3.11"
+        Write-Host "✓ Found Python 3.11: $pythonVersion" -ForegroundColor Green
+    }
+}
+
+if (-not $Python311) {
+    # Fallback to python command
+    $pythonVersion = python --version 2>&1
+    if ($pythonVersion -match "Python 3\\.11") {
+        $Python311 = "python"
+        Write-Host "✓ Found Python 3.11: $pythonVersion" -ForegroundColor Green
+    } else {
+        Write-Error "Python 3.11 is required for Blender 4.3+ compatibility. Found: $pythonVersion"
+        exit 1
+    }
 }
 
 # Download missing headers
@@ -73,11 +89,20 @@ New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 Set-Location $buildDir
 
 try {
+    # Get Python 3.11 executable path for CMake
+    $PythonExe = & $Python311 -c "import sys; print(sys.executable)" 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Failed to get Python executable path"
+        exit 1
+    }
+    Write-Host "Python executable: $PythonExe" -ForegroundColor Cyan
+    
     # Configure CMake
     $cmakeArgs = @(
         "..",
         "-G", "Visual Studio 17 2022",
-        "-A", "x64"
+        "-A", "x64",
+        "-DPython3_EXECUTABLE=$PythonExe"
     )
     
     # Add vcpkg toolchain if specified
@@ -128,10 +153,10 @@ try {
 Write-Host "`n==> Building Python wheel..." -ForegroundColor Yellow
 
 # Install build dependencies
-python -m pip install --upgrade pip setuptools wheel build
+& $Python311 -m pip install --upgrade pip setuptools wheel build
 
 # Build wheel
-python setup_vectorize.py bdist_wheel
+& $Python311 setup_vectorize.py bdist_wheel
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "`n=== Build Complete ===" -ForegroundColor Green
