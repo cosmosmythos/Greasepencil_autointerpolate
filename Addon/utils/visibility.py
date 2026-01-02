@@ -7,6 +7,10 @@ timer-based timeout, and animation awareness.
 import bpy
 import time
 
+# Performance tuning constants
+SCRUB_DETECTION_THRESHOLD = 0.1  # Time threshold (seconds) to detect scrubbing
+SCRUB_TIMEOUT_DELAY = 0.1        # Delay (seconds) before turning off modifier after scrub stops
+
 # Visibility manager state (ported from Local)
 visibility_state = {
     'last_frame': None,
@@ -50,7 +54,7 @@ def detect_scrubbing():
     time_diff = current_time - visibility_state['last_frame_time']
     frame_diff = abs(current_frame - visibility_state['last_frame'])
     
-    is_scrubbing = (time_diff < 0.1 and frame_diff >= 1) or frame_diff > 1
+    is_scrubbing = (time_diff < SCRUB_DETECTION_THRESHOLD and frame_diff >= 1) or frame_diff > 1
     
     visibility_state['last_frame'] = current_frame
     visibility_state['last_frame_time'] = current_time
@@ -154,7 +158,7 @@ def on_frame_change(scene, depsgraph=None):
     ensure_visibility_state()
     if visibility_state.get('is_scrubbing', False):
         stop_scrub_timer()
-        visibility_state['scrub_timer'] = bpy.app.timers.register(scrub_timeout, first_interval=0.2)
+        visibility_state['scrub_timer'] = bpy.app.timers.register(scrub_timeout, first_interval=SCRUB_TIMEOUT_DELAY)
     
     # Only process interpolation if modifier should be visible (optimization)
     if should_show_modifier():
