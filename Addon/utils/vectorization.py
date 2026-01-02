@@ -30,6 +30,8 @@ def process_image_to_polylines(
     blur_pixels: int = 0,
     smooth_steps: int = 10,
     smooth_weight: float = 0.5,
+    simplify_epsilon: float = 0.01,
+    verbose: bool = False,
 ) -> List[np.ndarray]:
     """
     Process image and extract polylines using PolyVector algorithm.
@@ -42,6 +44,10 @@ def process_image_to_polylines(
         blur_pixels: Gaussian blur radius in pixels applied before vectorization (0 disables)
         smooth_steps: Smoothing iterations (0-20). Default 10.
         smooth_weight: Smoothing strength (0.0-1.0). Default 0.5.
+        simplify_epsilon: Douglas-Peucker point reduction tolerance (default=0.01)
+                         Higher = fewer points (faster, less detail)
+                         Lower = more points (slower, more detail)
+        verbose: Enable detailed debug logging (default=False)
     
     Returns:
         List of polylines as Nx2 numpy arrays
@@ -50,8 +56,10 @@ def process_image_to_polylines(
         RuntimeError: If PolyVector backend is not available
     
     Note:
-        PolyVector has built-in preprocessing, noise removal, simplification,
-        and smoothing. No additional parameters are needed.
+        For optimization:
+        - Increase simplify_epsilon (0.05-0.1) to reduce point count by 50-80%
+        - Set verbose=False for production (significantly faster)
+        - Default settings balance quality and performance
     """
     if not _linevector_available:
         raise RuntimeError(
@@ -70,7 +78,7 @@ def process_image_to_polylines(
     if image_array.dtype != np.uint8:
         image_array = image_array.astype(np.uint8)
     
-    # Call LineVector
+    # Call LineVector with optimization parameters
     # Threshold is intentionally fixed to 90 (master default). Users should adjust image contrast beforehand.
     strokes = gp_linevector.vectorize_array(
         image_array,
@@ -78,6 +86,8 @@ def process_image_to_polylines(
         blur_pixels=int(blur_pixels),
         smooth_steps=int(smooth_steps),
         smooth_weight=float(smooth_weight),
+        simplify_epsilon=float(simplify_epsilon),
+        verbose=bool(verbose),
     )
     
     # Convert to numpy arrays

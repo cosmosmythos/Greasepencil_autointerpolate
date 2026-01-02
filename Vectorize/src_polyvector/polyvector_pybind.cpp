@@ -50,9 +50,11 @@ process_numpy(py::array_t<uint8_t> image,
               double threshold,
               int blur_pixels,
               int smooth_steps,
-              double smooth_weight) {
+              double smooth_weight,
+              double simplify_epsilon,
+              bool verbose) {
     cv::Mat mat = numpy_to_mat(image);
-    return vectorize_mat(mat, threshold, blur_pixels, smooth_steps, smooth_weight);
+    return vectorize_mat(mat, threshold, blur_pixels, smooth_steps, smooth_weight, simplify_epsilon, verbose);
 }
 
 /**
@@ -62,8 +64,10 @@ std::vector<std::vector<std::pair<double, double>>>
 process_file(const std::string& path,
              double threshold,
              int smooth_steps,
-             double smooth_weight) {
-    return vectorize_image(path, threshold, smooth_steps, smooth_weight);
+             double smooth_weight,
+             double simplify_epsilon,
+             bool verbose) {
+    return vectorize_image(path, threshold, smooth_steps, smooth_weight, simplify_epsilon, verbose);
 }
 
 } // namespace polyvector
@@ -86,6 +90,8 @@ PYBIND11_MODULE(gp_linevector, m) {
           py::arg("threshold") = 90.0,
           py::arg("smooth_steps") = 10,
           py::arg("smooth_weight") = 0.5,
+          py::arg("simplify_epsilon") = 0.01,
+          py::arg("verbose") = false,
           R"doc(
               Vectorize an image file.
               
@@ -93,14 +99,26 @@ PYBIND11_MODULE(gp_linevector, m) {
                   image_path: Path to input image (PNG, JPG, etc.)
                   threshold: Background/foreground threshold (0-255, default=90)
                              Lower values = more ink is detected
+                  smooth_steps: Number of Laplacian smoothing iterations (0-20, default=10)
+                  smooth_weight: Smoothing strength (0.0-1.0, default=0.5)
+                  simplify_epsilon: Point reduction tolerance (default=0.01)
+                                   Higher values = fewer points, more simplified curves
+                                   Lower values = more points, more detail preserved
+                  verbose: Enable detailed logging for debugging (default=False)
                              
               Returns:
                   List of polylines, each polyline is a list of (x, y) tuples
                   
               Example:
                   >>> import gp_linevector
+                  >>> # Standard usage
                   >>> strokes = gp_linevector.vectorize_image("sketch.png")
-                  >>> print(f"Found {len(strokes)} strokes")
+                  >>> 
+                  >>> # Aggressive simplification for fewer points
+                  >>> strokes = gp_linevector.vectorize_image("sketch.png", simplify_epsilon=0.1)
+                  >>> 
+                  >>> # High detail preservation
+                  >>> strokes = gp_linevector.vectorize_image("sketch.png", simplify_epsilon=0.001)
           )doc");
 
     m.def("vectorize_array", &polyvector::process_numpy,
@@ -109,6 +127,8 @@ PYBIND11_MODULE(gp_linevector, m) {
           py::arg("blur_pixels") = 0,
           py::arg("smooth_steps") = 10,
           py::arg("smooth_weight") = 0.5,
+          py::arg("simplify_epsilon") = 0.01,
+          py::arg("verbose") = false,
           R"doc(
               Vectorize a numpy array image.
               
@@ -116,6 +136,14 @@ PYBIND11_MODULE(gp_linevector, m) {
                   image: Numpy array of shape (H, W) or (H, W, 3) or (H, W, 4)
                          dtype should be uint8
                   threshold: Background/foreground threshold (0-255, default=90)
+                  blur_pixels: Gaussian blur preprocessing (0-10, default=0)
+                              Helps clean up noisy images before vectorization
+                  smooth_steps: Number of Laplacian smoothing iterations (0-20, default=10)
+                  smooth_weight: Smoothing strength (0.0-1.0, default=0.5)
+                  simplify_epsilon: Point reduction tolerance (default=0.01)
+                                   Higher values = fewer points, more simplified curves
+                                   Lower values = more points, more detail preserved
+                  verbose: Enable detailed logging for debugging (default=False)
                   
               Returns:
                   List of polylines, each polyline is a list of (x, y) tuples
@@ -127,6 +155,9 @@ PYBIND11_MODULE(gp_linevector, m) {
                   >>> 
                   >>> img = np.array(Image.open("sketch.png"))
                   >>> strokes = gp_linevector.vectorize_array(img)
+                  >>> 
+                  >>> # With aggressive simplification
+                  >>> strokes = gp_linevector.vectorize_array(img, simplify_epsilon=0.1)
           )doc");
     
     // Version info

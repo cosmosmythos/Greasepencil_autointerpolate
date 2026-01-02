@@ -84,6 +84,24 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         precision=3,
     )
 
+    simplify_epsilon: FloatProperty(
+        name="Simplify",
+        description="Point reduction tolerance (higher = fewer points, faster processing)\n"
+                    "0.01 = Default balance\n"
+                    "0.05-0.1 = Aggressive (50-80% fewer points)\n"
+                    "0.001 = High detail (more points)",
+        default=0.01,
+        min=0.0,
+        max=0.5,
+        precision=3,
+    )
+
+    verbose_logging: BoolProperty(
+        name="Verbose Logging",
+        description="Enable detailed console logging for debugging (slower)",
+        default=False,
+    )
+
     stroke_radius: FloatProperty(
         name="Stroke Radius",
         description="Radius of strokes",
@@ -186,6 +204,8 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                         blur_pixels=self.blur_pixels,
                         smooth_steps=self.smooth_steps,
                         smooth_weight=self.smooth_weight,
+                        simplify_epsilon=self.simplify_epsilon,
+                        verbose=self.verbose_logging,
                     )
                     
                     if len(polylines) > 0:
@@ -351,8 +371,13 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         box.label(text="Vectorization", icon='CURVE_DATA')
         box.prop(self, "smooth_steps")
         box.prop(self, "smooth_weight")
+        box.prop(self, "simplify_epsilon")
 
         # Threshold is fixed internally to master default (90). No UI needed.
+        
+        box = layout.box()
+        box.label(text="Advanced", icon='PREFERENCES')
+        box.prop(self, "verbose_logging")
         
         box = layout.box()
         box.label(text="Image Sequence", icon='SEQUENCE')

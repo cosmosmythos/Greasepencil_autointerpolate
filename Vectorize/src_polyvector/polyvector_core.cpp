@@ -187,9 +187,19 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
                 weight(i, j) = 0;
 }
 
+// Global verbose flag (thread-local for safety)
+static thread_local bool g_verbose_mode = false;
+
+// Helper macro for conditional verbose logging
+#define PV_RUNTIME_VLOG(msg) do { if (g_verbose_mode) { std::cout << msg << std::endl; } } while(0)
+#define PV_RUNTIME_VLOG_NL(msg) do { if (g_verbose_mode) { std::cout << msg; } } while(0)
+
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int smooth_steps, double smooth_weight) {
+vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int smooth_steps, double smooth_weight, double simplify_epsilon, bool verbose) {
     using namespace cv;
+    
+    // Set runtime verbose mode
+    g_verbose_mode = verbose;
     
     std::vector<std::vector<std::pair<double, double>>> result;
     
@@ -218,6 +228,10 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
             const int k = 2 * blur_pixels + 1; // kernel must be odd
             cv::GaussianBlur(bwImg, bwImg, cv::Size(k, k), 0.0);
         }
+        
+        // Clamp and validate simplify_epsilon
+        if (simplify_epsilon < 0.0) simplify_epsilon = 0.0;
+        if (simplify_epsilon > 10.0) simplify_epsilon = 10.0;
         
         int m = bwImg.rows;
         int n = bwImg.cols;
@@ -259,7 +273,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
 
         // Process each component separately (THIS IS THE FIX!)
         for (size_t compIdx = 0; compIdx < componentMasks.size(); ++compIdx) {
-            std::cout << "COMPONENT " << compIdx << " / " << componentMasks.size() << std::endl;
+            PV_RUNTIME_VLOG("COMPONENT " << compIdx << " / " << componentMasks.size());
             cv::Mat& compMask = componentMasks[compIdx];
             
             // Calculate indices for this component
@@ -277,12 +291,12 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
             }
 
             // Optimize for this component
-            std::cout << "Optimizing..." << std::flush;
+            PV_RUNTIME_VLOG_NL("Optimizing...");
             Eigen::VectorXcd X = optimizeByLinearSolve(bwImg, weight, tau, beta, compMask, indices);
             if (X.size() == 0) {
                 X = optimize(bwImg, weight, tau, beta, compMask, indices);
             }
-            std::cout << "done. " << std::endl;
+            PV_RUNTIME_VLOG("done.");
 
             // Safety check
             if (X.size() == 0 || !X.allFinite()) {
@@ -291,33 +305,29 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
             }
 
             // Find roots for this component
-            std::cout << "Finding roots.. " << std::flush;
+            PV_RUNTIME_VLOG_NL("Finding roots.. ");
             auto compRoots = findRoots(X, compMask);
 
             // Iteratively remove singularities
             auto singularities = findSingularities(compRoots, X, indices, compMask);
             
-            // DEBUG: keep concise (always useful)
-            std::cout << "DEBUG: singularities=" << singularities.size()
-                      << " roots0=" << compRoots[0].size()
-                      << " roots1=" << compRoots[1].size()
-                      << " X=" << X.size()
-                      << " nnz=" << nnz
-                      << std::endl;
-            
-            // Print initial singularities (truncate to keep logs readable)
-            std::cout << "Singularities (count=" << singularities.size() << "): ";
-            const size_t maxPrint = POLYVECTOR_VERBOSE_LOGS ? singularities.size() : 20;
-            size_t si = 0;
-            for (const auto& s : singularities) {
-                if (si >= maxPrint) break;
-                std::cout << s[0] << ", " << s[1] << "; ";
-                ++si;
+            // Print singularity info (verbose mode shows all, normal mode shows summary)
+            if (verbose) {
+                std::cout << "DEBUG: singularities=" << singularities.size()
+                          << " roots0=" << compRoots[0].size()
+                          << " roots1=" << compRoots[1].size()
+                          << " X=" << X.size()
+                          << " nnz=" << nnz
+                          << std::endl;
+                
+                std::cout << "Singularities (count=" << singularities.size() << "): ";
+                for (const auto& s : singularities) {
+                    std::cout << s[0] << ", " << s[1] << "; ";
+                }
+                std::cout << std::endl;
+            } else if (singularities.size() > 0) {
+                std::cout << "Found " << singularities.size() << " singularities" << std::endl;
             }
-            if (!POLYVECTOR_VERBOSE_LOGS && singularities.size() > maxPrint) {
-                std::cout << "...";
-            }
-            std::cout << std::endl;
             bool improved;
             do {
                 int origSingularityCount = singularities.size();
@@ -339,11 +349,11 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
                 compRoots = findRoots(X, compMask);
                 singularities = findSingularities(compRoots, X, indices, compMask);
 
-                std::cout << "done (" << origSingularityCount - (int)singularities.size() << " singularities removed)" << std::endl;
+                PV_RUNTIME_VLOG("done (" << origSingularityCount - (int)singularities.size() << " singularities removed)");
                 improved = origSingularityCount - singularities.size() > 0;
             } while (improved);
 
-            std::cout << "Done." << std::endl;
+            PV_RUNTIME_VLOG("Done.");
 
             // Trace polylines for this component
             std::map<std::array<int, 2>, std::vector<PixelInfo>> pixelInfo;
@@ -352,7 +362,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
             auto compPolys = traceAll(bwImg, compMask, compMask, compRoots, X, indices, 
                                       pixelInfo, endedWithASingularity);
             
-            std::cout << "Done. " << compPolys.size() << " curves" << std::endl;
+            PV_RUNTIME_VLOG("Done. " << compPolys.size() << " curves");
 
             if (compPolys.empty()) {
                 std::cout << "No polylines traced for component " << compIdx << std::endl;
@@ -431,21 +441,20 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
             }
 
             // CRITICAL: Find and remove cycles (matches master line 579-590)
-            std::cout << "Finding cycles: ";
+            PV_RUNTIME_VLOG_NL("Finding cycles: ");
             std::vector<edge_descriptor> removedEdges;
             const auto wG_edges = (int)boost::num_edges(wG);
             if (wG_edges < 350) {
-                std::cout << "Using Tarjan's algorithm " << std::endl;
+                PV_RUNTIME_VLOG("Using Tarjan's algorithm");
                 removedEdges = contractLoops2(wG, compMask, compVectorization);
             } else {
-                std::cout << "Using min spanning trees algorithm " << std::endl;
+                PV_RUNTIME_VLOG("Using min spanning trees algorithm");
                 removedEdges = contractLoops(wG, compMask, compVectorization);
             }
-            std::cout << "CycleStats: comp=" << compIdx
+            PV_RUNTIME_VLOG("CycleStats: comp=" << compIdx
                       << " wG_edges=" << wG_edges
                       << " removedEdges=" << removedEdges.size()
-                      << " curves=" << compVectorization.size()
-                      << std::endl;
+                      << " curves=" << compVectorization.size());
 
             // CRITICAL: Cut polylines at cycle intersections (matches master line 591-633)
             std::vector<std::vector<std::pair<double, double>>> cutThosePieces(compVectorization.size());
@@ -459,7 +468,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
                     totalCuts++;
                 }
             }
-            std::cout << "CycleStats: cuts=" << totalCuts << " curves=" << compVectorization.size() << std::endl;
+            PV_RUNTIME_VLOG("CycleStats: cuts=" << totalCuts << " curves=" << compVectorization.size());
 
             // Split polylines based on cut points
             std::vector<MyPolyline> compNewVectorization;
@@ -500,14 +509,14 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
                     }
                 }
             }
-            std::cout << "CycleStats: curvesWithCuts=" << curvesWithCuts
+            PV_RUNTIME_VLOG("CycleStats: curvesWithCuts=" << curvesWithCuts
                       << " segments=" << totalSegmentsCreated
-                      << " inputCurves=" << compVectorization.size()
-                      << std::endl;
+                      << " inputCurves=" << compVectorization.size());
 
             // Simplify and smooth (matches master line 635-638)
+            // Use configurable epsilon for Douglas-Peucker simplification
             for (size_t i = 0; i < compNewVectorization.size(); ++i) {
-                compNewVectorization[i] = simplify(compNewVectorization[i], 1e-2);
+                compNewVectorization[i] = simplify(compNewVectorization[i], simplify_epsilon);
             }
             
             smooth(compNewVectorization, smooth_steps, smooth_weight);
@@ -517,8 +526,6 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
                                    compNewVectorization.begin(), 
                                    compNewVectorization.end());
         }
-
-        std::cout << "Simplifying and smoothing..." << std::endl;
 
         // Convert to output format
         for (const auto& poly : allVectorization) {
@@ -543,7 +550,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, int
 }
 
 std::vector<std::vector<std::pair<double, double>>> 
-vectorize_image(const std::string& image_path, double threshold, int smooth_steps, double smooth_weight) {
+vectorize_image(const std::string& image_path, double threshold, int smooth_steps, double smooth_weight, double simplify_epsilon, bool verbose) {
     cv::Mat image = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
     
     if (image.empty()) {
@@ -551,7 +558,7 @@ vectorize_image(const std::string& image_path, double threshold, int smooth_step
         return {};
     }
     
-    return vectorize_mat(image, threshold, smooth_steps, smooth_weight);
+    return vectorize_mat(image, threshold, 0, smooth_steps, smooth_weight, simplify_epsilon, verbose);
 }
 
 } // namespace polyvector
