@@ -66,36 +66,6 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         max=10,
     )
 
-    # Stroke
-    smooth_steps: IntProperty(
-        name="Smooth Steps",
-        description="Number of smoothing iterations applied to vectorized strokes (0-20)",
-        default=10,
-        min=0,
-        max=20,
-    )
-
-    smooth_weight: FloatProperty(
-        name="Smooth Weight",
-        description="Smoothing strength per iteration (0.0-1.0)",
-        default=0.5,
-        min=0.0,
-        max=1.0,
-        precision=3,
-    )
-
-    simplify_epsilon: FloatProperty(
-        name="Simplify",
-        description="Point reduction tolerance (higher = fewer points, faster processing)\n"
-                    "0.01 = Default balance\n"
-                    "0.05-0.1 = Aggressive (50-80% fewer points)\n"
-                    "0.001 = High detail (more points)",
-        default=0.01,
-        min=0.0,
-        max=0.5,
-        precision=3,
-    )
-
     verbose_logging: BoolProperty(
         name="Verbose Logging",
         description="Enable detailed console logging for debugging (slower)",
