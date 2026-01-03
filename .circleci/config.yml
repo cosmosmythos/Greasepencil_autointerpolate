@@ -162,17 +162,6 @@ jobs:
             py -3.11 -m pip install --upgrade pip
             py -3.11 -m pip install setuptools wheel build
       - run:
-          name: Verify Python configuration (Windows)
-          shell: powershell.exe
-          command: |
-            Write-Host "=== Python Configuration ===" -ForegroundColor Cyan
-            Write-Host "Python version from py -3.11:"
-            py -3.11 --version
-            py -3.11 -c "import sys; print(f'Executable: {sys.executable}'); print(f'Include: {sys.base_prefix}/include'); print(f'Libs: {sys.base_prefix}/libs')"
-            
-            Write-Host "`nPython paths:"
-            py -3.11 -c "import sysconfig; print(f'Include dir: {sysconfig.get_path(\"include\")}'); print(f'Platinclude: {sysconfig.get_path(\"platinclude\")}'); print(f'Library: {sysconfig.get_config_var(\"LIBRARY\")}')"
-      - run:
           name: Ensure simple_svg header exists
           shell: powershell.exe
           command: |
