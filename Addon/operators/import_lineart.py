@@ -161,28 +161,25 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                 if not os.path.exists(filepath):
                     continue
                 
-                image = None
+                # Use C++ direct file loading (master-equivalent)
+                # This bypasses Blender's pixel pipeline entirely
                 try:
-                    # Load image with NO color management (raw pixel values like master)
-                    image = bpy.data.images.load(filepath)
+                    # Get absolute path (handles Blender relative paths like //...)
+                    abs_filepath = bpy.path.abspath(filepath)
                     
-                    # CRITICAL: Disable Blender color management to get raw pixel values
-                    # Master reads raw RGB/RGBA from disk without color space transforms
-                    image.colorspace_settings.name = 'Raw'
-                    
-                    width, height = image.size
-                    channels = image.channels
-                    
-                    # Get raw float pixels [0..1] from Blender
-                    pixels = np.array(image.pixels[:]).reshape((height, width, channels))
-                    
-                    polylines = vectorization.process_image_to_polylines(
-                        pixels,
+                    # Load via C++ OpenCV (like master does)
+                    polylines = vectorization.process_image_file(
+                        abs_filepath,
                         blur_pixels=self.blur_pixels,
                         verbose=self.verbose_logging,
                     )
                     
                     if len(polylines) > 0:
+                        # Get image dimensions for coordinate scaling
+                        temp_img = bpy.data.images.load(abs_filepath)
+                        width, height = temp_img.size
+                        bpy.data.images.remove(temp_img)
+                        
                         stroke_count = self._create_strokes_gpv3(
                             layer, frame_number, polylines, width, height
                         )
@@ -192,8 +189,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     print(f"[GPAI Lineart] Error: {e}")
                 
                 finally:
-                    if image:
-                        bpy.data.images.remove(image)
+                    pass  # No cleanup needed (C++ handles file loading)
                 
                 frame_number += self.frame_step
         

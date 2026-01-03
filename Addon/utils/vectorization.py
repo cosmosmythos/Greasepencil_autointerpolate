@@ -25,11 +25,61 @@ def is_backend_available() -> bool:
     return _linevector_available
 
 
+def process_image_file(
+    filepath: str,
+    blur_pixels: int = 0,
+    verbose: bool = False,
+) -> List[np.ndarray]:
+    """
+    Process image file directly via C++ (RECOMMENDED - master-equivalent).
+    
+    Uses OpenCV to load image exactly like PolyVectorization master:
+    - No Blender color management
+    - RGBA composited on white background
+    - OpenCV grayscale conversion
+    - Then inverted, thresholded, vectorized
+    
+    Args:
+        filepath: Path to image file (PNG, JPG, etc.)
+        blur_pixels: Gaussian blur radius in pixels (0 disables)
+        verbose: Enable detailed debug logging
+    
+    Returns:
+        List of polylines as Nx2 numpy arrays
+    """
+    if not _linevector_available:
+        raise RuntimeError(
+            "LineVector backend not available. "
+            "Ensure wheels are loaded via blender_manifest.toml"
+        )
+    
+    # Call C++ vectorize_image (master-equivalent)
+    strokes = gp_linevector.vectorize_image(
+        filepath,
+        threshold=90,
+        blur_pixels=int(blur_pixels),
+        verbose=bool(verbose),
+    )
+    
+    # Convert to numpy arrays
+    polylines = []
+    for stroke in strokes:
+        if len(stroke) >= 2:  # Need at least 2 points
+            points = np.array(stroke, dtype=np.float32)
+            polylines.append(points)
+    
+    return polylines
+
+
 def process_image_to_polylines(
     image_array: np.ndarray,
     blur_pixels: int = 0,
     verbose: bool = False,
 ) -> List[np.ndarray]:
+    """
+    DEPRECATED: Use process_image_file() instead for master-equivalent results.
+    
+    This function is subject to Blender's color management and pixel pipeline."""
     """
     Process image and extract polylines using PolyVector algorithm.
     

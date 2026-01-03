@@ -8,6 +8,7 @@
 #include <pybind11/stl.h>
 
 #include "polyvector_core.h"
+#include "image_loader.h"
 #include <opencv2/core/core.hpp>
 
 namespace py = pybind11;
@@ -55,13 +56,22 @@ process_numpy(py::array_t<uint8_t> image,
 }
 
 /**
- * Process image file
+ * Process image file using master-equivalent loading
  */
 std::vector<std::vector<std::pair<double, double>>> 
 process_file(const std::string& path,
              double threshold,
+             int blur_pixels,
              bool verbose) {
-    return vectorize_image(path, threshold, verbose);
+    // Load image like master (handles RGBA compositing on white, converts to grayscale)
+    cv::Mat bwImg = load_image_like_master(path, true);
+    
+    if (bwImg.empty()) {
+        throw std::runtime_error("Failed to load image: " + path);
+    }
+    
+    // Vectorize using core algorithm
+    return vectorize_mat(bwImg, threshold, blur_pixels, verbose);
 }
 
 } // namespace polyvector
@@ -82,14 +92,22 @@ PYBIND11_MODULE(gp_linevector, m) {
     m.def("vectorize_image", &polyvector::process_file,
           py::arg("image_path"),
           py::arg("threshold") = 90.0,
+          py::arg("blur_pixels") = 0,
           py::arg("verbose") = false,
           R"doc(
-              Vectorize an image file.
+              Vectorize an image file (MASTER-EQUIVALENT METHOD).
+              
+              Loads image using OpenCV like PolyVectorization master does:
+              - No Blender color management
+              - RGBA composited on white background
+              - Converted to grayscale with OpenCV weights
+              - Then inverted, thresholded, and vectorized
               
               Args:
                   image_path: Path to input image (PNG, JPG, etc.)
                   threshold: Background/foreground threshold (0-255, default=90)
                              Lower values = more ink is detected
+                  blur_pixels: Gaussian blur radius (0-10, default=0)
                   verbose: Enable detailed logging for debugging (default=False)
                              
               Returns:
@@ -101,13 +119,18 @@ PYBIND11_MODULE(gp_linevector, m) {
                   >>> print(f"Found {len(strokes)} strokes")
           )doc");
 
+    // DEPRECATED: vectorize_array (use vectorize_image for master-equivalent results)
     m.def("vectorize_array", &polyvector::process_numpy,
           py::arg("image"),
           py::arg("threshold") = 90.0,
           py::arg("blur_pixels") = 0,
           py::arg("verbose") = false,
           R"doc(
-              Vectorize a numpy array image.
+              Vectorize a numpy array image (DEPRECATED - use vectorize_image instead).
+              
+              WARNING: This method is subject to Blender's color management and pixel
+              pipeline differences. For master-equivalent results, use vectorize_image()
+              which loads files directly via OpenCV.
               
               Args:
                   image: Numpy array of shape (H, W) or (H, W, 3) or (H, W, 4)
