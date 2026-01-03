@@ -193,7 +193,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     
 elseif(MSVC)
     # Visual Studio
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /fp:fast")
+    # Using /fp:precise for better numerical accuracy (avoids aggressive FP optimizations)
+    # Changed from /fp:fast to reduce cross-platform variation in corner/intersection quality
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /fp:precise")
     
     # Auto-detect CPU features (VS 2017+)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|X86")

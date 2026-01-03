@@ -267,19 +267,9 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
         double beta = FRAME_FIELD_SMOOTHNESS_WEIGHT;
         std::vector<MyPolyline> allVectorization;
 
-        // Process each component separately in parallel
-        // Each component is completely independent, so this is 100% safe
-        // Use dynamic scheduling to balance workload (components vary in complexity)
-#ifdef _OPENMP
-#pragma omp parallel
-        {
-            // Thread-local storage for results
-            std::vector<MyPolyline> localVectorization;
-            
-#pragma omp for schedule(dynamic)
-#endif
-        // Use int for OpenMP loop variable (MSVC requirement: C3016)
-        for (int compIdx = 0; compIdx < static_cast<int>(componentMasks.size()); ++compIdx) {
+        // Process each component separately
+        // NOTE: Parallelization caused 2x slowdown due to overhead - keep serial
+        for (size_t compIdx = 0; compIdx < componentMasks.size(); ++compIdx) {
             PV_RUNTIME_VLOG("COMPONENT " << compIdx << " / " << componentMasks.size());
             cv::Mat& compMask = componentMasks[compIdx];
             
@@ -528,29 +518,10 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             smooth(compNewVectorization);
 
             // Accumulate results from this component
-#ifdef _OPENMP
-            // In parallel mode: accumulate to thread-local storage
-            localVectorization.insert(localVectorization.end(), 
-                                     compNewVectorization.begin(), 
-                                     compNewVectorization.end());
-#else
-            // In serial mode: accumulate directly
             allVectorization.insert(allVectorization.end(), 
                                    compNewVectorization.begin(), 
                                    compNewVectorization.end());
-#endif
         }
-        
-#ifdef _OPENMP
-            // Merge thread-local results into final result (thread-safe)
-#pragma omp critical
-            {
-                allVectorization.insert(allVectorization.end(),
-                                       localVectorization.begin(),
-                                       localVectorization.end());
-            }
-        } // end omp parallel
-#endif
 
         // Convert to output format
         for (const auto& poly : allVectorization) {
