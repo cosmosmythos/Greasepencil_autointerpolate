@@ -163,10 +163,17 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                 
                 image = None
                 try:
+                    # Load image with NO color management (raw pixel values like master)
                     image = bpy.data.images.load(filepath)
+                    
+                    # CRITICAL: Disable Blender color management to get raw pixel values
+                    # Master reads raw RGB/RGBA from disk without color space transforms
+                    image.colorspace_settings.name = 'Raw'
+                    
                     width, height = image.size
                     channels = image.channels
                     
+                    # Get raw float pixels [0..1] from Blender
                     pixels = np.array(image.pixels[:]).reshape((height, width, channels))
                     
                     polylines = vectorization.process_image_to_polylines(

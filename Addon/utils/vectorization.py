@@ -57,16 +57,55 @@ def process_image_to_polylines(
             "Ensure wheels are loaded via blender_manifest.toml"
         )
     
-    # Convert float [0,1] to uint8 [0,255] if needed
-    if image_array.dtype == np.float32 or image_array.dtype == np.float64:
-        if image_array.max() <= 1.0:
-            image_array = (image_array * 255).astype(np.uint8)
-        else:
-            image_array = image_array.astype(np.uint8)
+    # ============================================================================
+    # CRITICAL PREPROCESSING: Convert to master-equivalent grayscale uint8
+    # Master expects: opaque RGB image with dark lines on light background
+    # ============================================================================
     
-    # Ensure uint8
-    if image_array.dtype != np.uint8:
-        image_array = image_array.astype(np.uint8)
+    # Handle RGBA by compositing on WHITE background (master assumes opaque images)
+    if image_array.shape[2] == 4:  # RGBA
+        # Extract RGB and Alpha channels (float [0..1])
+        rgb = image_array[..., :3].astype(np.float32)
+        alpha = image_array[..., 3:4].astype(np.float32)
+        
+        # Composite on WHITE background: result = rgb*alpha + white*(1-alpha)
+        # This matches master's expectation (dark lines on light background)
+        composited = rgb * alpha + 1.0 * (1.0 - alpha)
+        
+        # Convert to grayscale using OpenCV weights (matches master's cvtColor BGR2GRAY)
+        # Formula: 0.299*R + 0.587*G + 0.114*B
+        gray = (0.299 * composited[..., 0] + 
+                0.587 * composited[..., 1] + 
+                0.114 * composited[..., 2])
+        
+        # Convert to uint8 [0..255] with rounding (not truncation!)
+        image_array = np.clip(gray * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        
+    elif image_array.shape[2] == 3:  # RGB (no alpha)
+        # Convert RGB to grayscale using same weights as OpenCV
+        if image_array.dtype in [np.float32, np.float64]:
+            gray = (0.299 * image_array[..., 0] + 
+                    0.587 * image_array[..., 1] + 
+                    0.114 * image_array[..., 2])
+            image_array = np.clip(gray * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        else:  # already uint8
+            gray = (0.299 * image_array[..., 0].astype(np.float32) + 
+                    0.587 * image_array[..., 1].astype(np.float32) + 
+                    0.114 * image_array[..., 2].astype(np.float32))
+            image_array = np.clip(gray + 0.5, 0, 255).astype(np.uint8)
+    
+    elif image_array.shape[2] == 1:  # Already grayscale
+        if image_array.dtype in [np.float32, np.float64]:
+            image_array = np.clip(image_array[..., 0] * 255.0 + 0.5, 0, 255).astype(np.uint8)
+        else:
+            image_array = image_array[..., 0].astype(np.uint8)
+    
+    else:
+        raise ValueError(f"Unexpected image shape: {image_array.shape}. Expected H×W×C with C=1,3,4")
+    
+    # Now image_array is H×W grayscale uint8, ready for master-equivalent processing
+    # Master will do: invert → threshold → repairMask → gradient → optimize
+    # (all handled in C++ polyvector_core.cpp)
     
     # Call LineVector (threshold=90 matches master default)
     strokes = gp_linevector.vectorize_array(
