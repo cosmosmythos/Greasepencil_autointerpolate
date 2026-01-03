@@ -1,10 +1,11 @@
 # stroke_guide.py - Modern Blender Extension Module
-# OPTIMIZED: Reduced signature overhead and screen coordinate caching
+# OPTIMIZED: Reduced signature overhead
 
 import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 import bpy_extras.view3d_utils
+import math
 
 # Module state
 guide_state = {
@@ -16,10 +17,8 @@ guide_state = {
     'last_stroke_count': 0,
     'last_frame': None,
     'last_layer_signature': None,
-    # OPTIMIZATION: Screen coordinate caching
-    'coord_cache': {},
-    'cached_view_matrix': None,
-    'cache_region_size': None,
+    # Forces viewport redraws while guide is enabled (fixes camera view pan/zoom not updating)
+    'redraw_timer_running': False,
 }
 
 
@@ -101,28 +100,14 @@ def update_stroke_guide_auto():
         guide_state['last_stroke_count'] = current_stroke_count
         guide_state['last_frame'] = current_frame
         
-        # CRITICAL: Clear coordinate cache when frame changes
-        guide_state['coord_cache'].clear()
-        
         refresh_guide_display()
         return
     
-    # Handle new stroke detection (same frame, more strokes)
-    if current_stroke_count > guide_state['last_stroke_count']:
-        guide_state['stroke_index'] = current_stroke_count  # Auto-advance to next stroke
+    # Handle stroke count changes (both increases AND decreases for undo support)
+    if current_stroke_count != guide_state['last_stroke_count']:
+        # Stroke count changed - update stroke index to current count
+        guide_state['stroke_index'] = current_stroke_count
         guide_state['last_stroke_count'] = current_stroke_count
-        
-        # Clear cache when stroke count changes
-        guide_state['coord_cache'].clear()
-        
-        refresh_guide_display()
-    elif current_stroke_count == 0:
-        # New keyframe detected - reset to stroke 0
-        guide_state['stroke_index'] = 0
-        guide_state['last_stroke_count'] = 0
-        
-        # Clear cache
-        guide_state['coord_cache'].clear()
         
         refresh_guide_display()
 
@@ -138,18 +123,99 @@ def convert_points_to_screen(points, gp_obj, region, rv3d):
             world_pt = gp_obj.matrix_world @ pt
             screen_pt = bpy_extras.view3d_utils.location_3d_to_region_2d(region, rv3d, world_pt)
             if screen_pt and len(screen_pt) >= 2:
-                coords_2d.append((screen_pt[0], screen_pt[1]))
+                coords_2d.append((float(screen_pt[0]), float(screen_pt[1])))
         except (ValueError, TypeError, AttributeError):
             continue
-    
+
     return coords_2d
 
 
+def _arrow_triangles_for_polyline(coords_2d, spacing_px=60.0, size_px=14.0):
+    """Build arrowhead triangles along a 2D polyline.
+
+    Returns a flat list of 2D vertices suitable for batch_for_shader(..., 'TRIS', ...).
+    Vulkan-friendly: uses triangles instead of thick lines.
+    """
+    if not coords_2d or len(coords_2d) < 2:
+        return []
+
+    # Compute cumulative arc-length
+    cum = [0.0]
+    for i in range(1, len(coords_2d)):
+        x0, y0 = coords_2d[i - 1]
+        x1, y1 = coords_2d[i]
+        seg = math.hypot(x1 - x0, y1 - y0)
+        cum.append(cum[-1] + seg)
+
+    total = cum[-1]
+    if total <= 1e-4:
+        return []
+
+    # Place arrows starting half spacing in, then every spacing
+    spacing_px = max(10.0, float(spacing_px))
+    size_px = max(4.0, float(size_px))
+    start = spacing_px * 0.5
+
+    # If the stroke is short, try placing exactly one arrow in the middle
+    if total < spacing_px:
+        start = total * 0.5
+
+    verts = []
+    d = start
+    while d < total - size_px:
+        # find segment
+        j = 1
+        while j < len(cum) and cum[j] < d:
+            j += 1
+        if j >= len(cum):
+            break
+
+        x0, y0 = coords_2d[j - 1]
+        x1, y1 = coords_2d[j]
+        seg_len = cum[j] - cum[j - 1]
+        if seg_len <= 1e-6:
+            d += spacing_px
+            continue
+
+        t = (d - cum[j - 1]) / seg_len
+        px = x0 + (x1 - x0) * t
+        py = y0 + (y1 - y0) * t
+
+        # direction (tangent)
+        dx = x1 - x0
+        dy = y1 - y0
+        L = math.hypot(dx, dy)
+        if L <= 1e-6:
+            d += spacing_px
+            continue
+        dx /= L
+        dy /= L
+
+        # Arrow triangle: tip forward, base behind with small width
+        tipx = px + dx * size_px
+        tipy = py + dy * size_px
+
+        basex = px - dx * size_px * 0.6
+        basey = py - dy * size_px * 0.6
+
+        # perpendicular for width
+        wx = -dy * size_px * 0.45
+        wy = dx * size_px * 0.45
+
+        leftx = basex + wx
+        lefty = basey + wy
+        rightx = basex - wx
+        righty = basey - wy
+
+        verts.extend([(tipx, tipy), (leftx, lefty), (rightx, righty)])
+
+        d += spacing_px
+
+    return verts
+
+
 def draw_stroke_guide_overlay(gp_obj, layer, current_frame, direction, color):
-    """
-    OPTIMIZED: Draw stroke guide with screen coordinate caching.
-    Caches converted coordinates until view changes.
-    """
+    """Draw stroke guide overlay."""
     frames = sorted([f.frame_number for f in layer.frames])
     target_frame = None
     
@@ -180,36 +246,9 @@ def draw_stroke_guide_overlay(gp_obj, layer, current_frame, direction, color):
     if not region or not rv3d:
         return
     
-    # OPTIMIZATION: Check if we can use cached coordinates
-    # Create view matrix tuple for comparison (hashable)
-    current_view_matrix = tuple(tuple(row) for row in rv3d.view_matrix)
-    current_region_size = (region.width, region.height)
-    
-    # Cache key includes: target frame, direction, stroke index, view matrix, region size
-    cache_key = (
-        target_frame,
-        direction,
-        guide_state['stroke_index'],
-        current_view_matrix,
-        current_region_size
-    )
-    
-    # Check if we can use cached coordinates
-    if cache_key in guide_state['coord_cache']:
-        coords_2d = guide_state['coord_cache'][cache_key]
-    else:
-        # Convert and cache
-        coords_2d = convert_points_to_screen(points, gp_obj, region, rv3d)
-        
-        # Store in cache
-        guide_state['coord_cache'][cache_key] = coords_2d
-        
-        # OPTIMIZATION: Limit cache size to prevent memory bloat
-        if len(guide_state['coord_cache']) > 20:
-            # Keep only most recent entries
-            oldest_keys = list(guide_state['coord_cache'].keys())[:-10]
-            for old_key in oldest_keys:
-                del guide_state['coord_cache'][old_key]
+    # ALWAYS recalculate screen coordinates (fixes camera view zoom/pan)
+    # This ensures guides track properly in both viewport and camera view
+    coords_2d = convert_points_to_screen(points, gp_obj, region, rv3d)
     
     if len(coords_2d) < 2:
         return
@@ -217,14 +256,29 @@ def draw_stroke_guide_overlay(gp_obj, layer, current_frame, direction, color):
     # Draw the overlay
     try:
         shader = gpu.shader.from_builtin('UNIFORM_COLOR')
-        batch = batch_for_shader(shader, 'LINE_STRIP', {"pos": coords_2d})
         
         gpu.state.blend_set('ALPHA')
-        gpu.state.line_width_set(4.0)
+        gpu.state.line_width_set(5.0)
         
+        # Base line (OpenGL: thick; Vulkan: may be thin but still provides continuity)
+        batch = batch_for_shader(shader, 'LINE_STRIP', {"pos": coords_2d})
         shader.bind()
         shader.uniform_float("color", color)
         batch.draw(shader)
+
+        # Direction arrows (triangles) - Vulkan-safe and improves usability
+        arrow_verts = _arrow_triangles_for_polyline(coords_2d, spacing_px=60.0, size_px=14.0)
+        if arrow_verts:
+            # Slightly brighter for readability
+            arrow_color = (
+                min(1.0, color[0] * 1.25),
+                min(1.0, color[1] * 1.25),
+                min(1.0, color[2] * 1.25),
+                color[3],
+            )
+            arrow_batch = batch_for_shader(shader, 'TRIS', {"pos": arrow_verts})
+            shader.uniform_float("color", arrow_color)
+            arrow_batch.draw(shader)
         
     except Exception as e:
         print(f"[Stroke Guide] Draw error: {e}")
@@ -266,9 +320,41 @@ def draw_guide_main():
 
 def refresh_guide_display():
     """Force refresh of guide display"""
-    for area in bpy.context.screen.areas:
+    screen = getattr(bpy.context, "screen", None)
+    if not screen:
+        return
+    for area in screen.areas:
         if area.type == 'VIEW_3D':
             area.tag_redraw()
+
+
+def _redraw_timer_callback():
+    """Timer callback: keep viewports redrawing while guides are active."""
+    if guide_state['show_prev'] or guide_state['show_next']:
+        refresh_guide_display()
+        return 0.1  # 10 fps is enough; keeps things responsive without spamming
+
+    guide_state['redraw_timer_running'] = False
+    return None
+
+
+def _ensure_redraw_timer():
+    """Start the redraw timer if it isn't already running."""
+    if guide_state['redraw_timer_running']:
+        return
+    if bpy.app.timers.is_registered(_redraw_timer_callback):
+        guide_state['redraw_timer_running'] = True
+        return
+
+    guide_state['redraw_timer_running'] = True
+    bpy.app.timers.register(_redraw_timer_callback, first_interval=0.1)
+
+
+def _stop_redraw_timer():
+    """Stop the redraw timer."""
+    guide_state['redraw_timer_running'] = False
+    if bpy.app.timers.is_registered(_redraw_timer_callback):
+        bpy.app.timers.unregister(_redraw_timer_callback)
 
 
 def manage_draw_handler():
@@ -281,13 +367,17 @@ def manage_draw_handler():
             draw_guide_main, (), 'WINDOW', 'POST_PIXEL')
         print("[Stroke Guide] Draw handler registered")
         
+        # IMPORTANT: camera view pan/zoom sometimes doesn't trigger redraw events.
+        # A small timer forcing tag_redraw makes guides visually update reliably.
+        _ensure_redraw_timer()
+        
     elif not should_have_handler and guide_state['draw_handler']:
         # Unregister handler
         bpy.types.SpaceView3D.draw_handler_remove(guide_state['draw_handler'], 'WINDOW')
         guide_state['draw_handler'] = None
         
-        # Clear caches when disabling
-        guide_state['coord_cache'].clear()
+        # Stop redraw timer
+        _stop_redraw_timer()
         
         print("[Stroke Guide] Draw handler removed")
 
@@ -299,6 +389,17 @@ def on_stroke_guide_update(scene, depsgraph=None):
         # Only run when guides are active
         update_stroke_guide_auto()
         refresh_guide_display()
+
+
+def on_stroke_guide_undo_redo(scene):
+    """Force guide refresh after undo/redo so stroke_index doesn't get stuck."""
+    if not (guide_state['show_prev'] or guide_state['show_next']):
+        return
+
+    # Invalidate signature so update_stroke_guide_auto recomputes
+    guide_state['last_layer_signature'] = None
+    update_stroke_guide_auto()
+    refresh_guide_display()
 
 
 # Operators
@@ -329,7 +430,6 @@ class GP_TogglePrevGuide(bpy.types.Operator):
                     guide_state['last_stroke_count'] = current_stroke_count
             
             guide_state['last_layer_signature'] = None  # Force update
-            guide_state['coord_cache'].clear()  # Clear cache
         
         manage_draw_handler()
         refresh_guide_display()
@@ -363,7 +463,6 @@ class GP_ToggleNextGuide(bpy.types.Operator):
                     guide_state['last_stroke_count'] = current_stroke_count
             
             guide_state['last_layer_signature'] = None  # Force update
-            guide_state['coord_cache'].clear()  # Clear cache
         
         manage_draw_handler()
         refresh_guide_display()
@@ -382,7 +481,6 @@ class GP_ToggleAutoMode(bpy.types.Operator):
             guide_state['last_stroke_count'] = 0
             guide_state['stroke_index'] = 0
             guide_state['last_layer_signature'] = None
-            guide_state['coord_cache'].clear()
         
         refresh_guide_display()
         return {'FINISHED'}
@@ -395,7 +493,6 @@ class GP_NextStroke(bpy.types.Operator):
     def execute(self, context):
         guide_state['auto_mode'] = False  # Switch to manual
         guide_state['stroke_index'] += 1
-        guide_state['coord_cache'].clear()  # Clear cache when manually changing
         refresh_guide_display()
         return {'FINISHED'}
 
@@ -408,7 +505,6 @@ class GP_PrevStroke(bpy.types.Operator):
         guide_state['auto_mode'] = False  # Switch to manual
         if guide_state['stroke_index'] > 0:
             guide_state['stroke_index'] -= 1
-        guide_state['coord_cache'].clear()  # Clear cache when manually changing
         refresh_guide_display()
         return {'FINISHED'}
 
@@ -466,6 +562,12 @@ def register():
     if on_stroke_guide_update not in bpy.app.handlers.frame_change_post:
         bpy.app.handlers.frame_change_post.append(on_stroke_guide_update)
 
+    # Undo/redo handlers: ensure the guide updates immediately after undo/redo
+    if on_stroke_guide_undo_redo not in bpy.app.handlers.undo_post:
+        bpy.app.handlers.undo_post.append(on_stroke_guide_undo_redo)
+    if on_stroke_guide_undo_redo not in bpy.app.handlers.redo_post:
+        bpy.app.handlers.redo_post.append(on_stroke_guide_undo_redo)
+
 
 def unregister():
     """Clean unregister - standard Blender pattern"""
@@ -473,13 +575,19 @@ def unregister():
     if guide_state['draw_handler']:
         bpy.types.SpaceView3D.draw_handler_remove(guide_state['draw_handler'], 'WINDOW')
         guide_state['draw_handler'] = None
+
+    _stop_redraw_timer()
     
-    # Clear all caches
-    guide_state['coord_cache'].clear()
     
     # Remove from frame change handler
     if on_stroke_guide_update in bpy.app.handlers.frame_change_post:
         bpy.app.handlers.frame_change_post.remove(on_stroke_guide_update)
+
+    # Remove undo/redo handlers
+    if on_stroke_guide_undo_redo in bpy.app.handlers.undo_post:
+        bpy.app.handlers.undo_post.remove(on_stroke_guide_undo_redo)
+    if on_stroke_guide_undo_redo in bpy.app.handlers.redo_post:
+        bpy.app.handlers.redo_post.remove(on_stroke_guide_undo_redo)
     
     # Remove from header
     bpy.types.VIEW3D_HT_tool_header.remove(draw_header)

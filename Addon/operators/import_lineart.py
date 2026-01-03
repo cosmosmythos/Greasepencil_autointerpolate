@@ -247,8 +247,12 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     x = polyline[i, 0] if polyline.ndim == 2 else polyline[i][0]
                     y = polyline[i, 1] if polyline.ndim == 2 else polyline[i][1]
                     
+                    # Convert to Blender coordinates
+                    # OpenCV/image coords: (0,0) at top-left, Y increases downward
+                    # Blender coords: (0,0) at center, Z increases upward
+                    # So we flip Y: Blender Z = (image_height - y) to make top→top, bottom→bottom
                     scaled_x = float(x * self.scale_factor) - center_x
-                    scaled_z = float(-(image_height - y) * self.scale_factor) - center_z
+                    scaled_z = float((image_height - y) * self.scale_factor) - center_z  # Removed negative sign
                     
                     positions.extend([scaled_x, 0.0, scaled_z])
             

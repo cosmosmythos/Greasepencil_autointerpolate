@@ -99,17 +99,21 @@ def _set_modifier_visible(visible: bool):
 
 
 def update_modifier_visibility():
-    """Updates the visibility of the Auto-Interpolate modifier based on current state."""
+    """Updates the visibility of the Auto-Interpolate modifier based on current state.
+
+    Important: frame_change_post handlers can run in contexts where bpy.context.active_object
+    is unavailable. Always resolve the target object via the stored scene property.
+    """
     scene = bpy.context.scene
-    gp_obj = bpy.context.active_object
-    
+
+    target_name = scene.get("gp_interpolation_target")
+    if not target_name:
+        return
+
+    gp_obj = bpy.data.objects.get(target_name)
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return
-    
-    target_name = scene.get("gp_interpolation_target")
-    if not target_name or gp_obj.name != target_name:
-        return
-    
+
     should_show = should_show_modifier()
     _set_modifier_visible(should_show)
 
@@ -146,8 +150,10 @@ def on_frame_change(scene, depsgraph=None):
     if not target_name:
         return
     
-    active_obj = bpy.context.active_object
-    if not active_obj or active_obj.name != target_name:
+    # In frame_change_post, bpy.context may not expose active_object.
+    # Use the stored target name to resolve the object directly.
+    active_obj = bpy.data.objects.get(target_name)
+    if not active_obj:
         return
     
     # Update modifier visibility
@@ -163,6 +169,8 @@ def on_frame_change(scene, depsgraph=None):
     # Only process interpolation if modifier should be visible (optimization)
     if should_show_modifier():
         from ..core import interpolation
+        # interpolation.process expects a context-like object; in restricted handler contexts
+        # bpy.context may miss attributes, so pass it through but guard inside interpolation.
         interpolation.process(bpy.context)
 
 

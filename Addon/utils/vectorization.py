@@ -12,8 +12,8 @@ from typing import List
 try:
     import gp_linevector
     _linevector_available = True
-    print("[GPAI Lineart] LineVector module loaded successfully")
-    print(f"[GPAI Lineart] Version: {gp_linevector.__version__}")
+    # Keep startup logging clean: one line on success.
+    print("[GPAI Lineart] Module loaded successfully")
 except ImportError as e:
     _linevector_available = False
     print(f"[GPAI Lineart] ERROR: LineVector module not available: {e}")
