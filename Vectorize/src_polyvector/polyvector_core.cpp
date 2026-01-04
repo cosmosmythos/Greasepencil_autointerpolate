@@ -27,6 +27,7 @@
 #include "opencv2/imgproc/imgproc.hpp"
 
 #include <array>
+#include <cmath>
 #include <iostream>
 #include <fstream>
 
@@ -555,6 +556,79 @@ vectorize_image(const std::string& image_path, double threshold, bool verbose) {
     }
     
     return vectorize_mat(image, threshold, 0, verbose);
+}
+
+std::vector<std::vector<std::pair<double, double>>>
+vectorize_image_with_downscale(const std::string& image_path,
+                                double threshold,
+                                int blur_pixels,
+                                int user_downscale,
+                                bool verbose) {
+    // Load image using master-equivalent preprocessing
+    cv::Mat bwImg = load_image_like_master(image_path, true);
+
+    if (bwImg.empty()) {
+        std::cerr << "Failed to load image: " << image_path << std::endl;
+        return {};
+    }
+
+    int orig_width = bwImg.cols;
+    int orig_height = bwImg.rows;
+    
+    // Smart downscaling logic:
+    // 1. Auto-cap: if max dimension > 1024, scale down to 1024 on longest side
+    // 2. User divisor: further divide by user_downscale (1-4)
+    
+    int max_dim = std::max(orig_width, orig_height);
+    double auto_scale = 1.0;
+    if (max_dim > 1024) {
+        auto_scale = 1024.0 / static_cast<double>(max_dim);
+    }
+    
+    int user_div = std::max(1, user_downscale);
+    double final_scale = auto_scale / static_cast<double>(user_div);
+    
+    int proc_width = std::max(1, static_cast<int>(std::round(orig_width * final_scale)));
+    int proc_height = std::max(1, static_cast<int>(std::round(orig_height * final_scale)));
+    
+    bool needs_downscale = (proc_width != orig_width) || (proc_height != orig_height);
+    
+    cv::Mat processing_img;
+    double scale_x = 1.0;
+    double scale_y = 1.0;
+    
+    if (needs_downscale) {
+        // Resize using INTER_AREA (best for downsampling)
+        cv::resize(bwImg, processing_img, cv::Size(proc_width, proc_height), 0, 0, cv::INTER_AREA);
+        scale_x = static_cast<double>(orig_width) / static_cast<double>(proc_width);
+        scale_y = static_cast<double>(orig_height) / static_cast<double>(proc_height);
+        
+        if (verbose) {
+            std::cout << "[Downscale] Original: " << orig_width << "x" << orig_height 
+                      << " -> Processing: " << proc_width << "x" << proc_height 
+                      << " (scale: " << final_scale << ")" << std::endl;
+        }
+    } else {
+        processing_img = bwImg;
+        if (verbose) {
+            std::cout << "[Downscale] No resize needed: " << orig_width << "x" << orig_height << std::endl;
+        }
+    }
+    
+    // Vectorize at processing resolution
+    auto polylines = vectorize_mat(processing_img, threshold, blur_pixels, verbose);
+    
+    // Scale polyline coordinates back to original image space
+    if (needs_downscale) {
+        for (auto& polyline : polylines) {
+            for (auto& point : polyline) {
+                point.first *= scale_x;
+                point.second *= scale_y;
+            }
+        }
+    }
+    
+    return polylines;
 }
 
 } // namespace polyvector

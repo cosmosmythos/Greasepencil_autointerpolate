@@ -63,7 +63,15 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         description="Gaussian blur radius in pixels applied before vectorization (0 disables)",
         default=0,
         min=0,
-        max=10,
+        max=5,
+    )
+
+    downscale: IntProperty(
+        name="Downscale",
+        description="Smaller = faster. Extra reduction applied after the automatic 1024px cap",
+        default=2,
+        min=1,
+        max=4,
     )
 
     verbose_logging: BoolProperty(
@@ -161,35 +169,30 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                 if not os.path.exists(filepath):
                     continue
                 
-                # Use C++ direct file loading (master-equivalent)
-                # This bypasses Blender's pixel pipeline entirely
                 try:
                     # Get absolute path (handles Blender relative paths like //...)
                     abs_filepath = bpy.path.abspath(filepath)
-                    
-                    # Load via C++ OpenCV (like master does)
-                    polylines = vectorization.process_image_file(
+
+                    polylines = vectorization.process_image_file_with_downscale(
                         abs_filepath,
                         blur_pixels=self.blur_pixels,
+                        user_downscale=self.downscale,
                         verbose=self.verbose_logging,
                     )
                     
                     if len(polylines) > 0:
-                        # Get image dimensions for coordinate scaling
+                        # Get original image dimensions for coordinate scaling
                         temp_img = bpy.data.images.load(abs_filepath)
-                        width, height = temp_img.size
+                        orig_width, orig_height = temp_img.size
                         bpy.data.images.remove(temp_img)
                         
                         stroke_count = self._create_strokes_gpv3(
-                            layer, frame_number, polylines, width, height
+                            layer, frame_number, polylines, orig_width, orig_height
                         )
                         total_strokes += stroke_count
                     
                 except Exception as e:
                     print(f"[GPAI Lineart] Error: {e}")
-                
-                finally:
-                    pass  # No cleanup needed (C++ handles file loading)
                 
                 frame_number += self.frame_step
         
@@ -339,6 +342,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
 
         box = layout.box()
         box.label(text="Preprocessing", icon='IMAGE')
+        box.prop(self, "downscale")
         box.prop(self, "blur_pixels")
 
         # Note: Smoothing (10 iters, 0.5 weight) and simplification (1e-2) 
@@ -346,13 +350,13 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
         # Threshold is fixed at 90 (master default).
         
         box = layout.box()
-        box.label(text="Advanced", icon='PREFERENCES')
-        box.prop(self, "verbose_logging")
-        
-        box = layout.box()
         box.label(text="Image Sequence", icon='SEQUENCE')
         box.prop(self, "start_frame")
         box.prop(self, "frame_step")
+
+        box = layout.box()
+        box.label(text="Developer", icon='PREFERENCES')
+        box.prop(self, "verbose_logging")
 
 
 def menu_func_import(self, context):

@@ -15,6 +15,13 @@ def load():
         return  # Already loaded
     
     try:
+        # Ensure wheel-bundled DLLs are discoverable on Windows before importing the extension.
+        try:
+            from ..utils.dll_loader import add_wheel_dll_dirs
+            add_wheel_dll_dirs("gp_autointerpolate")
+        except Exception:
+            pass
+
         import gp_autointerpolate  # Direct import from wheel
         interpolator_module = gp_autointerpolate
         print("[GPAI] Module loaded successfully")

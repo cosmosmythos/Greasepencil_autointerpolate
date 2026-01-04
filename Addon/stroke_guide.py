@@ -523,18 +523,25 @@ def draw_header(self, context):
     row = layout.row(align=True)
     row.operator("gp.toggle_prev_guide", depress=guide_state['show_prev'], text="", icon="PLAY_REVERSE")
     row.operator("gp.toggle_next_guide", depress=guide_state['show_next'], text="", icon="PLAY")
-    
-    if guide_state['show_prev'] or guide_state['show_next']:
-        # Mode toggle
-        row.operator("gp.toggle_auto_mode", 
-                    text="Auto" if guide_state['auto_mode'] else "Manual", 
-                    depress=guide_state['auto_mode'])
-        
+
+    # Always show the Auto/Manual toggle.
+    # When no guide is active, keep it visible but disabled to avoid confusing "no-op" behavior.
+    guide_active = guide_state['show_prev'] or guide_state['show_next']
+
+    mode_row = row.row(align=True)
+    mode_row.enabled = guide_active
+    mode_row.operator(
+        "gp.toggle_auto_mode",
+        text="Auto" if guide_state['auto_mode'] else "Manual",
+        depress=guide_state['auto_mode'],
+    )
+
+    if guide_active:
         # Manual controls (only when needed)
         if not guide_state['auto_mode']:
             row.operator("gp.prev_stroke", text="", icon="ZOOM_OUT")
             row.operator("gp.next_stroke", text="", icon="ZOOM_IN")
-        
+
         # Stroke index display
         row.label(text=f"S[{guide_state['stroke_index']}]")
 
