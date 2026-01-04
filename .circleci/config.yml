@@ -414,4 +414,4 @@ workflows:
       - polyvector_master_linux:
           filters:
             branches:
-              only: polyvector-master-only
+              only: main
