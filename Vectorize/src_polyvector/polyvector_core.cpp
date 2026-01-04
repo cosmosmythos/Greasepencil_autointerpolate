@@ -21,6 +21,7 @@
 #include "findSingularities.h"
 #include "traceAuto.h"
 #include "polynomial_energy.h"
+#include "image_loader.h"
 
 #include "opencv2/core/eigen.hpp"
 #include "opencv2/highgui/highgui.hpp"
