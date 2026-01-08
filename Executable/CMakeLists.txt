@@ -85,7 +85,6 @@ set(FTPSC_SOURCES
     src/interpolate.cpp
     src/fuzzy_topology.cpp
     src/greedy_matcher.cpp
-    src/salient_point_matcher.cpp
     src/similarity_transform.cpp
     src/stroke_matcher.cpp
     src/stage_one.cpp
