@@ -32,10 +32,10 @@
 #include <iostream>
 #include <fstream>
 
-namespace polyvector {
-
-// Runtime logging flag used by PV_LOG macros (thread-local for safety).
+// Runtime logging flag used by PV_LOG macros (defined in global scope to match declaration)
 bool PV_RUNTIME_VERBOSE = false;
+
+namespace polyvector {
 
 // Helper functions from main.cpp
 static void calculateGradient(const cv::Mat& bwImg, int m, int n,
