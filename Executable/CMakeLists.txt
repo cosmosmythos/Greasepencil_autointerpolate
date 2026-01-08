@@ -50,10 +50,60 @@ FetchContent_MakeAvailable(pybind11)
 set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
 
 # ============================================================================
+# EIGEN3 DEPENDENCY (for stage_two.cpp)
+# ============================================================================
+
+find_package(Eigen3 3.3 QUIET)
+if(Eigen3_FOUND)
+    message(STATUS "Eigen3 found: ${EIGEN3_INCLUDE_DIR}")
+    set(FTPSC_USE_EIGEN ON)
+else()
+    message(STATUS "Eigen3 not found - Stage 2 PCA will use fallback implementation")
+    set(FTPSC_USE_EIGEN OFF)
+endif()
+
+# ============================================================================
+# NANOFLANN DEPENDENCY (header-only, for stage_two.cpp k-NN search)
+# ============================================================================
+
+# Fetch nanoflann (header-only library)
+FetchContent_Declare(
+    nanoflann
+    GIT_REPOSITORY https://github.com/jlblancoc/nanoflann.git
+    GIT_TAG v1.5.5
+)
+FetchContent_MakeAvailable(nanoflann)
+message(STATUS "nanoflann fetched successfully (header-only)")
+set(FTPSC_USE_NANOFLANN ON)
+
+# ============================================================================
 # BUILD MODULE
 # ============================================================================
 
-pybind11_add_module(gp_autointerpolate src/interpolate.cpp)
+# Collect all FTP-SC source files
+set(FTPSC_SOURCES
+    src/interpolate.cpp
+    src/fuzzy_topology.cpp
+    src/greedy_matcher.cpp
+    src/salient_point_matcher.cpp
+    src/similarity_transform.cpp
+    src/stroke_matcher.cpp
+    src/stage_one.cpp
+    src/stage_two.cpp
+)
+
+pybind11_add_module(gp_autointerpolate ${FTPSC_SOURCES})
+
+# Add compile definitions for optional dependencies
+if(FTPSC_USE_EIGEN)
+    target_compile_definitions(gp_autointerpolate PRIVATE FTPSC_USE_EIGEN)
+    target_link_libraries(gp_autointerpolate PRIVATE Eigen3::Eigen)
+endif()
+
+if(FTPSC_USE_NANOFLANN)
+    target_compile_definitions(gp_autointerpolate PRIVATE FTPSC_USE_NANOFLANN)
+    target_include_directories(gp_autointerpolate PRIVATE ${nanoflann_SOURCE_DIR}/include)
+endif()
 
 # Enable static linking for Linux cross-distribution compatibility
 if(UNIX AND NOT APPLE)

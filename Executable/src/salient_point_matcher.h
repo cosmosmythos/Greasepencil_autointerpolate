@@ -1,13 +1,35 @@
 #pragma once
 
 #define _USE_MATH_DEFINES
-#include "hierarchical_interp.h"
+#include "stroke.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <vector>
 
 namespace ftpsc {
+
+/**
+ * @brief A salient point on a stroke (feature point)
+ * 
+ * Used for hierarchical interpolation and shape matching.
+ * These are typically corners, inflection points, or other geometrically
+ * significant locations along a stroke.
+ */
+struct SalientPoint {
+    Vec2 position;           // 2D position of the salient point
+    double arc_length_ratio; // Normalized position along stroke [0,1]
+    double turning_angle;    // Curvature/turning angle at this point (radians)
+    double importance;       // Importance weight (e.g., based on curvature magnitude)
+    
+    SalientPoint() 
+        : position(0.0, 0.0), arc_length_ratio(0.0), 
+          turning_angle(0.0), importance(1.0) {}
+    
+    SalientPoint(Vec2 pos, double arc_ratio, double angle, double imp = 1.0)
+        : position(pos), arc_length_ratio(arc_ratio), 
+          turning_angle(angle), importance(imp) {}
+};
 
 /**
  * @brief Dynamic Programming Matcher for Salient Points (YF09 / LWZ04)

@@ -197,10 +197,21 @@ def process(context):
                 'handle_right': []
             }
             
-            max_strokes = min(len(prev_strokes), len(next_strokes))
-            for stroke_idx in range(max_strokes):
-                prev_stroke = prev_strokes[stroke_idx]
-                next_stroke = next_strokes[stroke_idx]
+            # Build Match_ID lookup for next_strokes
+            next_by_match_id = {}
+            for idx, stroke in enumerate(next_strokes):
+                match_id = stroke.get('match_id', idx)
+                next_by_match_id[match_id] = idx
+            
+            # Pair strokes using Match_ID (includes FTP-SC matches and position-based fallback)
+            for stroke_idx, prev_stroke in enumerate(prev_strokes):
+                match_id = prev_stroke.get('match_id', stroke_idx)
+                
+                # Find matching stroke by Match_ID
+                if match_id in next_by_match_id:
+                    next_stroke = next_strokes[next_by_match_id[match_id]]
+                else:
+                    continue  # No matching stroke (out of bounds)
                 
                 prev_positions = prev_stroke['position'] if isinstance(prev_stroke, dict) else prev_stroke
                 next_positions = next_stroke['position'] if isinstance(next_stroke, dict) else next_stroke

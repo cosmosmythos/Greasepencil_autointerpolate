@@ -2,7 +2,12 @@
 #include <cmath>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <vector>
+
+// FTP-SC stroke matching
+#include "stroke_matcher.h"
+#include "stroke.h"
 
 
 namespace py = pybind11;
@@ -416,8 +421,11 @@ public:
 // ============================================================================
 
 PYBIND11_MODULE(gp_autointerpolate, m) {
-  m.doc() = "GP Auto Interpolate - Arc interpolation with uniform arc-length "
-            "resampling";
+  m.doc() = "GP Auto Interpolate - Arc interpolation with FTP-SC stroke correspondence";
+  
+  // ============================================================================
+  // Legacy Interpolator (Linear/Arc)
+  // ============================================================================
   py::class_<Interpolator>(m, "Interpolator")
       .def(py::init<>())
       .def("process_interpolation", &Interpolator::process_interpolation,
@@ -433,4 +441,104 @@ PYBIND11_MODULE(gp_autointerpolate, m) {
            py::arg("easing_curve"), py::arg("arc_amount"),
            py::arg("arc_direction"), py::arg("curvature_blend"),
            py::arg("use_spiral"), py::arg("stroke_normal"));
+  
+  // ============================================================================
+  // FTP-SC Stroke Matching
+  // ============================================================================
+  
+  // Configuration
+  py::class_<ftpsc::MatcherConfig>(m, "MatcherConfig")
+      .def(py::init<>())
+      .def_readwrite("max_alpha", &ftpsc::MatcherConfig::max_alpha,
+                     "Max alpha threshold for topology (default: 0.05 for NDC coords)")
+      .def_readwrite("k_neighbors", &ftpsc::MatcherConfig::k_neighbors,
+                     "Number of neighbors for Stage 2 (default: 6)")
+      .def_readwrite("angle_threshold", &ftpsc::MatcherConfig::angle_threshold,
+                     "Angle threshold for Stage 2 in radians (default: pi/4)")
+      .def_readwrite("enable_stage_two", &ftpsc::MatcherConfig::enable_stage_two,
+                     "Enable Stage 2 matching (default: True)")
+      .def_readwrite("coincident_threshold", &ftpsc::MatcherConfig::coincident_threshold,
+                     "Distance for coincident points (default: 0.01)")
+      .def_readwrite("debug", &ftpsc::MatcherConfig::debug,
+                     "Enable debug output (default: False)");
+  
+  // Match result
+  py::class_<ftpsc::MatchingResult>(m, "MatchingResult")
+      .def_readonly("num_strokes_initial", &ftpsc::MatchingResult::num_strokes_initial)
+      .def_readonly("num_strokes_target", &ftpsc::MatchingResult::num_strokes_target)
+      .def_readonly("num_matched", &ftpsc::MatchingResult::num_matched)
+      .def_readonly("num_unmatched_initial", &ftpsc::MatchingResult::num_unmatched_initial)
+      .def_readonly("num_unmatched_target", &ftpsc::MatchingResult::num_unmatched_target)
+      .def_readonly("stage_one_cost", &ftpsc::MatchingResult::stage_one_cost)
+      .def_readonly("final_cost", &ftpsc::MatchingResult::final_cost)
+      .def_readonly("used_stage_two", &ftpsc::MatchingResult::used_stage_two)
+      .def("get_matches", [](const ftpsc::MatchingResult &result) {
+          return result.final_correspondence.matches;
+      }, "Get list of (initial_idx, target_idx) match pairs");
+  
+  // Main matcher class
+  py::class_<ftpsc::StrokeMatcher>(m, "StrokeMatcher")
+      .def(py::init<>())
+      .def(py::init<const ftpsc::MatcherConfig&>(), py::arg("config"))
+      .def("match", [](ftpsc::StrokeMatcher &self,
+                       py::array_t<float> initial_strokes,
+                       py::array_t<float> target_strokes) {
+          // Convert numpy arrays to Stroke vectors
+          // Expected format: flat array of [x0,y0, x1,y1, ..., -1, x0,y0, ...]
+          // where -1 separates strokes
+          
+          auto init_data = initial_strokes.unchecked<1>();
+          auto targ_data = target_strokes.unchecked<1>();
+          
+          std::vector<ftpsc::Stroke> init_strokes, targ_strokes;
+          
+          // Parse initial strokes
+          std::vector<ftpsc::Vec2> current_stroke;
+          for (size_t i = 0; i < initial_strokes.shape(0); i += 2) {
+              float x = init_data(i);
+              if (x < -0.5f) { // Separator marker (-1)
+                  if (!current_stroke.empty()) {
+                      ftpsc::Stroke s;
+                      s.points = current_stroke;
+                      init_strokes.push_back(s);
+                      current_stroke.clear();
+                  }
+              } else if (i + 1 < initial_strokes.shape(0)) {
+                  float y = init_data(i + 1);
+                  current_stroke.emplace_back(x, y);
+              }
+          }
+          if (!current_stroke.empty()) {
+              ftpsc::Stroke s;
+              s.points = current_stroke;
+              init_strokes.push_back(s);
+          }
+          
+          // Parse target strokes
+          current_stroke.clear();
+          for (size_t i = 0; i < target_strokes.shape(0); i += 2) {
+              float x = targ_data(i);
+              if (x < -0.5f) { // Separator marker (-1)
+                  if (!current_stroke.empty()) {
+                      ftpsc::Stroke s;
+                      s.points = current_stroke;
+                      targ_strokes.push_back(s);
+                      current_stroke.clear();
+                  }
+              } else if (i + 1 < target_strokes.shape(0)) {
+                  float y = targ_data(i + 1);
+                  current_stroke.emplace_back(x, y);
+              }
+          }
+          if (!current_stroke.empty()) {
+              ftpsc::Stroke s;
+              s.points = current_stroke;
+              targ_strokes.push_back(s);
+          }
+          
+          return self.match(init_strokes, targ_strokes);
+      }, py::arg("initial_strokes"), py::arg("target_strokes"),
+      "Match strokes between two frames using FTP-SC algorithm")
+      .def("get_config", &ftpsc::StrokeMatcher::get_config)
+      .def("set_config", &ftpsc::StrokeMatcher::set_config, py::arg("config"));
 }

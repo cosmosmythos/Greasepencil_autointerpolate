@@ -197,11 +197,21 @@ class GP_OT_bake_single_frame(Operator):
             all_opacities = []
             all_radii = []
             
-            num_strokes = min(len(prev_strokes), len(next_strokes))
+            # Build Match_ID lookup for next_strokes
+            next_by_match_id = {}
+            for idx, stroke in enumerate(next_strokes):
+                match_id = stroke.get('match_id', idx)
+                next_by_match_id[match_id] = idx
             
-            for stroke_idx in range(num_strokes):
-                prev_stroke = prev_strokes[stroke_idx]
-                next_stroke = next_strokes[stroke_idx]
+            # Pair strokes using Match_ID (includes FTP-SC matches and position-based fallback)
+            for stroke_idx, prev_stroke in enumerate(prev_strokes):
+                match_id = prev_stroke.get('match_id', stroke_idx)
+                
+                # Find matching stroke by Match_ID
+                if match_id in next_by_match_id:
+                    next_stroke = next_strokes[next_by_match_id[match_id]]
+                else:
+                    continue  # No matching stroke (out of bounds)
                 
                 # Position (always present)
                 prev_pos = np.array(prev_stroke['position'], dtype=np.float32)

@@ -14,6 +14,7 @@ from . import core
 from . import utils
 from . import operators
 from . import panels
+from . import gp_correspondence
 
 
 def register():
@@ -38,6 +39,7 @@ def register():
     utils.register()
     operators.register()
     panels.register()
+    gp_correspondence.register()
     
     # Register stroke guide if available
     try:
@@ -57,6 +59,7 @@ def unregister():
         pass
     
     # Unregister submodules (reverse order)
+    gp_correspondence.unregister()
     panels.unregister()
     operators.unregister()
     utils.unregister()

@@ -16,12 +16,7 @@ from gpu_extras.batch import batch_for_shader
 
 # Import utilities
 from .utils.correspondence_utils import get_match_id_from_stroke
-
-
-# ============================================================================
 # Global State (Shared across modules via this file)
-# ============================================================================
-
 _match_job_running = False
 _match_progress = {"current": 0, "total": 0, "status": ""}
 _link_mode_active = False
@@ -30,12 +25,7 @@ _show_matches_viz = False
 _draw_handle_view = None
 _draw_handle_pixel = None
 _match_colors = {}  # {match_id: (r, g, b, a)}
-
-
-# ============================================================================
 # Visualization: Color Generation
-# ============================================================================
-
 def generate_color_for_match_id(match_id, is_linked=False):
     """Generate consistent color for a match_id"""
     if is_linked:
@@ -48,14 +38,9 @@ def generate_color_for_match_id(match_id, is_linked=False):
     g = random.random() * 0.5 + 0.5
     b = random.random() * 0.5 + 0.5
     return (r, g, b, 1.0)
-
-
-# ============================================================================
 # Visualization: Draw Callbacks
-# ============================================================================
-
 def draw_matches_view_callback():
-    """Draw colored strokes in 3D viewport to show matches"""
+    """Draw colored strokes in 3D viewport to show matches, plus orange highlights for selected strokes"""
     if not _show_matches_viz and not _link_mode_active:
         return
     
@@ -66,6 +51,7 @@ def draw_matches_view_callback():
     
     gpu.state.blend_set('ALPHA')
     gpu.state.line_width_set(4.0)
+    gpu.state.depth_test_set('ALWAYS')  # Draw on top
     
     shader = gpu.shader.from_builtin('UNIFORM_COLOR')
     
@@ -154,35 +140,86 @@ def draw_matches_view_callback():
         except:
             pass
     
+    # Draw orange filled squares at center of selected strokes (in link mode) - ON TOP
+    if _link_mode_active:
+        for layer in obj.data.layers:
+            for frame in layer.frames:
+                if frame.drawing is None:
+                    continue
+                
+                for stroke in frame.drawing.strokes:
+                    if not stroke.select:
+                        continue
+                    
+                    if len(stroke.points) == 0:
+                        continue
+                    
+                    try:
+                        # Get midpoint of stroke (middle point index, ON the actual stroke)
+                        mw = obj.matrix_world
+                        mid_idx = len(stroke.points) // 2
+                        mid_point = stroke.points[mid_idx]
+                        
+                        co_local = getattr(mid_point, "position", None)
+                        if co_local is None:
+                            co_local = getattr(mid_point, "co", None)
+                        if co_local is None:
+                            continue
+                        
+                        center_3d = mw @ co_local
+                        
+                        # Draw filled square facing camera (billboard)
+                        size = 0.03  # Size in world units (doubled)
+                        
+                        # Get view matrix to make square face camera
+                        view_matrix = context.region_data.view_matrix
+                        # Extract camera right and up vectors
+                        cam_right = view_matrix.inverted()[0].to_3d().normalized()
+                        cam_up = view_matrix.inverted()[1].to_3d().normalized()
+                        
+                        # Create square vertices facing camera
+                        vertices = [
+                            center_3d - cam_right * size - cam_up * size,
+                            center_3d + cam_right * size - cam_up * size,
+                            center_3d + cam_right * size + cam_up * size,
+                            center_3d - cam_right * size + cam_up * size,
+                        ]
+                        
+                        # Two triangles to make filled square
+                        indices = [0, 1, 2, 0, 2, 3]
+                        tri_vertices = [vertices[i] for i in indices]
+                        
+                        batch = batch_for_shader(shader, 'TRIS', {"pos": tri_vertices})
+                        shader.uniform_float("color", (1.0, 0.4, 0.0, 1.0))  # Vibrant orange, fully opaque
+                        batch.draw(shader)
+                    except:
+                        pass
+    
     gpu.state.line_width_set(1.0)
+    gpu.state.depth_test_set('LESS_EQUAL')
     gpu.state.blend_set('NONE')
 
 
 def draw_selection_pixel_callback():
-    """Draw link mode UI overlay in pixel space"""
+    """Draw link mode UI text overlay"""
     if not _link_mode_active:
         return
     
-    import blf
+    context = bpy.context
     
-    # Draw status text in top-left corner
+    # Draw text overlay
+    import blf
     font_id = 0
     blf.size(font_id, 16)
     blf.color(font_id, 1.0, 0.8, 0.0, 1.0)
-    blf.position(font_id, 15, bpy.context.region.height - 30, 0)
+    blf.position(font_id, 15, context.region.height - 30, 0)
     blf.draw(font_id, "🔗 LINK MODE: Select one stroke in each of two frames, then click Link/Unlink")
     
-    # Show number of linked constraints
     blf.size(font_id, 14)
     blf.color(font_id, 0.8, 0.8, 0.8, 1.0)
-    blf.position(font_id, 15, bpy.context.region.height - 55, 0)
+    blf.position(font_id, 15, context.region.height - 55, 0)
     blf.draw(font_id, f"Linked pairs: {len(_link_constraints)}")
-
-
-# ============================================================================
 # Draw Handler Management
-# ============================================================================
-
 def install_draw_handler():
     """Install viewport draw handlers"""
     global _draw_handle_view, _draw_handle_pixel
@@ -215,12 +252,7 @@ def remove_draw_handler():
         _draw_handle_pixel = None
     
     _match_colors.clear()
-
-
-# ============================================================================
 # Header UI Integration
-# ============================================================================
-
 def draw_gpcorr_header(self, context):
     """Draw correspondence buttons in 3D View header"""
     layout = self.layout
@@ -255,12 +287,7 @@ def draw_gpcorr_header(self, context):
         total = _match_progress.get('total', 0)
         if total > 0:
             row.label(text=f"[{current}/{total}] {status}")
-
-
-# ============================================================================
 # Visualization Toggle Callback
-# ============================================================================
-
 def toggle_viz_update(context):
     """Update callback for visualization toggle"""
     global _show_matches_viz
@@ -275,21 +302,10 @@ def toggle_viz_update(context):
     for area in context.screen.areas:
         if area.type == 'VIEW_3D':
             area.tag_redraw()
-
-
-# ============================================================================
-# Registration
-# ============================================================================
-
 def register():
-    # Register operators from correspondence module
-    from .operators import correspondence
-    correspondence.register()
-    
-    # Add to tool header (left side, like stroke_guide)
+    """Register correspondence UI and visualization."""
     bpy.types.VIEW3D_HT_tool_header.prepend(draw_gpcorr_header)
     
-    # Scene property for visualization toggle
     bpy.types.Scene.gpcorr_show_matches = BoolProperty(
         name="Show Matches",
         description="Show correspondence match visualization",
@@ -299,16 +315,10 @@ def register():
 
 
 def unregister():
-    # Clean up draw handler
+    """Unregister correspondence UI and visualization."""
     remove_draw_handler()
     
-    # Remove from tool header
     bpy.types.VIEW3D_HT_tool_header.remove(draw_gpcorr_header)
     
-    # Remove scene property
     if hasattr(bpy.types.Scene, "gpcorr_show_matches"):
         del bpy.types.Scene.gpcorr_show_matches
-    
-    # Unregister operators
-    from .operators import correspondence
-    correspondence.unregister()

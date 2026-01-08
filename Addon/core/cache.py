@@ -171,10 +171,16 @@ def build(gp_obj):
                         attrs[attr_name].data.foreach_get(attr_type, buffer)
                         attr_data[attr_name] = buffer
                 
+                # Read Match_ID attribute if it exists
+                match_ids = None
+                if 'Match_ID' in attrs and len(attrs['Match_ID'].data) > 0:
+                    match_ids = np.empty(len(attrs['Match_ID'].data), dtype=np.int32)
+                    attrs['Match_ID'].data.foreach_get('value', match_ids)
+                
                 stroke_data = []
                 pos_idx = 0
                 attr_idx = 0
-                for stroke in frame.drawing.strokes:
+                for stroke_idx, stroke in enumerate(frame.drawing.strokes):
                     point_count = len(stroke.points)
                     stroke_positions = all_positions[pos_idx : pos_idx + point_count * 3]
                     
@@ -188,6 +194,15 @@ def build(gp_obj):
                         stroke_attrs['handle_left'] = attr_data['handle_left'][pos_idx : pos_idx + point_count * 3]
                     if 'handle_right' in attr_data:
                         stroke_attrs['handle_right'] = attr_data['handle_right'][pos_idx : pos_idx + point_count * 3]
+                    
+                    # Add Match_ID (default to stroke_idx for position-based pairing)
+                    if match_ids is not None and stroke_idx < len(match_ids):
+                        match_id = int(match_ids[stroke_idx])
+                        # Use FTP-SC match_id if set, otherwise default to position-based
+                        stroke_attrs['match_id'] = match_id if match_id >= 0 else stroke_idx
+                    else:
+                        # No Match_ID attribute exists - default to position-based
+                        stroke_attrs['match_id'] = stroke_idx
                     
                     stroke_data.append(stroke_attrs)
                     pos_idx += point_count * 3

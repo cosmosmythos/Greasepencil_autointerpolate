@@ -7,7 +7,6 @@ import bpy
 from bpy.types import Operator
 from bpy.props import IntProperty, FloatProperty, BoolProperty, EnumProperty
 
-# Import utilities
 from ..utils.correspondence_utils import (
     detect_keyframe_range,
     find_keyframe_pairs,
@@ -17,12 +16,6 @@ from ..utils.correspondence_utils import (
     to_cpp_strokes
 )
 
-
-# ============================================================================
-# Module-level State (shared with main gp_correspondence.py)
-# ============================================================================
-
-# These are imported from parent module
 _match_job_running = False
 _match_progress = {"current": 0, "total": 0, "status": ""}
 _link_constraints = []
@@ -51,17 +44,8 @@ def set_state(**kwargs):
             gp_correspondence._link_constraints = value
         elif key == 'link_mode_active':
             gp_correspondence._link_mode_active = value
-
-
-# ============================================================================
-# Correspondence Matching Core Logic
-# ============================================================================
-
 def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
-    """
-    Run correspondence matching between two frames.
-    Returns: (success, matches, message)
-    """
+    """Run correspondence matching between two frames. Returns (success, matches, message)."""
     try:
         import gp_autointerpolate
     except ImportError as e:
@@ -71,7 +55,6 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         state = get_state()
         link_constraints = state['link_constraints']
         
-        # Clear existing Match_IDs to prevent stale data
         clear_match_ids_for_layer_frames(gp_obj, layer_idx, frame1, frame2)
         
         s1, indices1 = collect_strokes_2d(gp_obj, layer_idx, frame1)
@@ -90,49 +73,35 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         cfg.debug = config['debug']
         cfg.debug_level = config['debug_level']
         
-        # Apply linked constraints (filter strokes before matching)
-        # Note: constraints are normalized so c_frame1 < c_frame2
         linked_for_this_pair = []
         strokes_to_exclude_1 = set()
         strokes_to_exclude_2 = set()
         
-        # Normalize frame order for lookup (smaller frame first)
         lookup_frame1, lookup_frame2 = (frame1, frame2) if frame1 < frame2 else (frame2, frame1)
-        swap_order = (frame1 > frame2)  # If we swapped, we need to swap stroke indices too
+        swap_order = (frame1 > frame2)
         
         for constraint in link_constraints:
             c_layer, c_frame1, c_stroke1, c_frame2, c_stroke2 = constraint
             if c_layer == layer_idx and c_frame1 == lookup_frame1 and c_frame2 == lookup_frame2:
-                # Determine which constraint stroke maps to which input frame
                 if swap_order:
-                    # Input frame1 > frame2, so constraint's stroke2 goes with input frame1
                     actual_stroke1 = c_stroke2
                     actual_stroke2 = c_stroke1
                 else:
                     actual_stroke1 = c_stroke1
                     actual_stroke2 = c_stroke2
                 
-                # Find filtered indices
                 try:
                     filtered_idx1 = indices1.index(actual_stroke1)
                     filtered_idx2 = indices2.index(actual_stroke2)
                     linked_for_this_pair.append((filtered_idx1, filtered_idx2))
                     strokes_to_exclude_1.add(filtered_idx1)
                     strokes_to_exclude_2.add(filtered_idx2)
-                    if config['debug']:
-                        print(f"[GPCORR] Applied constraint: frame {frame1} stroke {actual_stroke1} -> frame {frame2} stroke {actual_stroke2}")
                 except ValueError:
-                    # Stroke not in filtered list (skipped due to NDC filtering)
-                    if config['debug']:
-                        print(f"[GPCORR] Warning: Linked stroke not visible in camera (skipped)")
                     pass
         
-        # If all strokes are linked, no need to run matcher
         if len(strokes_to_exclude_1) >= len(S1) or len(strokes_to_exclude_2) >= len(S2):
-            matches = linked_for_this_pair
-            result_matches = matches
+            result_matches = linked_for_this_pair
         else:
-            # Filter out linked strokes and run matcher on remainder
             S1_filtered = [s for i, s in enumerate(S1) if i not in strokes_to_exclude_1]
             S2_filtered = [s for i, s in enumerate(S2) if i not in strokes_to_exclude_2]
             
@@ -140,29 +109,42 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
                 matcher = gp_autointerpolate.StrokeMatcher(cfg)
                 result = matcher.match(S1_filtered, S2_filtered)
                 
-                # Map filtered indices back to original indices
                 idx1_map = [i for i in range(len(S1)) if i not in strokes_to_exclude_1]
                 idx2_map = [i for i in range(len(S2)) if i not in strokes_to_exclude_2]
                 
                 matched_pairs = [(idx1_map[i], idx2_map[j]) for i, j in result.final_correspondence.matches]
-                matches = linked_for_this_pair + matched_pairs
-                result_matches = matches
+                result_matches = linked_for_this_pair + matched_pairs
             else:
-                matches = linked_for_this_pair
-                result_matches = matches
+                result_matches = linked_for_this_pair
         
-        if config['debug']:
-            print(f"[GP Match] Linked: {len(linked_for_this_pair)}, Auto-matched: {len(result_matches) - len(linked_for_this_pair)}")
+        matched_strokes_frame1 = set()
+        matched_strokes_frame2 = set()
         
-        # Store Match_ID attributes
-        match_id_base = frame1 * 10000 + frame2  # Unique ID per frame pair
-        for match_idx, (i, j) in enumerate(result_matches):
-            match_id = match_id_base + match_idx
+        for match_id, (i, j) in enumerate(result_matches):
             original_i = indices1[i]
             original_j = indices2[j]
             
             store_match_id_on_strokes(gp_obj, layer_idx, frame1, [original_i], match_id)
             store_match_id_on_strokes(gp_obj, layer_idx, frame2, [original_j], match_id)
+            
+            matched_strokes_frame1.add(original_i)
+            matched_strokes_frame2.add(original_j)
+        
+        layer = gp_obj.data.layers[layer_idx]
+        
+        for f_num in [frame1, frame2]:
+            matched_set = matched_strokes_frame1 if f_num == frame1 else matched_strokes_frame2
+            
+            frame_obj = None
+            for f in layer.frames:
+                if f.frame_number == f_num:
+                    frame_obj = f
+                    break
+            
+            if frame_obj and frame_obj.drawing:
+                for stroke_idx in range(len(frame_obj.drawing.strokes)):
+                    if stroke_idx not in matched_set:
+                        store_match_id_on_strokes(gp_obj, layer_idx, f_num, [stroke_idx], stroke_idx)
         
         return (True, result_matches, f"Matched {len(result_matches)} pairs (linked: {len(linked_for_this_pair)})")
         
@@ -172,12 +154,8 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         return (False, [], f"Match failed: {e}")
 
 
-# ============================================================================
-# Multi-Pair Job System (Non-blocking with bpy.app.timers)
-# ============================================================================
-
 def run_match_job_step():
-    """Single step of multi-pair matching job"""
+    """Single step of multi-pair matching job."""
     state = get_state()
     
     if not state['match_job_running']:
@@ -196,12 +174,16 @@ def run_match_job_step():
     current = match_progress['current']
     
     if current >= len(pairs):
-        # Job complete
         set_state(match_job_running=False)
         match_progress['status'] = f"Complete! Matched {len(pairs)} frame pairs"
-        print(f"[GP Match] Job complete: {len(pairs)} pairs matched")
 
-        # Trigger viewport redraw (and update depsgraph)
+        scene = bpy.context.scene
+        if scene.gp_interpolation_enabled:
+            target_name = scene.get("gp_interpolation_target")
+            if target_name and target_name == gp_obj.name:
+                from ..core import cache
+                cache.build(gp_obj)
+
         try:
             bpy.context.view_layer.update()
         except Exception:
@@ -210,23 +192,17 @@ def run_match_job_step():
             if area.type == 'VIEW_3D':
                 area.tag_redraw()
 
-        return None  # Stop timer
+        return None
     
-    # Process current pair
     frame1, frame2 = pairs[current]
     match_progress['status'] = f"Matching frames {frame1} → {frame2}..."
-    print(f"[GP Match] Processing pair {current+1}/{len(pairs)}: {frame1} → {frame2}")
     
     success, matches, msg = run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config)
     
     if not success:
-        print(f"[GP Match] Warning: {msg}")
-    else:
-        print(f"[GP Match] {msg}")
+        print(f"[GPCORR] Error: {msg}")
     
     match_progress['current'] = current + 1
-    
-    # Continue timer (run next step in 0.1 seconds)
     return 0.1
 
 
@@ -235,18 +211,13 @@ def start_match_job(gp_obj, layer_idx, pairs, config):
     state = get_state()
     
     if state['match_job_running']:
-        print("[GP Match] Job already running")
         return False
     
-    # Clear old link constraints for frame pairs being re-matched on this layer
-    # This prevents stale constraints from affecting new matches
     pairs_set = set()
     for f1, f2 in pairs:
-        # Normalize order (smaller frame first) to match how constraints are stored
         norm = (f1, f2) if f1 < f2 else (f2, f1)
         pairs_set.add(norm)
     
-    # Filter out constraints for this layer's frame pairs
     link_constraints = state['link_constraints']
     new_constraints = [
         c for c in link_constraints 
@@ -271,14 +242,8 @@ def start_match_job(gp_obj, layer_idx, pairs, config):
     # Register timer to run job steps
     bpy.app.timers.register(run_match_job_step)
     
-    print(f"[GP Match] Started job: {len(pairs)} frame pairs")
     return True
-
-
-# ============================================================================
 # Operator: GP Match (Main Matching Operator)
-# ============================================================================
-
 class GPCORR_OT_match(Operator):
     bl_idname = "gpcorr.match"
     bl_label = "Auto-Match Strokes"
@@ -398,12 +363,7 @@ class GPCORR_OT_match(Operator):
                         break
         
         return context.window_manager.invoke_props_dialog(self)
-
-
-# ============================================================================
 # Operator: Link Mode Toggle
-# ============================================================================
-
 class GPCORR_OT_link_mode_toggle(Operator):
     bl_idname = "gpcorr.link_mode"
     bl_label = "Link Mode"
@@ -484,12 +444,7 @@ class GPCORR_OT_link_mode_toggle(Operator):
             self.report({'INFO'}, "Link Mode OFF")
         
         return {'FINISHED'}
-
-
-# ============================================================================
 # Operator: Link Selected Pair
-# ============================================================================
-
 class GPCORR_OT_link_selected(Operator):
     bl_idname = "gpcorr.link_selected"
     bl_label = "Link"
@@ -565,12 +520,7 @@ class GPCORR_OT_link_selected(Operator):
 
         bpy.ops.grease_pencil.select_all(action='DESELECT')
         return {'FINISHED'}
-
-
-# ============================================================================
 # Operator: Unlink Selected Pair
-# ============================================================================
-
 class GPCORR_OT_unlink_selected(Operator):
     bl_idname = "gpcorr.unlink_selected"
     bl_label = "Unlink"
@@ -639,12 +589,7 @@ class GPCORR_OT_unlink_selected(Operator):
                 area.tag_redraw()
 
         return {'FINISHED'}
-
-
-# ============================================================================
 # Registration
-# ============================================================================
-
 classes = (
     GPCORR_OT_match,
     GPCORR_OT_link_mode_toggle,
