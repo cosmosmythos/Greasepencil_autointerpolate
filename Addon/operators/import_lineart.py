@@ -25,6 +25,11 @@ import os
 class GPENCIL_OT_import_lineart(Operator, ImportHelper):
     """Import line art image(s) as Grease Pencil strokes"""
     bl_idname = "gpencil.import_lineart"
+
+    @classmethod
+    def poll(cls, context):
+        obj = getattr(context, "object", None)
+        return bool(obj and obj.type in ("GREASEPENCIL", "GPENCIL"))
     bl_label = "Import Line Art"
     bl_options = {'REGISTER', 'UNDO'}
     
@@ -68,7 +73,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
 
     downscale: IntProperty(
         name="Downscale",
-        description="Smaller = faster. Extra reduction applied after the automatic 1024px cap",
+        description="Lower resolution for faster vectorization.",
         default=2,
         min=1,
         max=4,
@@ -82,7 +87,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
 
     stroke_radius: FloatProperty(
         name="Stroke Radius",
-        description="Radius of strokes",
+        description="Thickness of strokes", 
         default=0.01,
         min=0.001,
         max=0.1,
@@ -121,6 +126,12 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
 
     def execute(self, context):
         """Execute the import."""
+
+        obj = context.object
+        if not obj or obj.type not in ("GREASEPENCIL", "GPENCIL"):
+            self.report({'ERROR'}, "Select an active Grease Pencil object before importing line art")
+            return {'CANCELLED'}
+
         from ..utils import vectorization
         
         # Check C++ backend
@@ -242,7 +253,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
             
             # Center offsets
             center_x = (image_width * self.scale_factor) / 2
-            center_z = -(image_height * self.scale_factor) / 2
+            center_z = (image_height * self.scale_factor) / 2
             
             positions = []
             for polyline in valid_polylines:
@@ -252,10 +263,11 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
                     
                     # Convert to Blender coordinates
                     # OpenCV/image coords: (0,0) at top-left, Y increases downward
-                    # Blender coords: (0,0) at center, Z increases upward
-                    # So we flip Y: Blender Z = (image_height - y) to make top→top, bottom→bottom
+                    # Map image pixel coordinates into GP space:
+                    # - X: (0..W) -> centered around 0
+                    # - Z: flip Y so image-top maps to +Z, and center around 0
                     scaled_x = float(x * self.scale_factor) - center_x
-                    scaled_z = float((image_height - y) * self.scale_factor) - center_z  # Removed negative sign
+                    scaled_z = float((image_height - y) * self.scale_factor) - center_z
                     
                     positions.extend([scaled_x, 0.0, scaled_z])
             
@@ -334,6 +346,13 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
             box.label(text="Reinstall addon with wheels")
             return
         
+        obj = context.object
+        if not obj or obj.type not in ('GREASEPENCIL', 'GPENCIL'):
+            box = layout.box()
+            box.alert = True
+            box.label(text="Select an active Grease Pencil object", icon='ERROR')
+            return
+
         box = layout.box()
         box.label(text="Stroke", icon='GREASEPENCIL')
         box.prop(self, "scale_factor")
@@ -362,7 +381,7 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
 def menu_func_import(self, context):
     self.layout.operator(
         GPENCIL_OT_import_lineart.bl_idname,
-        text="Grease Pencil Line Art (.png, .jpg)"
+        text="GPAI Line Art (.png, .jpg)"
     )
 
 

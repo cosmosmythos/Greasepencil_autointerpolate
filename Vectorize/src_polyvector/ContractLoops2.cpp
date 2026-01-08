@@ -58,8 +58,8 @@ std::vector<edge_descriptor> contractLoops2(G& g, const cv::Mat & origMask, cons
 			if (printLoops) {
 				PV_VLOG_NL("FOUND A CONTRACTIBLE LOOP: ");
 				for (size_t j : loop)
-					std::cout << j << " ";
-				std::cout << std::endl;
+					PV_LOG_NL(j << " ");
+				PV_LOG("");
 			}
 
 		}

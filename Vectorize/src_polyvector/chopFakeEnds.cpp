@@ -129,9 +129,9 @@ std::pair<std::vector<MyPolyline>, G> chopFakeEnds(const std::vector<MyPolyline>
 
 				/*if (!intersections.empty())
 				{
-					std::cout << "Curve " << i << " intersections (endIdx = " << endIdx << "): " << std::endl;
+					PV_LOG("Curve " << i << " intersections (endIdx = " << endIdx << "):");
 					for (auto ii : intersections)
-						std::cout << "c" << ii.second.curve << " at " << ii.first << "(@" << ii.second.segmentIdx << ")" << std::endl;
+						PV_LOG("c" << ii.second.curve << " at " << ii.first << "(@" << ii.second.segmentIdx << ")");
 				}*/
 
 				for (int k = 0; k < intersections.size(); ++k)
@@ -292,7 +292,7 @@ std::pair<std::vector<MyPolyline>, G> chopFakeEnds(const std::vector<MyPolyline>
 
 	/*for (int i = 0; i < boost::num_vertices(curveGraph); ++i)
 	{
-		std::cout << "Vertex " << i << ": " << curveGraph[i].clusterPoints[0].curve << " @" << curveGraph[i].clusterPoints[0].segmentIdx << "(length = " << result[curveGraph[i].clusterPoints[0].curve].size() << ")" << std::endl;
+		PV_LOG("Vertex " << i << ": " << curveGraph[i].clusterPoints[0].curve << " @" << curveGraph[i].clusterPoints[0].segmentIdx << "(length = " << result[curveGraph[i].clusterPoints[0].curve].size() << ")");
 	}*/
 
 	for (int i = 0; i < result.size(); ++i)
@@ -301,9 +301,9 @@ std::pair<std::vector<MyPolyline>, G> chopFakeEnds(const std::vector<MyPolyline>
 		std::sort(curveVertices[i].begin(), curveVertices[i].end(), [](const std::pair<double, int>& a, const std::pair<double, int>& b) {return a.first < b.first; });
 		/*for (auto& jj : curveVertices[i])
 		{
-			std::cout << jj.second << " (@" << jj.first << ") ";
+			PV_LOG_NL(jj.second << " (@" << jj.first << ") ");
 		}
-		std::cout << std::endl;*/
+		PV_LOG("");*/
 
 		for (int j = 0; j + 1 < curveVertices[i].size(); ++j)
 		{

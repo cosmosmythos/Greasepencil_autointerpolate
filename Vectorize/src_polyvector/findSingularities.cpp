@@ -74,7 +74,7 @@ std::set<std::array<int,2>> findSingularities(std::array<Eigen::MatrixXcd, 2>& r
 			if (isItASingularity({ j,i }, { roots[0](i,j),roots[1](i,j) }, roots, origMask))
 			{
 				/*if (singularities.find({i,j}) == singularities.end())
-					std::cout << i << ", " << j << "; ";
+					PV_LOG_NL(i << ", " << j << "; ");
 				singularities.insert({ i,j });*/
 				localSets[tid].insert({ i,j });
 			}

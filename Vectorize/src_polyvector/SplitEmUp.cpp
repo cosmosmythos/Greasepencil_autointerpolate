@@ -289,9 +289,9 @@ void splitEmUpCorrectly(G& g)
 
 			if (pseudoHole.size() != 4)
 			{
-				std::cout << "Skipping this chain: ";
+				PV_LOG_NL("Skipping this chain: ");
 				for (size_t v : myChainVertices)
-					std::cout << v << " ";
+					PV_LOG_NL(v << " ");
 				return;
 				continue;
 			}

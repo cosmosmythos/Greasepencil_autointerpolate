@@ -190,13 +190,13 @@ std::set<edge_descriptor> contract_edges(const std::vector<std::vector<boost::gr
 
 		if (componentVertices.find(41) != componentVertices.end())
 		{
-			std::cout << "!!!!!*** ";
+			PV_LOG_NL("!!!!!*** ");
 			for (size_t k : myAdjacentVerts[i])
-				std::cout << k << " ";
-			std::cout << std::endl << " $$$ ";
+				PV_LOG_NL(k << " ");
+			PV_LOG_NL("\n $$$ ");
 			for (size_t k : componentVertices)
-				std::cout << k << " ";
-			std::cout << std::endl;
+				PV_LOG_NL(k << " ");
+			PV_LOG("");
 		}
 		
 

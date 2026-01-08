@@ -367,7 +367,7 @@ G computeAlmostReebGraph(const cv::Mat & origMask, const std::array<Eigen::Matri
 	};
 
 	std::map < std::array<int, 2>, std::set<int>> clustersPerPixel;
-	std::cout << std::endl;
+	PV_LOG("");
 
 	std::vector<PointOnCurve> seedPts;
 	for (int k = 0; k < polys.size(); ++k)

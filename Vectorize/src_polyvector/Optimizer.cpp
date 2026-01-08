@@ -23,7 +23,7 @@ Eigen::VectorXcd optimize(cv::Mat & bwImg, const Eigen::MatrixXd & weight, const
 	int m = bwImg.rows;
 	int n = bwImg.cols;
 	int nnz = countNonZero(mask);
-	std::cout << "nnz = " << nnz << std::endl;
+	PV_LOG("nnz = " << nnz);
 	TotalEnergy fun(bwImg, weight, tauNormalized, beta, mask, indices,nnz);
 	Eigen::VectorXd X(nnz * 4); //intial guess
 	X.setZero();
@@ -40,11 +40,11 @@ Eigen::VectorXcd optimize(cv::Mat & bwImg, const Eigen::MatrixXd & weight, const
 	double fx;
 	int niter = solver.minimize(fun, X, fx);
 
-	std::cout << "Done in " << niter << " iterations" << std::endl;
-	std::cout << "f(x) = " << fx << std::endl;
+	PV_LOG("Done in " << niter << " iterations");
+	PV_LOG("f(x) = " << fx);
 	// Safety: detect numerical divergence early
 	if (!std::isfinite(fx)) {
-		std::cout << "Error: Optimization diverged (f(x) is not finite)." << std::endl;
+		PV_LOG("Error: Optimization diverged (f(x) is not finite).");
 		return Eigen::VectorXcd();
 	}
 
@@ -77,7 +77,7 @@ Eigen::VectorXcd optimize(cv::Mat & bwImg, const Eigen::MatrixXd & weight, const
 	ApplicationReturnStatus status;
 	status = app->Initialize();
 	if (status != Solve_Succeeded) {
-		std::cout << std::endl << std::endl << "*** Error during initialization!" << std::endl;
+		PV_LOG("*** Error during initialization!");
 		return Eigen::VectorXcd();
 	}
 
@@ -85,15 +85,15 @@ Eigen::VectorXcd optimize(cv::Mat & bwImg, const Eigen::MatrixXd & weight, const
 	status = app->OptimizeTNLP(mynlp);
 
 	if (status == Solve_Succeeded) {
-		std::cout << std::endl << std::endl << "*** The problem solved!" << std::endl;
+		PV_LOG("*** The problem solved!");
 	}
 	else {
-		std::cout << std::endl << std::endl << "*** The problem FAILED!" << std::endl;
+		PV_LOG("*** The problem FAILED!");
 	}
 #endif
 	Eigen::VectorXcd x_complex = X.head(X.size() / 2) + std::complex<double>(0, 1)*X.tail(X.size() / 2);
 	if (!x_complex.allFinite()) {
-		std::cout << "Error: Optimization produced non-finite field values." << std::endl;
+		PV_LOG("Error: Optimization produced non-finite field values.");
 		return Eigen::VectorXcd();
 	}
 	return x_complex;
@@ -168,7 +168,7 @@ Eigen::VectorXcd optimizeByLinearSolve(cv::Mat& bwImg, const Eigen::MatrixXd& we
 	PV_VLOG("solved in " << cg.iterations() << " iterations, error=" << cg.error());
 	
 	if (cg.info() != Eigen::Success) {
-		std::cout << "  WARNING: Linear solver did not converge!" << std::endl;
+		PV_LOG("WARNING: Linear solver did not converge!");
 		return Eigen::VectorXcd();
 	}
 	
@@ -182,7 +182,7 @@ Eigen::VectorXcd optimizeByLinearSolve_holdingSomeFixed(cv::Mat& bwImg, const Ei
 	int n = bwImg.cols;
 	int nnz = countNonZero(mask);
 	int oldNnz = countNonZero(fixedMask);
-	std::cout << "nnz = " << nnz << std::endl;
+	PV_LOG("nnz = " << nnz);
 
 	Eigen::SparseMatrix<double> L = laplacian_matrix(mask, indices, computeSmartWeights(weight, mask, indices).second);
 	//convert it to triplets
@@ -270,11 +270,11 @@ Eigen::VectorXcd optimizeByLinearSolve_holdingSomeFixed(cv::Mat& bwImg, const Ei
 	else
 	{
 		/*double error = 0;
-		std::cout << "Fixed indices: ";
+		PV_LOG_NL("Fixed indices: ");
 		for (auto it : newIdxToOldIdx)
 		{
 			std::complex<double> newVal, oldVal;
-			std::cout << it.first << " ";
+			PV_LOG_NL(it.first << " ");
 			newVal = result[it.first];
 			oldVal = Xfixed[it.second];
 			error += std::abs(std::pow(newVal - oldVal, 2));

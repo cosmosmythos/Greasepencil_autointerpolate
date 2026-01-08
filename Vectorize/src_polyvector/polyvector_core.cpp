@@ -34,6 +34,9 @@
 
 namespace polyvector {
 
+// Runtime logging flag used by PV_LOG macros (thread-local for safety).
+thread_local bool PV_RUNTIME_VERBOSE = false;
+
 // Helper functions from main.cpp
 static void calculateGradient(const cv::Mat& bwImg, int m, int n,
                                Eigen::MatrixXcd& g, 
@@ -189,19 +192,13 @@ static void calculateWeight(const Eigen::MatrixXcd& tauTimesGmag, const Eigen::M
                 weight(i, j) = 0;
 }
 
-// Global verbose flag (thread-local for safety)
-static thread_local bool g_verbose_mode = false;
-
-// Helper macro for conditional verbose logging
-#define PV_RUNTIME_VLOG(msg) do { if (g_verbose_mode) { std::cout << msg << std::endl; } } while(0)
-#define PV_RUNTIME_VLOG_NL(msg) do { if (g_verbose_mode) { std::cout << msg; } } while(0)
-
 std::vector<std::vector<std::pair<double, double>>> 
 vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, bool verbose) {
+    // Enable/disable internal PolyVector logging for this call.
+    const bool prev_verbose = PV_RUNTIME_VERBOSE;
+    PV_RUNTIME_VERBOSE = verbose;
     using namespace cv;
     
-    // Set runtime verbose mode
-    g_verbose_mode = verbose;
     
     std::vector<std::vector<std::pair<double, double>>> result;
     
@@ -239,7 +236,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             return result;
         }
 
-        std::cout << "Processing image: " << m << "x" << n << std::endl;
+        PV_LOG("Processing image: " << m << "x" << n);
 
         // CRITICAL: Invert image before thresholding (matches master line 388!)
         // This is essential for correct mask generation
@@ -264,7 +261,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
 
         // Split into connected components (KEY: matches master!)
         auto componentMasks = computeComponentMasks(origMask);
-        std::cout << "Found " << componentMasks.size() << " connected component(s)." << std::endl;
+        PV_LOG("Found " << componentMasks.size() << " connected component(s).");
 
         double beta = FRAME_FIELD_SMOOTHNESS_WEIGHT;
         std::vector<MyPolyline> allVectorization;
@@ -272,7 +269,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
         // Process each component separately
         // NOTE: Parallelization caused 2x slowdown due to overhead - keep serial
         for (size_t compIdx = 0; compIdx < componentMasks.size(); ++compIdx) {
-            PV_RUNTIME_VLOG("COMPONENT " << compIdx << " / " << componentMasks.size());
+            PV_LOG("COMPONENT " << compIdx << " / " << componentMasks.size());
             cv::Mat& compMask = componentMasks[compIdx];
             
             // Calculate indices for this component
@@ -290,21 +287,21 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             }
 
             // Optimize for this component
-            PV_RUNTIME_VLOG_NL("Optimizing...");
+            PV_LOG_NL("Optimizing...");
             Eigen::VectorXcd X = optimizeByLinearSolve(bwImg, weight, tau, beta, compMask, indices);
             if (X.size() == 0) {
                 X = optimize(bwImg, weight, tau, beta, compMask, indices);
             }
-            PV_RUNTIME_VLOG("done.");
+            PV_LOG("done.");
 
             // Safety check
             if (X.size() == 0 || !X.allFinite()) {
-                std::cout << "Component " << compIdx << " optimization failed, skipping." << std::endl;
+                PV_LOG("Component " << compIdx << " optimization failed, skipping.");
                 continue;
             }
 
             // Find roots for this component
-            PV_RUNTIME_VLOG_NL("Finding roots.. ");
+            PV_LOG_NL("Finding roots.. ");
             auto compRoots = findRoots(X, compMask);
 
             // Iteratively remove singularities
@@ -312,20 +309,19 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             
             // Print singularity info (verbose mode shows all, normal mode shows summary)
             if (verbose) {
-                std::cout << "DEBUG: singularities=" << singularities.size()
+                PV_LOG("DEBUG: singularities=" << singularities.size()
                           << " roots0=" << compRoots[0].size()
                           << " roots1=" << compRoots[1].size()
                           << " X=" << X.size()
-                          << " nnz=" << nnz
-                          << std::endl;
+                          << " nnz=" << nnz);
                 
-                std::cout << "Singularities (count=" << singularities.size() << "): ";
+                PV_LOG_NL("Singularities (count=" << singularities.size() << "): ");
                 for (const auto& s : singularities) {
-                    std::cout << s[0] << ", " << s[1] << "; ";
+                    PV_LOG_NL(s[0] << ", " << s[1] << "; ");
                 }
-                std::cout << std::endl;
+                PV_LOG("");
             } else if (singularities.size() > 0) {
-                std::cout << "Found " << singularities.size() << " singularities" << std::endl;
+                PV_LOG("Found " << singularities.size() << " singularities");
             }
             bool improved;
             do {
@@ -348,11 +344,11 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
                 compRoots = findRoots(X, compMask);
                 singularities = findSingularities(compRoots, X, indices, compMask);
 
-                PV_RUNTIME_VLOG("done (" << origSingularityCount - (int)singularities.size() << " singularities removed)");
+                PV_LOG("done (" << origSingularityCount - (int)singularities.size() << " singularities removed)");
                 improved = origSingularityCount - singularities.size() > 0;
             } while (improved);
 
-            PV_RUNTIME_VLOG("Done.");
+            PV_LOG("Done.");
 
             // Trace polylines for this component
             std::map<std::array<int, 2>, std::vector<PixelInfo>> pixelInfo;
@@ -361,10 +357,10 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             auto compPolys = traceAll(bwImg, compMask, compMask, compRoots, X, indices, 
                                       pixelInfo, endedWithASingularity);
             
-            PV_RUNTIME_VLOG("Done. " << compPolys.size() << " curves");
+            PV_LOG("Done. " << compPolys.size() << " curves");
 
             if (compPolys.empty()) {
-                std::cout << "No polylines traced for component " << compIdx << std::endl;
+                PV_LOG("No polylines traced for component " << compIdx);
                 continue;
             }
 
@@ -440,17 +436,17 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             }
 
             // CRITICAL: Find and remove cycles (matches master line 579-590)
-            PV_RUNTIME_VLOG_NL("Finding cycles: ");
+            PV_LOG_NL("Finding cycles: ");
             std::vector<edge_descriptor> removedEdges;
             const auto wG_edges = (int)boost::num_edges(wG);
             if (wG_edges < 350) {
-                PV_RUNTIME_VLOG("Using Tarjan's algorithm");
+                PV_LOG("Using Tarjan's algorithm");
                 removedEdges = contractLoops2(wG, compMask, compVectorization);
             } else {
-                PV_RUNTIME_VLOG("Using min spanning trees algorithm");
+                PV_LOG("Using min spanning trees algorithm");
                 removedEdges = contractLoops(wG, compMask, compVectorization);
             }
-            PV_RUNTIME_VLOG("CycleStats: comp=" << compIdx
+            PV_LOG("CycleStats: comp=" << compIdx
                       << " wG_edges=" << wG_edges
                       << " removedEdges=" << removedEdges.size()
                       << " curves=" << compVectorization.size());
@@ -467,7 +463,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
                     totalCuts++;
                 }
             }
-            PV_RUNTIME_VLOG("CycleStats: cuts=" << totalCuts << " curves=" << compVectorization.size());
+            PV_LOG("CycleStats: cuts=" << totalCuts << " curves=" << compVectorization.size());
 
             // Split polylines based on cut points
             std::vector<MyPolyline> compNewVectorization;
@@ -508,7 +504,7 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
                     }
                 }
             }
-            PV_RUNTIME_VLOG("CycleStats: curvesWithCuts=" << curvesWithCuts
+            PV_LOG("CycleStats: curvesWithCuts=" << curvesWithCuts
                       << " segments=" << totalSegmentsCreated
                       << " inputCurves=" << compVectorization.size());
 
@@ -536,9 +532,10 @@ vectorize_mat(const cv::Mat& input_image, double threshold, int blur_pixels, boo
             }
         }
 
-        std::cout << "Vectorization complete: " << result.size() << " strokes" << std::endl;
-
+        PV_LOG("Vectorization complete: " << result.size() << " strokes");
+        PV_RUNTIME_VERBOSE = prev_verbose;
     } catch (const std::exception& e) {
+        PV_RUNTIME_VERBOSE = prev_verbose;
         // Propagate as Python exception (pybind11 converts std::runtime_error)
         std::cerr << "Error during vectorization: " << e.what() << std::endl;
         throw;
@@ -604,16 +601,12 @@ vectorize_image_with_downscale(const std::string& image_path,
         scale_x = static_cast<double>(orig_width) / static_cast<double>(proc_width);
         scale_y = static_cast<double>(orig_height) / static_cast<double>(proc_height);
         
-        if (verbose) {
-            std::cout << "[Downscale] Original: " << orig_width << "x" << orig_height 
-                      << " -> Processing: " << proc_width << "x" << proc_height 
-                      << " (scale: " << final_scale << ")" << std::endl;
-        }
+        PV_LOG("[Downscale] Original: " << orig_width << "x" << orig_height
+              << " -> Processing: " << proc_width << "x" << proc_height
+              << " (scale: " << final_scale << ")");
     } else {
         processing_img = bwImg;
-        if (verbose) {
-            std::cout << "[Downscale] No resize needed: " << orig_width << "x" << orig_height << std::endl;
-        }
+        PV_LOG("[Downscale] No resize needed: " << orig_width << "x" << orig_height);
     }
     
     // Vectorize at processing resolution

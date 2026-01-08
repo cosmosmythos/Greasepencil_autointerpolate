@@ -91,12 +91,12 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 				
 				/*if (loop.size() > 100)
 				{
-					std::cout << "BIG LOOP: (size = " << loop.size() << "), ";
-					std::cout << "non-tree edge: " << it->m_source << "-" << it->m_target << std::endl;
-					std::cout << "loop: ";
+					PV_LOG_NL("BIG LOOP: (size = " << loop.size() << "), ");
+					PV_LOG("non-tree edge: " << it->m_source << "-" << it->m_target);
+					PV_LOG_NL("loop: ");
 					for (auto tt : loop)
 					{
-						std::cout << tt.m_source << " ";
+						PV_LOG_NL(tt.m_source << " ");
 					}
 				}*/
 
@@ -126,12 +126,12 @@ std::vector<edge_descriptor> contractLoops(G & g, const cv::Mat & origMask, cons
 		PV_VLOG_NL("Contracting loops...");
 		/*for (int i = 0; i < loops.size(); ++i)
 		{
-			std::cout << "Loop " << i << std::endl;
+			PV_LOG("Loop " << i);
 			for (const auto& e : loops[i])
 			{
-				std::cout << e.m_source << " ";
+				PV_LOG_NL(e.m_source << " ");
 			}
-			std::cout << loops[i].back().m_target << std::endl;
+			PV_LOG(loops[i].back().m_target);
 		}*/
 		auto removedEdges = contract_edges(loops, g);
 		if (!removedEdges.empty())

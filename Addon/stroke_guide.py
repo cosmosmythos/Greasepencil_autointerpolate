@@ -258,7 +258,7 @@ def draw_stroke_guide_overlay(gp_obj, layer, current_frame, direction, color):
         shader = gpu.shader.from_builtin('UNIFORM_COLOR')
         
         gpu.state.blend_set('ALPHA')
-        gpu.state.line_width_set(5.0)
+        gpu.state.line_width_set(4.0)
         
         # Base line (OpenGL: thick; Vulkan: may be thin but still provides continuity)
         batch = batch_for_shader(shader, 'LINE_STRIP', {"pos": coords_2d})
@@ -304,11 +304,11 @@ def draw_guide_main():
         
         # Draw previous keyframe guide (red)
         if guide_state['show_prev']:
-            draw_stroke_guide_overlay(gp_obj, layer, current_frame, 'prev', (1.0, 0.3, 0.3, 0.7))
+            draw_stroke_guide_overlay(gp_obj, layer, current_frame, 'prev', (1.0, 0.3, 0.3, 0.85))
         
         # Draw next keyframe guide (blue) 
         if guide_state['show_next']:
-            draw_stroke_guide_overlay(gp_obj, layer, current_frame, 'next', (0.3, 0.3, 1.0, 0.7))
+            draw_stroke_guide_overlay(gp_obj, layer, current_frame, 'next', (0.3, 0.3, 1.0, 0.85))
         
     except Exception as e:
         print(f"[Stroke Guide] Main draw error: {e}")
@@ -542,8 +542,10 @@ def draw_header(self, context):
             row.operator("gp.prev_stroke", text="", icon="ZOOM_OUT")
             row.operator("gp.next_stroke", text="", icon="ZOOM_IN")
 
-        # Stroke index display
-        row.label(text=f"S[{guide_state['stroke_index']}]")
+    # Stroke index display (always visible)
+    index_row = row.row(align=True)
+    index_row.enabled = guide_active
+    index_row.label(text=f"S[{guide_state['stroke_index']}]")
 
 
 # Registration classes
