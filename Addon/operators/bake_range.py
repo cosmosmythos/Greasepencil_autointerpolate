@@ -266,19 +266,14 @@ class GP_OT_BakeSelectedRange(Operator):
             # Pre-convert stroke data to numpy arrays once
             stroke_data_cache = []
             
-            # Build Match_ID lookup for next_strokes
-            next_by_match_id = {}
-            for idx, stroke in enumerate(next_strokes):
-                match_id = stroke.get('match_id', idx)
-                next_by_match_id[match_id] = idx
-            
-            # Pair strokes using Match_ID (includes FTP-SC matches and position-based fallback)
+            # Pair strokes using match_id
+            # prev_stroke.match_id = index of the corresponding stroke in next_strokes
             for stroke_idx, prev_stroke in enumerate(prev_strokes):
                 match_id = prev_stroke.get('match_id', stroke_idx)
                 
-                # Find matching stroke by Match_ID
-                if match_id in next_by_match_id:
-                    next_stroke = next_strokes[next_by_match_id[match_id]]
+                # match_id directly tells us which stroke in next_strokes to pair with
+                if 0 <= match_id < len(next_strokes):
+                    next_stroke = next_strokes[match_id]
                 else:
                     continue  # No matching stroke (out of bounds)
                 

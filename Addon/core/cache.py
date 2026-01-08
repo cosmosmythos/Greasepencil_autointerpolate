@@ -105,6 +105,15 @@ def build(gp_obj):
                 ("handle_right_i", 'FLOAT_VECTOR', 'POINT', "handle_right", 'vector', 3),
             ]
             
+            # Create match_id attribute (CURVE domain) if it doesn't exist
+            # match_id indicates which stroke in the NEXT keyframe this stroke corresponds to
+            if "match_id" not in attrs:
+                match_id_attr = attrs.new("match_id", 'INT', 'CURVE')
+                # Initialize all to stroke index (position-based default)
+                for stroke_idx in range(len(drawing.strokes)):
+                    if stroke_idx < len(match_id_attr.data):
+                        match_id_attr.data[stroke_idx].value = stroke_idx
+            
             for attr_name, attr_type, domain, source_name, access_type, multiplier in attr_defs:
                 if attr_name not in attrs:
                     attrs.new(attr_name, attr_type, domain)
@@ -171,11 +180,11 @@ def build(gp_obj):
                         attrs[attr_name].data.foreach_get(attr_type, buffer)
                         attr_data[attr_name] = buffer
                 
-                # Read Match_ID attribute if it exists
+                # Read match_id attribute if it exists (for interpolating to next keyframe)
                 match_ids = None
-                if 'Match_ID' in attrs and len(attrs['Match_ID'].data) > 0:
-                    match_ids = np.empty(len(attrs['Match_ID'].data), dtype=np.int32)
-                    attrs['Match_ID'].data.foreach_get('value', match_ids)
+                if 'match_id' in attrs and len(attrs['match_id'].data) > 0:
+                    match_ids = np.empty(len(attrs['match_id'].data), dtype=np.int32)
+                    attrs['match_id'].data.foreach_get('value', match_ids)
                 
                 stroke_data = []
                 pos_idx = 0
@@ -195,13 +204,13 @@ def build(gp_obj):
                     if 'handle_right' in attr_data:
                         stroke_attrs['handle_right'] = attr_data['handle_right'][pos_idx : pos_idx + point_count * 3]
                     
-                    # Add Match_ID (default to stroke_idx for position-based pairing)
+                    # Add match_id (for pairing with next keyframe, default to stroke_idx)
                     if match_ids is not None and stroke_idx < len(match_ids):
                         match_id = int(match_ids[stroke_idx])
                         # Use FTP-SC match_id if set, otherwise default to position-based
                         stroke_attrs['match_id'] = match_id if match_id >= 0 else stroke_idx
                     else:
-                        # No Match_ID attribute exists - default to position-based
+                        # No match_id attribute exists - default to position-based
                         stroke_attrs['match_id'] = stroke_idx
                     
                     stroke_data.append(stroke_attrs)

@@ -539,6 +539,76 @@ PYBIND11_MODULE(gp_autointerpolate, m) {
           return self.match(init_strokes, targ_strokes);
       }, py::arg("initial_strokes"), py::arg("target_strokes"),
       "Match strokes between two frames using FTP-SC algorithm")
+      .def("match_with_seeds", [](ftpsc::StrokeMatcher &self,
+                       py::array_t<float> initial_strokes,
+                       py::array_t<float> target_strokes,
+                       py::list seeds_list) {
+          // Convert numpy arrays to Stroke vectors
+          // Expected format: flat array of [x0,y0, x1,y1, ..., -1,-1, x0,y0, ...]
+          // where -1,-1 separates strokes
+          
+          auto init_data = initial_strokes.unchecked<1>();
+          auto targ_data = target_strokes.unchecked<1>();
+          
+          std::vector<ftpsc::Stroke> init_strokes, targ_strokes;
+          
+          // Parse initial strokes
+          std::vector<ftpsc::Vec2> current_stroke;
+          for (size_t i = 0; i < initial_strokes.shape(0); i += 2) {
+              float x = init_data(i);
+              if (x < -0.5f) { // Separator marker (-1)
+                  if (!current_stroke.empty()) {
+                      ftpsc::Stroke s;
+                      s.points = current_stroke;
+                      init_strokes.push_back(s);
+                      current_stroke.clear();
+                  }
+              } else if (i + 1 < initial_strokes.shape(0)) {
+                  float y = init_data(i + 1);
+                  current_stroke.emplace_back(x, y);
+              }
+          }
+          if (!current_stroke.empty()) {
+              ftpsc::Stroke s;
+              s.points = current_stroke;
+              init_strokes.push_back(s);
+          }
+          
+          // Parse target strokes
+          current_stroke.clear();
+          for (size_t i = 0; i < target_strokes.shape(0); i += 2) {
+              float x = targ_data(i);
+              if (x < -0.5f) { // Separator marker (-1)
+                  if (!current_stroke.empty()) {
+                      ftpsc::Stroke s;
+                      s.points = current_stroke;
+                      targ_strokes.push_back(s);
+                      current_stroke.clear();
+                  }
+              } else if (i + 1 < target_strokes.shape(0)) {
+                  float y = targ_data(i + 1);
+                  current_stroke.emplace_back(x, y);
+              }
+          }
+          if (!current_stroke.empty()) {
+              ftpsc::Stroke s;
+              s.points = current_stroke;
+              targ_strokes.push_back(s);
+          }
+          
+          // Parse seeds from Python list of tuples [(i, j), ...]
+          std::vector<std::pair<int, int>> seeds;
+          for (auto item : seeds_list) {
+              py::tuple tuple = item.cast<py::tuple>();
+              int i = tuple[0].cast<int>();
+              int j = tuple[1].cast<int>();
+              seeds.emplace_back(i, j);
+          }
+          
+          return self.match_with_seeds(init_strokes, targ_strokes, seeds);
+      }, py::arg("initial_strokes"), py::arg("target_strokes"), py::arg("seeds"),
+      "Match strokes with user-provided seeds for initial correspondence. "
+      "Seeds are (initial_idx, target_idx) pairs that guide the matching algorithm.")
       .def("get_config", &ftpsc::StrokeMatcher::get_config)
       .def("set_config", &ftpsc::StrokeMatcher::set_config, py::arg("config"));
 }

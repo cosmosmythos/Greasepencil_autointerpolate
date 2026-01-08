@@ -11,7 +11,7 @@ from ..utils.correspondence_utils import (
     detect_keyframe_range,
     find_keyframe_pairs,
     store_match_id_on_strokes,
-    clear_match_ids_for_layer_frames,
+    clear_match_ids_for_layer_frame,
     collect_strokes_2d,
     to_cpp_strokes
 )
@@ -29,6 +29,7 @@ def get_state():
         'match_progress': gp_correspondence._match_progress,
         'link_constraints': gp_correspondence._link_constraints,
         'link_mode_active': gp_correspondence._link_mode_active,
+        'viewport_context': gp_correspondence._viewport_context,
     }
 
 
@@ -44,6 +45,8 @@ def set_state(**kwargs):
             gp_correspondence._link_constraints = value
         elif key == 'link_mode_active':
             gp_correspondence._link_mode_active = value
+        elif key == 'viewport_context':
+            gp_correspondence._viewport_context = value
 def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
     """Run correspondence matching between two frames. Returns (success, matches, message)."""
     try:
@@ -55,7 +58,9 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         state = get_state()
         link_constraints = state['link_constraints']
         
-        clear_match_ids_for_layer_frames(gp_obj, layer_idx, frame1, frame2)
+        # Only clear match_ids on the earlier frame (frame1 stores match_id pointing to frame2)
+        earlier_frame = min(frame1, frame2)
+        clear_match_ids_for_layer_frame(gp_obj, layer_idx, earlier_frame)
         
         s1, indices1 = collect_strokes_2d(gp_obj, layer_idx, frame1)
         s2, indices2 = collect_strokes_2d(gp_obj, layer_idx, frame2)
@@ -63,19 +68,15 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         if len(s1) == 0 or len(s2) == 0:
             return (False, [], f"No valid strokes in frames {frame1} or {frame2}")
         
-        S1 = to_cpp_strokes(s1)
-        S2 = to_cpp_strokes(s2)
-        
         cfg = gp_autointerpolate.MatcherConfig()
         cfg.enable_stage_two = True
         cfg.max_alpha = config['max_alpha']
         cfg.coincident_threshold = config['coincident_threshold']
-        cfg.debug = config['debug']
-        cfg.debug_level = config['debug_level']
+        cfg.debug = config.get('debug', False)
         
-        linked_for_this_pair = []
-        strokes_to_exclude_1 = set()
-        strokes_to_exclude_2 = set()
+        # Build seeds from linked constraints for this frame pair
+        # Seeds are passed to C++ to guide the matching algorithm (per FTP-SC paper)
+        seeds = []
         
         lookup_frame1, lookup_frame2 = (frame1, frame2) if frame1 < frame2 else (frame2, frame1)
         swap_order = (frame1 > frame2)
@@ -90,61 +91,69 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
                     actual_stroke1 = c_stroke1
                     actual_stroke2 = c_stroke2
                 
+                # Map original stroke indices to collected stroke indices
                 try:
-                    filtered_idx1 = indices1.index(actual_stroke1)
-                    filtered_idx2 = indices2.index(actual_stroke2)
-                    linked_for_this_pair.append((filtered_idx1, filtered_idx2))
-                    strokes_to_exclude_1.add(filtered_idx1)
-                    strokes_to_exclude_2.add(filtered_idx2)
+                    idx1 = indices1.index(actual_stroke1)
+                    idx2 = indices2.index(actual_stroke2)
+                    seeds.append((idx1, idx2))
                 except ValueError:
-                    pass
+                    pass  # Stroke not found in collection (maybe filtered out)
         
-        if len(strokes_to_exclude_1) >= len(S1) or len(strokes_to_exclude_2) >= len(S2):
-            result_matches = linked_for_this_pair
+        # Convert ALL strokes to C++ format (don't filter - let C++ handle seeds)
+        S1 = to_cpp_strokes(s1)
+        S2 = to_cpp_strokes(s2)
+        
+        matcher = gp_autointerpolate.StrokeMatcher(cfg)
+        
+        # Use match_with_seeds if we have user-linked pairs, otherwise standard match
+        if seeds:
+            result = matcher.match_with_seeds(S1, S2, seeds)
         else:
-            S1_filtered = [s for i, s in enumerate(S1) if i not in strokes_to_exclude_1]
-            S2_filtered = [s for i, s in enumerate(S2) if i not in strokes_to_exclude_2]
-            
-            if len(S1_filtered) > 0 and len(S2_filtered) > 0:
-                matcher = gp_autointerpolate.StrokeMatcher(cfg)
-                result = matcher.match(S1_filtered, S2_filtered)
-                
-                idx1_map = [i for i in range(len(S1)) if i not in strokes_to_exclude_1]
-                idx2_map = [i for i in range(len(S2)) if i not in strokes_to_exclude_2]
-                
-                matched_pairs = [(idx1_map[i], idx2_map[j]) for i, j in result.final_correspondence.matches]
-                result_matches = linked_for_this_pair + matched_pairs
-            else:
-                result_matches = linked_for_this_pair
+            result = matcher.match(S1, S2)
         
-        matched_strokes_frame1 = set()
-        matched_strokes_frame2 = set()
+        raw_matches = result.get_matches()
         
-        for match_id, (i, j) in enumerate(result_matches):
-            original_i = indices1[i]
-            original_j = indices2[j]
-            
-            store_match_id_on_strokes(gp_obj, layer_idx, frame1, [original_i], match_id)
-            store_match_id_on_strokes(gp_obj, layer_idx, frame2, [original_j], match_id)
-            
-            matched_strokes_frame1.add(original_i)
-            matched_strokes_frame2.add(original_j)
+        # Map collected indices back to original stroke indices
+        result_matches = [(indices1[i], indices2[j]) for i, j in raw_matches]
         
+        matched_strokes = set()
+        
+        # Determine which frame is earlier (stores match_id) and which is later (target)
+        if frame1 < frame2:
+            src_frame, tgt_frame = frame1, frame2
+            src_indices, tgt_indices = indices1, indices2
+            # result_matches are (i, j) where i is src index, j is tgt index
+            swap_match = False
+        else:
+            src_frame, tgt_frame = frame2, frame1
+            src_indices, tgt_indices = indices2, indices1
+            # result_matches are (i, j) but we need to swap them
+            swap_match = True
+        
+        for idx, (i, j) in enumerate(result_matches):
+            if swap_match:
+                i, j = j, i
+            
+            src_stroke_idx = src_indices[i]
+            tgt_stroke_idx = tgt_indices[j]
+            
+            # Store the target stroke index as match_id on the source frame stroke
+            # This tells interpolation: "source stroke i corresponds to target stroke j"
+            store_match_id_on_strokes(gp_obj, layer_idx, src_frame, [src_stroke_idx], tgt_stroke_idx)
+            matched_strokes.add(src_stroke_idx)
+        
+        # Set unmatched strokes to their own index (position-based default)
         layer = gp_obj.data.layers[layer_idx]
+        frame_obj = None
+        for f in layer.frames:
+            if f.frame_number == src_frame:
+                frame_obj = f
+                break
         
-        for f_num in [frame1, frame2]:
-            matched_set = matched_strokes_frame1 if f_num == frame1 else matched_strokes_frame2
-            
-            frame_obj = None
-            for f in layer.frames:
-                if f.frame_number == f_num:
-                    frame_obj = f
-                    break
-            
-            if frame_obj and frame_obj.drawing:
-                for stroke_idx in range(len(frame_obj.drawing.strokes)):
-                    if stroke_idx not in matched_set:
-                        store_match_id_on_strokes(gp_obj, layer_idx, f_num, [stroke_idx], stroke_idx)
+        if frame_obj and frame_obj.drawing:
+            for stroke_idx in range(len(frame_obj.drawing.strokes)):
+                if stroke_idx not in matched_strokes:
+                    store_match_id_on_strokes(gp_obj, layer_idx, src_frame, [stroke_idx], stroke_idx)
         
         return (True, result_matches, f"Matched {len(result_matches)} pairs (linked: {len(linked_for_this_pair)})")
         
@@ -174,7 +183,7 @@ def run_match_job_step():
     current = match_progress['current']
     
     if current >= len(pairs):
-        set_state(match_job_running=False)
+        set_state(match_job_running=False, viewport_context={})  # Clear saved viewport context
         match_progress['status'] = f"Complete! Matched {len(pairs)} frame pairs"
 
         scene = bpy.context.scene
@@ -218,12 +227,8 @@ def start_match_job(gp_obj, layer_idx, pairs, config):
         norm = (f1, f2) if f1 < f2 else (f2, f1)
         pairs_set.add(norm)
     
-    link_constraints = state['link_constraints']
-    new_constraints = [
-        c for c in link_constraints 
-        if c[0] != layer_idx or (c[1], c[3]) not in pairs_set
-    ]
-    set_state(link_constraints=new_constraints)
+    # NOTE: We keep link_constraints - they should be used by the matcher, not cleared!
+    # Only clear constraints for frame pairs that no longer exist in the animation
     
     match_progress = {
         'current': 0,
@@ -243,6 +248,35 @@ def start_match_job(gp_obj, layer_idx, pairs, config):
     bpy.app.timers.register(run_match_job_step)
     
     return True
+# Helper function to get layer items for EnumProperty
+def get_layer_items(self, context):
+    """Generate layer items for dropdown"""
+    items = []
+    obj = context.active_object
+    if obj and obj.type == 'GREASEPENCIL':
+        for idx, layer in enumerate(obj.data.layers):
+            # EnumProperty items: (identifier, name, description, icon, number)
+            items.append((str(idx), layer.name, f"Layer: {layer.name}", 'OUTLINER_DATA_GP_LAYER', idx))
+    
+    if not items:
+        items.append(('0', "No Layers", "No GP layers available", 'ERROR', 0))
+    
+    return items
+
+
+def update_active_layer(self, context):
+    """Update callback - set the active layer when dropdown changes"""
+    obj = context.active_object
+    if obj and obj.type == 'GREASEPENCIL':
+        layer_idx = int(self.layer_enum) if self.layer_enum.isdigit() else 0
+        if layer_idx < len(obj.data.layers):
+            obj.data.layers.active = obj.data.layers[layer_idx]
+            # Force viewport redraw
+            for area in context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    area.tag_redraw()
+
+
 # Operator: GP Match (Main Matching Operator)
 class GPCORR_OT_match(Operator):
     bl_idname = "gpcorr.match"
@@ -250,15 +284,22 @@ class GPCORR_OT_match(Operator):
     bl_description = "Run correspondence matching for selected layer and frame range"
     bl_options = {'REGISTER', 'UNDO'}
     
-    # Layer selection (dropdown populated dynamically)
-    layer_index: IntProperty(
+    # Layer selection dropdown with names
+    layer_enum: EnumProperty(
         name="Layer",
         description="Layer to match",
-        default=0,
-        min=0
+        items=get_layer_items,
+        update=update_active_layer
     )
     
-    # Frame range
+    # Use custom range toggle
+    use_custom_range: BoolProperty(
+        name="Custom Range",
+        description="Override auto-detected range with custom start/end frames",
+        default=False
+    )
+    
+    # Frame range (only used when use_custom_range is True)
     frame_start: IntProperty(
         name="Start Frame",
         description="First frame of range",
@@ -271,28 +312,23 @@ class GPCORR_OT_match(Operator):
         default=24
     )
     
-    # Auto-detect mode
-    auto_detect: BoolProperty(
-        name="Auto-Detect Range",
-        description="Automatically detect keyframe range around playhead",
-        default=True
-    )
-    
     # Matching parameters
     max_alpha: FloatProperty(
         name="Max Alpha",
-        description="Maximum angle for corner detection",
-        default=165.0,
-        min=0.0,
-        max=180.0
+        description="Topology connectivity distance (higher = more permissive matching)",
+        default=0.05,
+        min=0.01,
+        max=0.2,
+        step=1,  # 0.01 increments
     )
     
-    coincident_threshold: FloatProperty(
-        name="Coincident Threshold",
-        description="Distance threshold for coincident points",
-        default=0.02,
-        min=0.0,
-        max=1.0
+    threshold: FloatProperty(
+        name="Threshold",
+        description="Distance threshold for matching strokes",
+        default=0.05,
+        min=0.01,
+        max=0.2,
+        step=1,  # 0.01 increments
     )
     
     debug: BoolProperty(
@@ -301,13 +337,41 @@ class GPCORR_OT_match(Operator):
         default=False
     )
     
-    debug_level: IntProperty(
-        name="Debug Level",
-        description="Debug verbosity (0=minimal, 2=verbose)",
-        default=0,
-        min=0,
-        max=2
-    )
+    def draw(self, context):
+        """Custom draw for the popup dialog"""
+        layout = self.layout
+        
+        # Layer dropdown
+        layout.prop(self, "layer_enum", text="Layer")
+        
+        layout.separator()
+        
+        # Custom range toggle
+        layout.prop(self, "use_custom_range")
+        
+        # Show frame range inputs only when custom range is enabled
+        if self.use_custom_range:
+            row = layout.row(align=True)
+            row.prop(self, "frame_start", text="Start")
+            row.prop(self, "frame_end", text="End")
+        else:
+            # Show auto-detected range as info
+            obj = context.active_object
+            if obj and obj.type == 'GREASEPENCIL':
+                layer_idx = int(self.layer_enum) if self.layer_enum.isdigit() else 0
+                if layer_idx < len(obj.data.layers):
+                    layer = obj.data.layers[layer_idx]
+                    start, end = detect_keyframe_range(context.scene, layer)
+                    layout.label(text=f"Auto-detected: frames {start} → {end}", icon='INFO')
+        
+        layout.separator()
+        
+        # Advanced settings
+        box = layout.box()
+        box.label(text="Advanced", icon='PREFERENCES')
+        box.prop(self, "max_alpha")
+        box.prop(self, "threshold")
+        box.prop(self, "debug")
     
     def execute(self, context):
         obj = context.active_object
@@ -315,40 +379,58 @@ class GPCORR_OT_match(Operator):
             self.report({'ERROR'}, "Select a Grease Pencil object")
             return {'CANCELLED'}
         
+        # Get layer index from enum
+        layer_index = int(self.layer_enum) if self.layer_enum.isdigit() else 0
+        
         # Validate layer
-        if self.layer_index >= len(obj.data.layers):
-            self.report({'ERROR'}, f"Layer index {self.layer_index} out of range")
+        if layer_index >= len(obj.data.layers):
+            self.report({'ERROR'}, f"Layer index {layer_index} out of range")
             return {'CANCELLED'}
         
-        layer = obj.data.layers[self.layer_index]
+        layer = obj.data.layers[layer_index]
         
-        # Auto-detect frame range if enabled
-        if self.auto_detect:
-            self.frame_start, self.frame_end = detect_keyframe_range(context.scene, layer)
+        # Determine frame range
+        if self.use_custom_range:
+            frame_start = self.frame_start
+            frame_end = self.frame_end
+        else:
+            # Auto-detect frame range
+            frame_start, frame_end = detect_keyframe_range(context.scene, layer)
         
         # Find keyframe pairs
-        pairs = find_keyframe_pairs(layer, self.frame_start, self.frame_end)
+        pairs = find_keyframe_pairs(layer, frame_start, frame_end)
         
         if not pairs:
-            self.report({'WARNING'}, f"No keyframe pairs found in range {self.frame_start}-{self.frame_end}")
+            self.report({'WARNING'}, f"No keyframe pairs found in range {frame_start}-{frame_end}")
             return {'CANCELLED'}
+        
+        # Save viewport context for timer callbacks (region/rv3d are lost in timer context)
+        viewport_ctx = {}
+        for area in context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for region in area.regions:
+                    if region.type == 'WINDOW':
+                        viewport_ctx['region'] = region
+                        viewport_ctx['region_data'] = area.spaces.active.region_3d
+                        break
+                break
+        set_state(viewport_context=viewport_ctx)
         
         # Prepare config
         config = {
             'max_alpha': self.max_alpha,
-            'coincident_threshold': self.coincident_threshold,
+            'coincident_threshold': self.threshold,
             'debug': self.debug,
-            'debug_level': self.debug_level
         }
         
         # Start matching job
-        success = start_match_job(obj, self.layer_index, pairs, config)
+        success = start_match_job(obj, layer_index, pairs, config)
         
         if success:
             self.report({'INFO'}, f"Started matching job: {len(pairs)} frame pairs")
             return {'FINISHED'}
         else:
-            self.report({'ERROR'}, "Failed to start matching job")
+            self.report({'ERROR'}, "Failed to start matching job (job already running?)")
             return {'CANCELLED'}
     
     def invoke(self, context, event):
@@ -359,10 +441,16 @@ class GPCORR_OT_match(Operator):
             if active_layer:
                 for idx, layer in enumerate(obj.data.layers):
                     if layer == active_layer:
-                        self.layer_index = idx
+                        self.layer_enum = str(idx)
                         break
+            
+            # Auto-detect and set frame range defaults
+            layer_idx = int(self.layer_enum) if self.layer_enum.isdigit() else 0
+            if layer_idx < len(obj.data.layers):
+                layer = obj.data.layers[layer_idx]
+                self.frame_start, self.frame_end = detect_keyframe_range(context.scene, layer)
         
-        return context.window_manager.invoke_props_dialog(self)
+        return context.window_manager.invoke_props_dialog(self, width=300)
 # Operator: Link Mode Toggle
 class GPCORR_OT_link_mode_toggle(Operator):
     bl_idname = "gpcorr.link_mode"
@@ -514,11 +602,40 @@ class GPCORR_OT_link_selected(Operator):
         if constraint not in link_constraints:
             link_constraints.append(constraint)
             set_state(link_constraints=link_constraints)
+            
             self.report({'INFO'}, f"Linked: Frame {norm_frame1} Stroke {norm_stroke1} → Frame {norm_frame2} Stroke {norm_stroke2}")
+            
+            # Auto-run matching on this frame pair
+            # The new link constraint will be passed as a seed to C++, 
+            # allowing the algorithm to propagate better matches from it (per FTP-SC paper)
+            pairs = [(norm_frame1, norm_frame2)]
+            
+            # Save viewport context for matching (needed for stroke projection)
+            viewport_ctx = {}
+            for area in context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    for region in area.regions:
+                        if region.type == 'WINDOW':
+                            viewport_ctx['region'] = region
+                            viewport_ctx['region_data'] = area.spaces.active.region_3d
+                            break
+                    break
+            set_state(viewport_context=viewport_ctx)
+            
+            # Run matching with default config - seeds will be extracted from link_constraints
+            config = {
+                'max_alpha': 0.05,
+                'coincident_threshold': 0.05,
+                'debug': False,
+            }
+            success = start_match_job(obj, layer1, pairs, config)
+            if success:
+                self.report({'INFO'}, f"Linked and re-matching Frame {norm_frame1} → {norm_frame2}")
         else:
             self.report({'INFO'}, "This pair is already linked")
 
         bpy.ops.grease_pencil.select_all(action='DESELECT')
+        
         return {'FINISHED'}
 # Operator: Unlink Selected Pair
 class GPCORR_OT_unlink_selected(Operator):
@@ -580,13 +697,34 @@ class GPCORR_OT_unlink_selected(Operator):
 
         if after < before:
             self.report({'INFO'}, "Unlinked selected pair")
+            
+            # Auto-run matching on this frame pair to re-match without the constraint
+            layer = obj.data.layers[layer1]
+            pairs = [(norm_frame1, norm_frame2)]
+            
+            # Save viewport context for matching
+            viewport_ctx = {}
+            for area in context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    for region in area.regions:
+                        if region.type == 'WINDOW':
+                            viewport_ctx['region'] = region
+                            viewport_ctx['region_data'] = area.spaces.active.region_3d
+                            break
+                    break
+            set_state(viewport_context=viewport_ctx)
+            
+            # Run matching with default config - no seeds since constraint was removed
+            config = {
+                'max_alpha': 0.05,
+                'coincident_threshold': 0.05,
+                'debug': False,
+            }
+            success = start_match_job(obj, layer1, pairs, config)
+            if success:
+                self.report({'INFO'}, f"Unlinked and re-matching Frame {norm_frame1} → {norm_frame2}")
         else:
             self.report({'INFO'}, "Selected pair was not linked")
-
-        # redraw
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                area.tag_redraw()
 
         return {'FINISHED'}
 # Registration

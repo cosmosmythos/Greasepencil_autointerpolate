@@ -22,22 +22,102 @@ _match_progress = {"current": 0, "total": 0, "status": ""}
 _link_mode_active = False
 _link_constraints = []  # [(layer_idx, frame1, stroke1_idx, frame2, stroke2_idx), ...]
 _show_matches_viz = False
+_viewport_context = {}  # Store viewport info (region, rv3d) for timer callbacks
 _draw_handle_view = None
 _draw_handle_pixel = None
-_match_colors = {}  # {match_id: (r, g, b, a)}
-# Visualization: Color Generation
-def generate_color_for_match_id(match_id, is_linked=False):
-    """Generate consistent color for a match_id"""
-    if is_linked:
-        # Fixed bright color for linked matches (gold/orange)
-        return (1.0, 0.6, 0.0, 1.0)
-    
-    # Use match_id as seed for consistent color
-    random.seed(match_id)
+_chain_colors = {}  # {chain_id: (r, g, b, a)}
+
+def generate_color_for_chain(chain_id):
+    """Generate consistent color for a chain ID."""
+    # Use chain_id as seed for consistent color
+    random.seed(chain_id)
     r = random.random() * 0.5 + 0.5  # 0.5-1.0
     g = random.random() * 0.5 + 0.5
     b = random.random() * 0.5 + 0.5
     return (r, g, b, 1.0)
+
+
+def clear_color_cache():
+    """Clear the color cache to force regeneration."""
+    global _chain_colors
+    _chain_colors.clear()
+
+
+def build_connection_chains(obj, layer_idx):
+    """
+    Build connection chains by following match_id links across frames.
+    
+    Returns: dict mapping (frame_num, stroke_idx) -> chain_id
+    
+    All strokes in the same chain get the same chain_id, so they get the same color.
+    """
+    layer = obj.data.layers[layer_idx]
+    
+    # Get sorted frame numbers
+    frames = sorted([f.frame_number for f in layer.frames if f.drawing])
+    if not frames:
+        return {}
+    
+    # Build forward links: (frame, stroke_idx) -> (next_frame, target_stroke_idx)
+    forward_links = {}
+    frame_stroke_counts = {}
+    
+    for i, frame_num in enumerate(frames):
+        frame_obj = None
+        for f in layer.frames:
+            if f.frame_number == frame_num:
+                frame_obj = f
+                break
+        
+        if not frame_obj or not frame_obj.drawing:
+            continue
+        
+        num_strokes = len(frame_obj.drawing.strokes)
+        frame_stroke_counts[frame_num] = num_strokes
+        
+        # If not the last frame, read match_ids to build links
+        if i < len(frames) - 1:
+            next_frame = frames[i + 1]
+            for stroke_idx in range(num_strokes):
+                match_id = get_match_id_from_stroke(obj, layer_idx, frame_num, stroke_idx)
+                if match_id >= 0:
+                    forward_links[(frame_num, stroke_idx)] = (next_frame, match_id)
+    
+    # Now build chains using Union-Find approach
+    # Each unique chain gets a chain_id
+    stroke_to_chain = {}  # (frame, stroke_idx) -> chain_id
+    chain_counter = 0
+    
+    # Process each frame's strokes
+    for frame_num in frames:
+        num_strokes = frame_stroke_counts.get(frame_num, 0)
+        for stroke_idx in range(num_strokes):
+            key = (frame_num, stroke_idx)
+            
+            if key in stroke_to_chain:
+                continue  # Already assigned
+            
+            # Start a new chain from this stroke
+            chain_id = chain_counter
+            chain_counter += 1
+            
+            # Follow the chain forward
+            current = key
+            while current:
+                if current in stroke_to_chain:
+                    # Merge: this stroke already belongs to another chain
+                    # Use the existing chain_id for consistency
+                    break
+                
+                stroke_to_chain[current] = chain_id
+                
+                # Follow forward link
+                if current in forward_links:
+                    current = forward_links[current]
+                else:
+                    current = None
+    
+    return stroke_to_chain
 # Visualization: Draw Callbacks
 def draw_matches_view_callback():
     """Draw colored strokes in 3D viewport to show matches, plus orange highlights for selected strokes"""
@@ -55,8 +135,24 @@ def draw_matches_view_callback():
     
     shader = gpu.shader.from_builtin('UNIFORM_COLOR')
     
-    # Collect all match_ids from visible frames
-    visible_match_ids = set()
+    # Build connection chains for visible layers
+    all_chains = {}  # {layer_idx: {(frame, stroke_idx): chain_id}}
+    visible_layers = set()
+    
+    for layer_idx, layer in enumerate(obj.data.layers):
+        for frame in layer.frames:
+            # Only show matches for frames near playhead or selected frames
+            if not frame.select and abs(frame.frame_number - context.scene.frame_current) > 5:
+                continue
+            if frame.drawing is not None:
+                visible_layers.add(layer_idx)
+                break
+    
+    for layer_idx in visible_layers:
+        all_chains[layer_idx] = build_connection_chains(obj, layer_idx)
+    
+    # Collect visible strokes
+    visible_strokes = []  # [(layer_idx, frame_num, stroke_idx)]
     
     for layer_idx, layer in enumerate(obj.data.layers):
         for frame in layer.frames:
@@ -67,25 +163,11 @@ def draw_matches_view_callback():
             if frame.drawing is None:
                 continue
             
-            for stroke_idx, stroke in enumerate(frame.drawing.strokes):
-                match_id = get_match_id_from_stroke(obj, layer_idx, frame.frame_number, stroke_idx)
-                if match_id >= 0:
-                    visible_match_ids.add((layer_idx, frame.frame_number, stroke_idx, match_id))
+            for stroke_idx in range(len(frame.drawing.strokes)):
+                visible_strokes.append((layer_idx, frame.frame_number, stroke_idx))
     
-    # Check if any match_ids correspond to linked constraints
-    linked_match_ids = set()
-    for constraint in _link_constraints:
-        c_layer, c_frame1, c_stroke1, c_frame2, c_stroke2 = constraint
-        # Get match_ids for linked strokes
-        mid1 = get_match_id_from_stroke(obj, c_layer, c_frame1, c_stroke1)
-        mid2 = get_match_id_from_stroke(obj, c_layer, c_frame2, c_stroke2)
-        if mid1 >= 0:
-            linked_match_ids.add(mid1)
-        if mid2 >= 0:
-            linked_match_ids.add(mid2)
-    
-    # Draw strokes with match colors
-    for layer_idx, frame_num, stroke_idx, match_id in visible_match_ids:
+    # Draw strokes with chain-based colors
+    for layer_idx, frame_num, stroke_idx in visible_strokes:
         try:
             layer = obj.data.layers[layer_idx]
             
@@ -104,14 +186,15 @@ def draw_matches_view_callback():
             
             stroke = frame.drawing.strokes[stroke_idx]
             
-            # Determine if this is a linked match
-            is_linked = match_id in linked_match_ids
+            # Get chain_id for this stroke
+            chain_map = all_chains.get(layer_idx, {})
+            chain_id = chain_map.get((frame_num, stroke_idx), stroke_idx)  # fallback to stroke_idx
             
-            # Get color
-            if match_id not in _match_colors:
-                _match_colors[match_id] = generate_color_for_match_id(match_id, is_linked)
+            # Get color (cached for consistency)
+            if chain_id not in _chain_colors:
+                _chain_colors[chain_id] = generate_color_for_chain(chain_id)
             
-            color = _match_colors[match_id]
+            color = _chain_colors[chain_id]
             
             # Get stroke points in world space
             mw = obj.matrix_world
@@ -239,7 +322,7 @@ def install_draw_handler():
 
 def remove_draw_handler():
     """Remove viewport draw handlers"""
-    global _draw_handle_view, _draw_handle_pixel, _match_colors
+    global _draw_handle_view, _draw_handle_pixel, _chain_colors
     
     from bpy.types import SpaceView3D
     
@@ -251,7 +334,7 @@ def remove_draw_handler():
         SpaceView3D.draw_handler_remove(_draw_handle_pixel, 'WINDOW')
         _draw_handle_pixel = None
     
-    _match_colors.clear()
+    _chain_colors.clear()
 # Header UI Integration
 def draw_gpcorr_header(self, context):
     """Draw correspondence buttons in 3D View header"""
@@ -264,12 +347,12 @@ def draw_gpcorr_header(self, context):
     row = layout.row(align=True)
     
     # Match button
-    row.operator("gpcorr.match", text="Auto-Match", icon='UV_SYNC_SELECT')
+    row.operator("gpcorr.match", text="Auto-Match", icon='COLLECTION_COLOR_06')
     
     # Link mode toggle
     row.operator("gpcorr.link_mode", 
-                 text="Link Mode" if not _link_mode_active else "Exit Link", 
-                 icon='LINKED' if not _link_mode_active else 'UNLINKED',
+                 text="Link" if not _link_mode_active else "Done", 
+                 icon='RESTRICT_INSTANCED_OFF' if not _link_mode_active else 'SOLO_ON',
                  depress=_link_mode_active)
     
     # Link/Unlink buttons (only visible in link mode)
@@ -304,7 +387,8 @@ def toggle_viz_update(context):
             area.tag_redraw()
 def register():
     """Register correspondence UI and visualization."""
-    bpy.types.VIEW3D_HT_tool_header.prepend(draw_gpcorr_header)
+    # Use VIEW3D_HT_header (main header) with prepend for leftmost static position
+    bpy.types.VIEW3D_HT_header.prepend(draw_gpcorr_header)
     
     bpy.types.Scene.gpcorr_show_matches = BoolProperty(
         name="Show Matches",
@@ -318,7 +402,7 @@ def unregister():
     """Unregister correspondence UI and visualization."""
     remove_draw_handler()
     
-    bpy.types.VIEW3D_HT_tool_header.remove(draw_gpcorr_header)
+    bpy.types.VIEW3D_HT_header.remove(draw_gpcorr_header)
     
     if hasattr(bpy.types.Scene, "gpcorr_show_matches"):
         del bpy.types.Scene.gpcorr_show_matches
