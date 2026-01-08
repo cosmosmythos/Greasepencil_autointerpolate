@@ -35,7 +35,7 @@
 namespace polyvector {
 
 // Runtime logging flag used by PV_LOG macros (thread-local for safety).
-thread_local bool PV_RUNTIME_VERBOSE = false;
+bool PV_RUNTIME_VERBOSE = false;
 
 // Helper functions from main.cpp
 static void calculateGradient(const cv::Mat& bwImg, int m, int n,

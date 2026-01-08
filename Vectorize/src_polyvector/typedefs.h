@@ -15,7 +15,7 @@
 //
 // We keep all console output disabled by default and only enable it when
 // the Python binding passes verbose=True ("Developer" toggle in the UI).
-extern thread_local bool PV_RUNTIME_VERBOSE;
+extern bool PV_RUNTIME_VERBOSE;
 
 #define PV_LOG(msg) do { if (PV_RUNTIME_VERBOSE) { std::cout << msg << std::endl; } } while(0)
 #define PV_LOG_NL(msg) do { if (PV_RUNTIME_VERBOSE) { std::cout << msg; } } while(0)

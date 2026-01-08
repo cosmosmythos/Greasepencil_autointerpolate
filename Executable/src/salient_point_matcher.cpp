@@ -7,6 +7,8 @@
 
 namespace ftpsc {
 
+SalientPointMatcher::SalientPointMatcher(const Config &config) : config_(config) {}
+
 double SalientPointMatcher::compute_cost(const SalientPoint &p1,
                                          const SalientPoint &p2) {
   double cost = 0.0;

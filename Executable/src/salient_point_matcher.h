@@ -50,7 +50,7 @@ public:
     // based on normalized parameters.
   };
 
-  SalientPointMatcher(const Config &config = Config()) : config_(config) {}
+  SalientPointMatcher(const Config &config = Config());
 
   /**
    * @brief Find optimal correspondence between two sets of salient points
