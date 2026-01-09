@@ -72,7 +72,7 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         cfg.enable_stage_two = True
         cfg.max_alpha = config['max_alpha']
         cfg.coincident_threshold = config['coincident_threshold']
-        cfg.debug = config.get('debug', False)
+        cfg.debug = False
         
         # Build seeds from linked constraints for this frame pair
         # Seeds are passed to C++ to guide the matching algorithm (per FTP-SC paper)
@@ -155,7 +155,7 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
                 if stroke_idx not in matched_strokes:
                     store_match_id_on_strokes(gp_obj, layer_idx, src_frame, [stroke_idx], stroke_idx)
         
-        return (True, result_matches, f"Matched {len(result_matches)} pairs (linked: {len(linked_for_this_pair)})")
+        return (True, result_matches, f"Matched {len(result_matches)} pairs (seeds: {len(seeds)})")
         
     except Exception as e:
         import traceback
@@ -280,8 +280,8 @@ def update_active_layer(self, context):
 # Operator: GP Match (Main Matching Operator)
 class GPCORR_OT_match(Operator):
     bl_idname = "gpcorr.match"
-    bl_label = "Auto-Match Strokes"
-    bl_description = "Run correspondence matching for selected layer and frame range"
+    bl_label = "Auto-Link Strokes"
+    bl_description = "Automatically pair strokes between keyframes"
     bl_options = {'REGISTER', 'UNDO'}
     
     # Layer selection dropdown with names
@@ -331,12 +331,6 @@ class GPCORR_OT_match(Operator):
         step=1,  # 0.01 increments
     )
     
-    debug: BoolProperty(
-        name="Debug Output",
-        description="Print debug information to console",
-        default=False
-    )
-    
     def draw(self, context):
         """Custom draw for the popup dialog"""
         layout = self.layout
@@ -371,7 +365,6 @@ class GPCORR_OT_match(Operator):
         box.label(text="Advanced", icon='PREFERENCES')
         box.prop(self, "max_alpha")
         box.prop(self, "threshold")
-        box.prop(self, "debug")
     
     def execute(self, context):
         obj = context.active_object
@@ -420,7 +413,6 @@ class GPCORR_OT_match(Operator):
         config = {
             'max_alpha': self.max_alpha,
             'coincident_threshold': self.threshold,
-            'debug': self.debug,
         }
         
         # Start matching job
@@ -454,8 +446,8 @@ class GPCORR_OT_match(Operator):
 # Operator: Link Mode Toggle
 class GPCORR_OT_link_mode_toggle(Operator):
     bl_idname = "gpcorr.link_mode"
-    bl_label = "Link Mode"
-    bl_description = "Edit mode for locking/unlocking ID matching between two keyframes"
+    bl_label = "Manual"
+    bl_description = "Manually pair strokes between keyframes"
     bl_options = {'REGISTER'}
     
     def execute(self, context):
@@ -472,9 +464,6 @@ class GPCORR_OT_link_mode_toggle(Operator):
             # Activate link mode
             set_state(link_mode_active=True)
 
-            # Auto-enable visualization while linking
-            context.scene.gpcorr_show_matches = True
-            gp_correspondence.install_draw_handler()
             
             # Switch to Edit mode
             bpy.ops.object.mode_set(mode='EDIT')
@@ -501,15 +490,16 @@ class GPCORR_OT_link_mode_toggle(Operator):
             
             self.report({'INFO'}, f"Link Mode ON | Frames: {frame_start}-{frame_end} selected | Select strokes to link")
             
-            # Deselect all strokes initially
-            bpy.ops.grease_pencil.select_all(action='DESELECT')
+            # Deselect all strokes on ALL layers
+            for layer in obj.data.layers:
+                for frame in layer.frames:
+                    if frame.drawing:
+                        for stroke in frame.drawing.strokes:
+                            stroke.select = False
             
         else:
             # Deactivate link mode
             set_state(link_mode_active=False)
-
-            # Auto-disable visualization when leaving link mode
-            context.scene.gpcorr_show_matches = False
 
             # Deselect keyframes
             if obj and obj.type == 'GREASEPENCIL':
@@ -520,14 +510,15 @@ class GPCORR_OT_link_mode_toggle(Operator):
             # Disable multi-frame editing
             context.scene.tool_settings.use_grease_pencil_multi_frame_editing = False
             
-            # Deselect all strokes
-            bpy.ops.grease_pencil.select_all(action='DESELECT')
+            # Deselect all strokes on ALL layers
+            for layer in obj.data.layers:
+                for frame in layer.frames:
+                    if frame.drawing:
+                        for stroke in frame.drawing.strokes:
+                            stroke.select = False
             
             # Return to previous mode (typically Paint)
             bpy.ops.object.mode_set(mode='PAINT_GREASE_PENCIL')
-            
-            # Ensure handlers are removed when leaving link mode (since Eye is off)
-            gp_correspondence.remove_draw_handler()
 
             self.report({'INFO'}, "Link Mode OFF")
         
@@ -536,7 +527,7 @@ class GPCORR_OT_link_mode_toggle(Operator):
 class GPCORR_OT_link_selected(Operator):
     bl_idname = "gpcorr.link_selected"
     bl_label = "Link"
-    bl_description = "Lock ID matching for selected stroke pair"
+    bl_description = "Pair selected strokes"
     bl_options = {'REGISTER', 'UNDO'}
     
     @classmethod
@@ -626,7 +617,6 @@ class GPCORR_OT_link_selected(Operator):
             config = {
                 'max_alpha': 0.05,
                 'coincident_threshold': 0.05,
-                'debug': False,
             }
             success = start_match_job(obj, layer1, pairs, config)
             if success:
@@ -641,7 +631,7 @@ class GPCORR_OT_link_selected(Operator):
 class GPCORR_OT_unlink_selected(Operator):
     bl_idname = "gpcorr.unlink_selected"
     bl_label = "Unlink"
-    bl_description = "Unlock ID matching for selected stroke pair"
+    bl_description = "Remove pairing"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -718,7 +708,6 @@ class GPCORR_OT_unlink_selected(Operator):
             config = {
                 'max_alpha': 0.05,
                 'coincident_threshold': 0.05,
-                'debug': False,
             }
             success = start_match_job(obj, layer1, pairs, config)
             if success:

@@ -1,10 +1,13 @@
 """
 Correspondence Utilities
-Handles keyframe detection, Match_ID storage/retrieval, and stroke collection
+Handles keyframe detection, match_id storage/retrieval, and stroke collection
 for the GP correspondence system.
 """
 
 import bpy
+
+# Module-level flag to show camera warning only once
+_camera_warning_shown = False
 def detect_keyframe_range(scene, layer):
     """Auto-detect keyframe range based on playhead position."""
     playhead = scene.frame_current
@@ -200,7 +203,11 @@ def collect_strokes_2d(gp_obj, layer_idx, frame):
     camera = scene.camera
     
     if camera is None:
-        print("[GPCORR] Warning: No active camera in scene. Using front view (looking down -Y).")
+        # Only warn once per session using a module-level flag
+        global _camera_warning_shown
+        if not _camera_warning_shown:
+            print("[GPCORR] Warning: No active camera in scene. Using front view (looking down -Y).")
+            _camera_warning_shown = True
         # Default: front view (looking down -Y axis)
         view_forward = Vector((0, -1, 0))
         view_up = Vector((0, 0, 1))

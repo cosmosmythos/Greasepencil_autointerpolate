@@ -97,16 +97,12 @@ MatchingResult StrokeMatcher::match_with_seeds(
     // Validate indices
     if (i < 0 || i >= static_cast<int>(initial_strokes.size()) || j < 0 ||
         j >= static_cast<int>(target_strokes.size())) {
-      std::cerr << "[ftpsc] Warning: Invalid manual seed (" << i << ", " << j
-                << ") - skipping\n";
       continue;
     }
 
     // Check if already matched
     if (initial_correspondence.is_matched_initial(i) ||
         initial_correspondence.is_matched_target(j)) {
-      std::cerr << "[ftpsc] Warning: Duplicate manual seed (" << i << ", " << j
-                << ") - skipping\n";
       continue;
     }
 
