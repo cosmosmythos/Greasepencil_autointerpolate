@@ -1,8 +1,8 @@
 schema_version = "1.0.0"
 id = "gp_auto_interpolate"
 name = "GP Auto Interpolate"
-version = "2.1.0"
-tagline = "Grease Pencil Real-time Auto-Interpolation with Line Art Import"
+version = "2.3.0"
+tagline = "Grease Pencil Real-time Auto-Interpolation"
 maintainer = "cosmosmythos"
 type = "add-on"
 tags = ["Grease Pencil", "Animation", "Geometry Nodes"]

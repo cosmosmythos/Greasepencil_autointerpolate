@@ -184,7 +184,14 @@ set_target_properties(gp_linevector PROPERTIES
 # Enable maximum optimization for production builds
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # GCC or Clang
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -march=native")
+    # Use -O3 for optimization, but avoid -march=native for cross-platform compatibility
+    if(APPLE)
+        # macOS: Don't use -march=native for universal/cross builds
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    else()
+        # Linux: -march=native is OK for local builds, CI overrides this
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+    endif()
     message(STATUS "Compiler flags (GCC/Clang): ${CMAKE_CXX_FLAGS}")
     
     # Optional: Enable fast math (trades precision for speed)

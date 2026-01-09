@@ -1,6 +1,5 @@
 """
-GP Auto Interpolate - Modern Extension Structure
-Blender 4.3+ Grease Pencil Interpolation Addon
+GP Auto Interpolate
 """
 
 # NOTE: Wheels are loaded automatically by Blender from blender_manifest.toml

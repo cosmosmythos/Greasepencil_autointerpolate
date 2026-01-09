@@ -89,6 +89,102 @@ jobs:
           paths:
             - dist/*.whl
 
+  build_interpolate_macos_arm64:
+    macos:
+      xcode: "15.4.0"
+    resource_class: macos.m1.medium.gen1
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies (macOS ARM64)
+          command: |
+            brew install cmake libomp eigen python@3.11
+            echo 'export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+            python3.11 --version
+            python3.11 -m pip install --upgrade pip
+            python3.11 -m pip install setuptools wheel build
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir -p Executable/build
+            cd Executable/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+            cmake --build . --config Release
+            cd ../..
+      - run:
+          name: Build wheel
+          command: |
+            python3.11 setup.py bdist_wheel
+      - run:
+          name: Rename wheel with correct platform tag
+          command: |
+            cd dist
+            for wheel in *.whl; do
+              if [[ $wheel =~ (gp_autointerpolate-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+                base="${BASH_REMATCH[1]}"
+                new_name="${base}-cp311-abi3-macosx_11_0_arm64.whl"
+                if [ "$wheel" != "$new_name" ]; then
+                  mv "$wheel" "$new_name"
+                fi
+              fi
+            done
+            ls -la
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
+  build_interpolate_macos_x64:
+    macos:
+      xcode: "15.2.0"
+    resource_class: macos.x86.medium.gen2
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies (macOS x64)
+          command: |
+            brew install cmake libomp eigen python@3.11
+            echo 'export PATH="/usr/local/opt/python@3.11/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+            python3.11 --version
+            python3.11 -m pip install --upgrade pip
+            python3.11 -m pip install setuptools wheel build
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir -p Executable/build
+            cd Executable/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+            cmake --build . --config Release
+            cd ../..
+      - run:
+          name: Build wheel
+          command: |
+            python3.11 setup.py bdist_wheel
+      - run:
+          name: Rename wheel with correct platform tag
+          command: |
+            cd dist
+            for wheel in *.whl; do
+              if [[ $wheel =~ (gp_autointerpolate-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+                base="${BASH_REMATCH[1]}"
+                new_name="${base}-cp311-abi3-macosx_10_15_x86_64.whl"
+                if [ "$wheel" != "$new_name" ]; then
+                  mv "$wheel" "$new_name"
+                fi
+              fi
+            done
+            ls -la
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
   # Build LineVector Module
   build_linevector_windows:
     machine:
@@ -249,6 +345,118 @@ jobs:
           paths:
             - dist/*.whl
 
+  build_linevector_macos_arm64:
+    macos:
+      xcode: "15.4.0"
+    resource_class: macos.m1.medium.gen1
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies (macOS ARM64)
+          command: |
+            brew install cmake opencv eigen boost python@3.11
+            echo 'export PATH="/opt/homebrew/opt/python@3.11/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+            python3.11 --version
+            python3.11 -m pip install --upgrade pip
+            python3.11 -m pip install setuptools wheel build delocate
+      - run:
+          name: Download missing headers
+          command: |
+            curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir -p Vectorize/build
+            cd Vectorize/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64
+            cmake --build . --config Release
+            cd ../..
+      - run:
+          name: Build wheel
+          command: |
+            python3.11 setup_vectorize.py bdist_wheel
+      - run:
+          name: Bundle dependencies and rename wheel
+          command: |
+            cd dist
+            for wheel in *.whl; do
+              python3.11 -m delocate.cmd.delocate_wheel -w . "$wheel"
+            done
+            # Rename to correct platform tag
+            for wheel in *.whl; do
+              if [[ $wheel =~ (gp_linevector-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+                base="${BASH_REMATCH[1]}"
+                new_name="${base}-cp311-abi3-macosx_11_0_arm64.whl"
+                if [ "$wheel" != "$new_name" ]; then
+                  mv "$wheel" "$new_name"
+                fi
+              fi
+            done
+            ls -la
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
+  build_linevector_macos_x64:
+    macos:
+      xcode: "15.2.0"
+    resource_class: macos.x86.medium.gen2
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies (macOS x64)
+          command: |
+            brew install cmake opencv eigen boost python@3.11
+            echo 'export PATH="/usr/local/opt/python@3.11/bin:$PATH"' >> $BASH_ENV
+            source $BASH_ENV
+            python3.11 --version
+            python3.11 -m pip install --upgrade pip
+            python3.11 -m pip install setuptools wheel build delocate
+      - run:
+          name: Download missing headers
+          command: |
+            curl -fsSL -o Vectorize/src_polyvector/simple_svg_1.0.0.hpp https://raw.githubusercontent.com/adishavit/simple-svg/master/simple_svg_1.0.0.hpp
+      - run:
+          name: Build C++ extension
+          command: |
+            mkdir -p Vectorize/build
+            cd Vectorize/build
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=x86_64
+            cmake --build . --config Release
+            cd ../..
+      - run:
+          name: Build wheel
+          command: |
+            python3.11 setup_vectorize.py bdist_wheel
+      - run:
+          name: Bundle dependencies and rename wheel
+          command: |
+            cd dist
+            for wheel in *.whl; do
+              python3.11 -m delocate.cmd.delocate_wheel -w . "$wheel"
+            done
+            # Rename to correct platform tag
+            for wheel in *.whl; do
+              if [[ $wheel =~ (gp_linevector-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
+                base="${BASH_REMATCH[1]}"
+                new_name="${base}-cp311-abi3-macosx_10_15_x86_64.whl"
+                if [ "$wheel" != "$new_name" ]; then
+                  mv "$wheel" "$new_name"
+                fi
+              fi
+            done
+            ls -la
+      - store_artifacts:
+          path: dist/*.whl
+      - persist_to_workspace:
+          root: .
+          paths:
+            - dist/*.whl
+
   # Package Everything
   package:
     docker:
@@ -261,15 +469,11 @@ jobs:
           name: Install zip
           command: sudo apt-get update && sudo apt-get install -y zip
       - run:
-          name: Create platform-specific packages (Windows + Linux)
+          name: Create platform-specific packages (Windows + Linux + macOS)
           command: |
             set -e
             
-            # Do NOT hardcode versions; use the exact wheel filenames produced by builds
-            VERSION_INTERP=""
-            VERSION_LINE=""
-            
-            # Collect all wheels into wheels-temp (mirror GitHub Actions)
+            # Collect all wheels into wheels-temp
             rm -rf wheels-temp
             mkdir -p wheels-temp
             find . -path "*/dist/*.whl" -exec cp {} wheels-temp/ \;
@@ -296,7 +500,6 @@ jobs:
             
             printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["windows-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$WIN_INTERP_BN" "$WIN_LINE_BN" >> build_windows/Addon/blender_manifest.toml
             cd build_windows/Addon
-            # Derive version from interpolate wheel filename to name the zip similarly to GitHub Actions
             WIN_ZIP_VER=$(echo "$WIN_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
             if [ -z "$WIN_ZIP_VER" ]; then WIN_ZIP_VER="unknown"; fi
             zip -r ../../gp_auto_interpolate-${WIN_ZIP_VER}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
@@ -308,7 +511,6 @@ jobs:
             cp -r Addon/* build_linux/Addon/
             rm -rf build_linux/Addon/wheels
             mkdir -p build_linux/Addon/wheels
-            # Copy Linux wheels (interpolate may be linux_x86_64, linevector should be manylinux after auditwheel)
             find wheels-temp -name "*linux_x86_64.whl" -exec cp {} build_linux/Addon/wheels/ \; || true
             find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \; || true
             
@@ -327,17 +529,66 @@ jobs:
             
             printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["linux-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$LINUX_INTERP_BN" "$LINUX_LINE_BN" >> build_linux/Addon/blender_manifest.toml
             cd build_linux/Addon
-            # Derive version from interpolate wheel filename to name the zip similarly to GitHub Actions
-            ZIP_VER=$(echo "$LINUX_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
-            if [ -z "$ZIP_VER" ]; then ZIP_VER="unknown"; fi
-            zip -r ../../gp_auto_interpolate-${ZIP_VER}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+            LINUX_ZIP_VER=$(echo "$LINUX_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+            if [ -z "$LINUX_ZIP_VER" ]; then LINUX_ZIP_VER="unknown"; fi
+            zip -r ../../gp_auto_interpolate-${LINUX_ZIP_VER}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
             cd ../..
+            
+            # macOS ARM64 package
+            echo "Creating macOS ARM64 package..."
+            mkdir -p build_macos_arm64/Addon
+            cp -r Addon/* build_macos_arm64/Addon/
+            rm -rf build_macos_arm64/Addon/wheels
+            mkdir -p build_macos_arm64/Addon/wheels
+            find wheels-temp -name "*macosx_11_0_arm64.whl" -exec cp {} build_macos_arm64/Addon/wheels/ \;
+            
+            MAC_ARM_INTERP=$(ls build_macos_arm64/Addon/wheels/*autointerpolate*macosx_11_0_arm64.whl 2>/dev/null | head -n 1)
+            MAC_ARM_LINE=$(ls build_macos_arm64/Addon/wheels/*linevector*macosx_11_0_arm64.whl 2>/dev/null | head -n 1)
+            
+            if [ -z "$MAC_ARM_INTERP" ] || [ -z "$MAC_ARM_LINE" ]; then
+              echo "⚠️ Missing macOS ARM64 wheels - skipping macOS ARM64 package"
+              echo "  Interpolate: $MAC_ARM_INTERP"
+              echo "  LineVector: $MAC_ARM_LINE"
+            else
+              MAC_ARM_INTERP_BN=$(basename "$MAC_ARM_INTERP")
+              MAC_ARM_LINE_BN=$(basename "$MAC_ARM_LINE")
+              printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["macos-arm64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$MAC_ARM_INTERP_BN" "$MAC_ARM_LINE_BN" >> build_macos_arm64/Addon/blender_manifest.toml
+              cd build_macos_arm64/Addon
+              MAC_ARM_ZIP_VER=$(echo "$MAC_ARM_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+              if [ -z "$MAC_ARM_ZIP_VER" ]; then MAC_ARM_ZIP_VER="unknown"; fi
+              zip -r ../../gp_auto_interpolate-${MAC_ARM_ZIP_VER}-macos-arm64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+              cd ../..
+            fi
+            
+            # macOS x64 package
+            echo "Creating macOS x64 package..."
+            mkdir -p build_macos_x64/Addon
+            cp -r Addon/* build_macos_x64/Addon/
+            rm -rf build_macos_x64/Addon/wheels
+            mkdir -p build_macos_x64/Addon/wheels
+            find wheels-temp -name "*macosx_10_15_x86_64.whl" -exec cp {} build_macos_x64/Addon/wheels/ \;
+            
+            MAC_X64_INTERP=$(ls build_macos_x64/Addon/wheels/*autointerpolate*macosx_10_15_x86_64.whl 2>/dev/null | head -n 1)
+            MAC_X64_LINE=$(ls build_macos_x64/Addon/wheels/*linevector*macosx_10_15_x86_64.whl 2>/dev/null | head -n 1)
+            
+            if [ -z "$MAC_X64_INTERP" ] || [ -z "$MAC_X64_LINE" ]; then
+              echo "⚠️ Missing macOS x64 wheels - skipping macOS x64 package"
+              echo "  Interpolate: $MAC_X64_INTERP"
+              echo "  LineVector: $MAC_X64_LINE"
+            else
+              MAC_X64_INTERP_BN=$(basename "$MAC_X64_INTERP")
+              MAC_X64_LINE_BN=$(basename "$MAC_X64_LINE")
+              printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["macos-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$MAC_X64_INTERP_BN" "$MAC_X64_LINE_BN" >> build_macos_x64/Addon/blender_manifest.toml
+              cd build_macos_x64/Addon
+              MAC_X64_ZIP_VER=$(echo "$MAC_X64_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+              if [ -z "$MAC_X64_ZIP_VER" ]; then MAC_X64_ZIP_VER="unknown"; fi
+              zip -r ../../gp_auto_interpolate-${MAC_X64_ZIP_VER}-macos-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+              cd ../..
+            fi
             
             echo "✅ Packages created:"
             ls -lh gp_auto_interpolate-*.zip
             
-            # CircleCI store_artifacts does NOT support glob patterns reliably.
-            # Move zips into a directory and upload the directory.
             rm -rf out_zips
             mkdir -p out_zips
             mv gp_auto_interpolate-*.zip out_zips/
@@ -350,11 +601,19 @@ workflows:
     jobs:
       - build_interpolate_windows
       - build_interpolate_linux
+      - build_interpolate_macos_arm64
+      - build_interpolate_macos_x64
       - build_linevector_windows
       - build_linevector_linux
+      - build_linevector_macos_arm64
+      - build_linevector_macos_x64
       - package:
           requires:
             - build_interpolate_windows
             - build_interpolate_linux
+            - build_interpolate_macos_arm64
+            - build_interpolate_macos_x64
             - build_linevector_windows
             - build_linevector_linux
+            - build_linevector_macos_arm64
+            - build_linevector_macos_x64
