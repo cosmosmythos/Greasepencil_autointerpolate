@@ -378,8 +378,9 @@ jobs:
       - name: Test wheel installation
         shell: bash
         # Skip test on Windows - OpenCV DLLs not in PATH during test
-        # The wheel is still valid and will work when installed in Blender
-        if: runner.os != 'Windows'
+        # Skip test on macOS x64 - cross-compiled on ARM64 runner, can't test x86_64 wheel
+        # The wheels are still valid and will work when installed in Blender
+        if: runner.os != 'Windows' && matrix.platform != 'macos-x64'
         run: |
           pip install dist/*.whl
           python -c "import gp_linevector; print(f'LineVector v{gp_linevector.__version__} imported successfully')"
