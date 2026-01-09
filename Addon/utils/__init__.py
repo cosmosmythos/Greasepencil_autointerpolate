@@ -6,15 +6,15 @@ from . import easing
 from . import arc_data
 from . import visibility
 from . import vectorization
+from . import linked_stroke_overlay
 
 
 def register():
     """Register utils modules"""
-    # No classes to register, just import modules
-    pass
+    linked_stroke_overlay.register()
 
 
 def unregister():
     """Unregister utils modules"""
-    pass
+    linked_stroke_overlay.unregister()
 

@@ -423,13 +423,13 @@ jobs:
           [build.generated]
           platforms = ["windows-x64"]
           wheels = [
-            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-win_amd64.whl",
+            "./wheels/gp_autointerpolate-2.3.0-cp311-abi3-win_amd64.whl",
             "./wheels/gp_linevector-1.0.0-cp311-abi3-win_amd64.whl"
           ]
           # END GENERATED CONTENT.
           EOF
           cd build_windows/Addon
-          zip -r ../../gp_auto_interpolate-2.1.0-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-2.3.0-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           # macOS ARM64
@@ -452,13 +452,13 @@ jobs:
           [build.generated]
           platforms = ["macos-arm64"]
           wheels = [
-            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-macosx_11_0_arm64.whl",
+            "./wheels/gp_autointerpolate-2.3.0-cp311-abi3-macosx_11_0_arm64.whl",
             "./wheels/gp_linevector-1.0.0-cp311-abi3-macosx_11_0_arm64.whl"
           ]
           # END GENERATED CONTENT.
           EOF
           cd build_macos_arm64/Addon
-          zip -r ../../gp_auto_interpolate-2.1.0-macos-arm64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-2.3.0-macos-arm64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
 
           # macOS x64
@@ -480,13 +480,13 @@ jobs:
           [build.generated]
           platforms = ["macos-x64"]
           wheels = [
-            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-macosx_10_15_x86_64.whl",
+            "./wheels/gp_autointerpolate-2.3.0-cp311-abi3-macosx_10_15_x86_64.whl",
             "./wheels/gp_linevector-1.0.0-cp311-abi3-macosx_10_15_x86_64.whl"
           ]
           # END GENERATED CONTENT.
           EOF
           cd build_macos_x64/Addon
-          zip -r ../../gp_auto_interpolate-2.1.0-macos-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-2.3.0-macos-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           # Linux
@@ -503,13 +503,13 @@ jobs:
           [build.generated]
           platforms = ["linux-x64"]
           wheels = [
-            "./wheels/gp_autointerpolate-2.1.0-cp311-abi3-manylinux_2_34_x86_64.whl",
+            "./wheels/gp_autointerpolate-2.3.0-cp311-abi3-manylinux_2_34_x86_64.whl",
             "./wheels/gp_linevector-1.0.0-cp311-abi3-manylinux_2_34_x86_64.whl"
           ]
           # END GENERATED CONTENT.
           EOF
           cd build_linux/Addon
-          zip -r ../../gp_auto_interpolate-2.1.0-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-2.3.0-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           echo "✅ Platform-specific packages created:"
@@ -518,8 +518,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.1.0-build-${{ github.run_number }}
-          name: "GP Auto Interpolate v2.1.0"
+          tag_name: v2.3.0-build-${{ github.run_number }}
+          name: "GP Auto Interpolate v2.3.0"
           body: |
             🎉 **Wheel-based release with Local_Modern architecture**
             
@@ -539,10 +539,10 @@ jobs:
             2. Install in Blender Extensions
             3. Done!
           files: |
-            gp_auto_interpolate-2.1.0-windows-x64.zip
-            gp_auto_interpolate-2.1.0-macos-arm64.zip
-            gp_auto_interpolate-2.1.0-macos-x64.zip
-            gp_auto_interpolate-2.1.0-linux-x64.zip
+            gp_auto_interpolate-2.3.0-windows-x64.zip
+            gp_auto_interpolate-2.3.0-macos-arm64.zip
+            gp_auto_interpolate-2.3.0-macos-x64.zip
+            gp_auto_interpolate-2.3.0-linux-x64.zip
           draft: false
           prerelease: false
         env:
@@ -552,4 +552,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extension-packages
-          path: gp_auto_interpolate-2.1.0-*.zip
+          path: gp_auto_interpolate-2.3.0-*.zip

@@ -81,7 +81,7 @@ class CMakeBuild(build_ext):
 
 setup(
     name="gp_autointerpolate",
-    version="2.1.0",
+    version="2.3.0",
     description="High-performance C++ interpolation module for Blender Grease Pencil",
     author="cosmosmythos",
     url="https://cosmosmythos.gumroad.com/",

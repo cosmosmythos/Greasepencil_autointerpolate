@@ -47,6 +47,8 @@ def set_state(**kwargs):
             gp_correspondence._link_mode_active = value
         elif key == 'viewport_context':
             gp_correspondence._viewport_context = value
+        elif key == 'show_linked_overlay':
+            gp_correspondence._show_linked_overlay = value
 def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
     """Run correspondence matching between two frames. Returns (success, matches, message)."""
     try:
@@ -452,6 +454,7 @@ class GPCORR_OT_link_mode_toggle(Operator):
     
     def execute(self, context):
         from .. import gp_correspondence
+        from ..utils import linked_stroke_overlay
         
         obj = context.active_object
         if obj is None or obj.type != 'GREASEPENCIL':
@@ -463,7 +466,10 @@ class GPCORR_OT_link_mode_toggle(Operator):
         if not link_mode_active:
             # Activate link mode
             set_state(link_mode_active=True)
-
+            
+            # Auto-enable linked strokes overlay
+            set_state(show_linked_overlay=True)
+            linked_stroke_overlay.manage_draw_handler()
             
             # Switch to Edit mode
             bpy.ops.object.mode_set(mode='EDIT')
@@ -500,6 +506,10 @@ class GPCORR_OT_link_mode_toggle(Operator):
         else:
             # Deactivate link mode
             set_state(link_mode_active=False)
+            
+            # Disable linked strokes overlay
+            set_state(show_linked_overlay=False)
+            linked_stroke_overlay.manage_draw_handler()
 
             # Deselect keyframes
             if obj and obj.type == 'GREASEPENCIL':

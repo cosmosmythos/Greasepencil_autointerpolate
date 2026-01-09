@@ -16,6 +16,7 @@ _match_progress = {"current": 0, "total": 0, "status": ""}
 _link_mode_active = False
 _link_constraints = []  # [(layer_idx, frame1, stroke1_idx, frame2, stroke2_idx), ...]
 _viewport_context = {}  # Store viewport info (region, rv3d) for timer callbacks
+_show_linked_overlay = False  # Toggle for showing orange overlay on linked strokes
 
 
 # Header UI Integration
@@ -42,6 +43,11 @@ def draw_gpcorr_header(self, context):
     if _link_mode_active:
         row.operator("gpcorr.link_selected", text="Link", icon='ADD')
         row.operator("gpcorr.unlink_selected", text="Unlink", icon='REMOVE')
+    
+    # Linked strokes overlay toggle (eye icon)
+    row.operator("gpcorr.toggle_linked_overlay", text="", 
+                 icon='HIDE_OFF' if _show_linked_overlay else 'HIDE_ON',
+                 depress=_show_linked_overlay)
     
     # Show progress if job running
     if _match_job_running:
