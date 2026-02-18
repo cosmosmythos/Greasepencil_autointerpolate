@@ -336,6 +336,61 @@ jobs:
       - store_artifacts:
           path: out_zips
 
+  # EXPERIMENTAL: Python 3.14 build for Arch Linux (one-time customer request)
+  build_py314_experimental:
+    docker:
+      - image: archlinux:latest
+    steps:
+      - checkout
+      - run:
+          name: Install Arch dependencies
+          command: |
+            pacman -Syu --noconfirm
+            pacman -S --noconfirm base-devel git cmake python python-pip opencv boost eigen gcc-libs
+      - run:
+          name: Verify Python 3.14
+          command: |
+            python --version
+            python -c "import sys; print(f'Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}')"
+      - run:
+          name: Install Python build tools
+          command: |
+            pip install --break-system-packages --upgrade pip wheel setuptools build
+      - run:
+          name: Build gp_autointerpolate
+          command: |
+            cd Executable
+            cmake -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --config Release
+      - run:
+          name: Package gp_autointerpolate wheel
+          command: |
+            sed -i 's/python_requires=">=3.11"/python_requires=">=3.14"/' setup.py
+            sed -i 's/"py_limited_api": "cp311"/"py_limited_api": "cp314"/' setup.py
+            python -m build --wheel
+      - run:
+          name: Build gp_linevector
+          command: |
+            cd Vectorize
+            cmake -B build -DCMAKE_BUILD_TYPE=Release
+            cmake --build build --config Release
+      - run:
+          name: Package gp_linevector wheel
+          command: |
+            sed -i 's/python_requires=">=3.11"/python_requires=">=3.14"/' setup_vectorize.py
+            sed -i 's/"py_limited_api": "cp311"/"py_limited_api": "cp314"/' setup_vectorize.py
+            python setup_vectorize.py bdist_wheel
+      - store_artifacts:
+          path: dist
+          destination: py314-wheels
+      - run:
+          name: Build Summary
+          command: |
+            echo "=== EXPERIMENTAL PYTHON 3.14 WHEELS COMPLETE ==="
+            echo "Built for: Arch Linux Blender 5.0"
+            echo "Wheels:"
+            ls -lh dist/*.whl
+
 workflows:
   build_and_package:
     jobs:
@@ -349,3 +404,11 @@ workflows:
             - build_interpolate_linux
             - build_linevector_windows
             - build_linevector_linux
+  
+  # Experimental workflow - only runs on experimental/py314 branch
+  experimental_py314:
+    jobs:
+      - build_py314_experimental:
+          filters:
+            branches:
+              only: experimental/py314

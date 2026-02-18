@@ -65,15 +65,12 @@ jobs:
           echo "Renamed to: $NEW_NAME"
           ls -lh
       
-      - name: Display gp_autointerpolate wheel
-        run: |
-          echo "✅ gp_autointerpolate wheel built successfully!"
-          echo ""
-          echo "📦 Wheel file:"
-          ls -lh dist/gp_autointerpolate-*-cp314-cp314-linux_*.whl
-          echo ""
-          echo "ℹ️  Artifact upload disabled to avoid storage quota"
-          echo "ℹ️  Build verified - wheel creation successful!"
+      - name: Upload gp_autointerpolate wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: gp_autointerpolate-py314-linux
+          path: dist/gp_autointerpolate-*-cp314-cp314-linux_*.whl
+          retention-days: 7
       
       # ============================================================================
       # BUILD GP LINEVECTOR
@@ -106,15 +103,12 @@ jobs:
           echo "Renamed to: $NEW_NAME"
           ls -lh
       
-      - name: Display gp_linevector wheel
-        run: |
-          echo "✅ gp_linevector wheel built successfully!"
-          echo ""
-          echo "📦 Wheel file:"
-          ls -lh dist/gp_linevector-*-cp314-cp314-linux_*.whl
-          echo ""
-          echo "ℹ️  Artifact upload disabled to avoid storage quota"
-          echo "ℹ️  Build verified - wheel creation successful!"
+      - name: Upload gp_linevector wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: gp_linevector-py314-linux
+          path: dist/gp_linevector-*-cp314-cp314-linux_*.whl
+          retention-days: 7
       
       # ============================================================================
       # BUILD SUMMARY
