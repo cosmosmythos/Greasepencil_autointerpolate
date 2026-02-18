@@ -369,8 +369,16 @@ jobs:
             sed -i 's/"py_limited_api": "cp311"/"py_limited_api": "cp314"/' setup.py
             rm -rf dist  # Clean dist folder first
             python -m build --wheel
+            
+            # Bundle dependencies with auditwheel (like official Linux builds)
+            pip install --break-system-packages auditwheel
+            mkdir -p repaired
+            original_wheel=$(ls dist/*.whl)
+            auditwheel repair "$original_wheel" -w repaired
+            
+            # Move repaired wheel to artifacts
             mkdir -p artifacts_py314/autointerpolate
-            mv dist/*.whl artifacts_py314/autointerpolate/
+            mv repaired/*.whl artifacts_py314/autointerpolate/
       - run:
           name: Build gp_linevector
           command: |
@@ -384,8 +392,15 @@ jobs:
             sed -i 's/"py_limited_api": "cp311"/"py_limited_api": "cp314"/' setup_vectorize.py
             rm -rf dist  # Clean dist folder to avoid cross-contamination
             python setup_vectorize.py bdist_wheel
+            
+            # Bundle dependencies with auditwheel (like official Linux builds)
+            mkdir -p repaired
+            original_wheel=$(ls dist/*.whl | grep gp_linevector)
+            auditwheel repair "$original_wheel" -w repaired
+            
+            # Move repaired wheel to artifacts
             mkdir -p artifacts_py314/linevector
-            mv dist/*.whl artifacts_py314/linevector/
+            mv repaired/*.whl artifacts_py314/linevector/
       - store_artifacts:
           path: artifacts_py314
           destination: py314-wheels
