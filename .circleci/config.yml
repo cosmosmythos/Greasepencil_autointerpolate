@@ -367,7 +367,10 @@ jobs:
           command: |
             sed -i 's/python_requires=">=3.11"/python_requires=">=3.14"/' setup.py
             sed -i 's/"py_limited_api": "cp311"/"py_limited_api": "cp314"/' setup.py
+            rm -rf dist  # Clean dist folder first
             python -m build --wheel
+            mkdir -p artifacts_py314/autointerpolate
+            mv dist/*.whl artifacts_py314/autointerpolate/
       - run:
           name: Build gp_linevector
           command: |
@@ -379,17 +382,24 @@ jobs:
           command: |
             sed -i 's/python_requires=">=3.11"/python_requires=">=3.14"/' setup_vectorize.py
             sed -i 's/"py_limited_api": "cp311"/"py_limited_api": "cp314"/' setup_vectorize.py
+            rm -rf dist  # Clean dist folder to avoid cross-contamination
             python setup_vectorize.py bdist_wheel
+            mkdir -p artifacts_py314/linevector
+            mv dist/*.whl artifacts_py314/linevector/
       - store_artifacts:
-          path: dist
+          path: artifacts_py314
           destination: py314-wheels
       - run:
           name: Build Summary
           command: |
             echo "=== EXPERIMENTAL PYTHON 3.14 WHEELS COMPLETE ==="
             echo "Built for: Arch Linux Blender 5.0"
-            echo "Wheels:"
-            ls -lh dist/*.whl
+            echo ""
+            echo "gp_autointerpolate:"
+            ls -lh artifacts_py314/autointerpolate/*.whl
+            echo ""
+            echo "gp_linevector:"
+            ls -lh artifacts_py314/linevector/*.whl
 
 workflows:
   build_and_package:
