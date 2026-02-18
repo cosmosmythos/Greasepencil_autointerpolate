@@ -152,17 +152,10 @@ set_target_properties(gp_autointerpolate PROPERTIES
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     if(UNIX AND NOT APPLE)
-        # Try static OpenMP first for maximum Linux compatibility, fallback to dynamic
-        include(CheckLibraryExists)
-        check_library_exists(gomp omp_get_num_threads "" HAVE_STATIC_GOMP)
-        
-        if(HAVE_STATIC_GOMP)
-            target_link_libraries(gp_autointerpolate PRIVATE -Wl,-Bstatic -lgomp -Wl,-Bdynamic)
-            message(STATUS "OpenMP statically linked for maximum Linux compatibility")
-        else()
-            target_link_libraries(gp_autointerpolate PRIVATE OpenMP::OpenMP_CXX)
-            message(STATUS "OpenMP dynamically linked (static not available)")
-        endif()
+        # Arch Linux doesn't provide static libgomp, use dynamic linking
+        # Other distros (Ubuntu/Fedora) can use static linking for max compatibility
+        target_link_libraries(gp_autointerpolate PRIVATE OpenMP::OpenMP_CXX)
+        message(STATUS "OpenMP dynamically linked (Arch Linux experimental build)")
     else()
         target_link_libraries(gp_autointerpolate PRIVATE OpenMP::OpenMP_CXX)
         message(STATUS "OpenMP linked (Windows/macOS)")

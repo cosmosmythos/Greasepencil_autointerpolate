@@ -21,7 +21,8 @@ jobs:
       - name: Install Arch dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm base-devel git cmake python python-pip opencv boost eigen
+          # Install dependencies (no static OpenMP available on Arch)
+          pacman -S --noconfirm base-devel git cmake python python-pip opencv boost eigen gcc-libs
       
       - name: Verify Python version
         run: |
