@@ -30,7 +30,8 @@ jobs:
       
       - name: Install Python build tools
         run: |
-          pip install --upgrade pip wheel setuptools build
+          # Arch Linux requires --break-system-packages for system Python
+          pip install --break-system-packages --upgrade pip wheel setuptools build
       
       # ============================================================================
       # BUILD GP AUTO-INTERPOLATE
