@@ -370,15 +370,11 @@ jobs:
             rm -rf dist  # Clean dist folder first
             python -m build --wheel
             
-            # Bundle dependencies with auditwheel (like official Linux builds)
-            pip install --break-system-packages auditwheel
-            mkdir -p repaired
-            original_wheel=$(ls dist/*.whl)
-            auditwheel repair "$original_wheel" -w repaired
-            
-            # Move repaired wheel to artifacts
+            # NOTE: auditwheel doesn't work on Arch (glibc too new for manylinux)
+            # This wheel is Arch-specific anyway, so skip auditwheel and use native wheel
+            # Dependencies (OpenCV, etc.) must be installed on target system via pacman
             mkdir -p artifacts_py314/autointerpolate
-            mv repaired/*.whl artifacts_py314/autointerpolate/
+            mv dist/*.whl artifacts_py314/autointerpolate/
       - run:
           name: Build gp_linevector
           command: |
@@ -393,14 +389,11 @@ jobs:
             rm -rf dist  # Clean dist folder to avoid cross-contamination
             python setup_vectorize.py bdist_wheel
             
-            # Bundle dependencies with auditwheel (like official Linux builds)
-            mkdir -p repaired
-            original_wheel=$(ls dist/*.whl | grep gp_linevector)
-            auditwheel repair "$original_wheel" -w repaired
-            
-            # Move repaired wheel to artifacts
+            # NOTE: auditwheel doesn't work on Arch (glibc too new for manylinux)
+            # This wheel is Arch-specific anyway, so skip auditwheel and use native wheel
+            # Dependencies (OpenCV, etc.) must be installed on target system via pacman
             mkdir -p artifacts_py314/linevector
-            mv repaired/*.whl artifacts_py314/linevector/
+            mv dist/*.whl artifacts_py314/linevector/
       - store_artifacts:
           path: artifacts_py314
           destination: py314-wheels
