@@ -37,11 +37,63 @@ def get_signature(gp_obj):
 def append_nodegroup(nodegroup_name):
     import os
     filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Auto-Interpolate (c).blend")
-    bpy.ops.wm.append(
-        filepath=os.path.join(filepath, "NodeTree", nodegroup_name),
-        directory=os.path.join(filepath, "NodeTree"),
-        filename=nodegroup_name
-    )
+    
+    # Use link instead of append to avoid context issues
+    # Then make it local so it can be modified
+    with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+        if nodegroup_name in data_from.node_groups:
+            data_to.node_groups = [nodegroup_name]
+
+
+def check_and_update_nodegroup():
+    """
+    Check if the scene's node group matches the expected version.
+    If outdated, remove it from all GP objects and re-append fresh.
+    Returns True if an update was performed, False otherwise.
+    """
+    from .constants import NODEGROUP_NAME, NODEGROUP_VERSION, MODIFIER_NAME
+    
+    existing = bpy.data.node_groups.get(NODEGROUP_NAME)
+    
+    if not existing:
+        # No node group exists yet, nothing to update
+        return False
+    
+    # Check version via description field
+    current_version = existing.description or ""
+    
+    if current_version == NODEGROUP_VERSION:
+        # Up to date
+        return False
+    
+    print(f"[GPAI] Node group outdated: '{current_version}' -> '{NODEGROUP_VERSION}'")
+    
+    # Track which GP objects had the modifier
+    objects_with_modifier = []
+    
+    # Remove modifier from all GP objects that use this node group
+    for obj in bpy.data.objects:
+        if obj.type == 'GREASEPENCIL':
+            for mod in list(obj.modifiers):  # list() to avoid modifying while iterating
+                if mod.type == 'NODES' and mod.node_group == existing:
+                    objects_with_modifier.append(obj)
+                    obj.modifiers.remove(mod)
+    
+    # Remove the old node group
+    bpy.data.node_groups.remove(existing)
+    
+    # Append fresh from .blend
+    append_nodegroup(NODEGROUP_NAME)
+    
+    # Re-apply modifier to objects that had it
+    new_nodegroup = bpy.data.node_groups.get(NODEGROUP_NAME)
+    if new_nodegroup:
+        for obj in objects_with_modifier:
+            modifier = obj.modifiers.new(name=MODIFIER_NAME, type='NODES')
+            modifier.node_group = new_nodegroup
+    
+    print(f"[GPAI] Node group updated to {NODEGROUP_VERSION}")
+    return True
 
 
 def build(gp_obj):
@@ -59,8 +111,6 @@ def build(gp_obj):
                 old_arc_data[layer_idx] = layer_cache['arc_data'].copy()
     
     cache.clear()
-    
-    print("[GPAI] Building Cache...")
     
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return
@@ -105,15 +155,6 @@ def build(gp_obj):
                 ("handle_right_i", 'FLOAT_VECTOR', 'POINT', "handle_right", 'vector', 3),
             ]
             
-            # Create match_id attribute (CURVE domain) if it doesn't exist
-            # match_id indicates which stroke in the NEXT keyframe this stroke corresponds to
-            if "match_id" not in attrs:
-                match_id_attr = attrs.new("match_id", 'INT', 'CURVE')
-                # Initialize all to stroke index (position-based default)
-                for stroke_idx in range(len(drawing.strokes)):
-                    if stroke_idx < len(match_id_attr.data):
-                        match_id_attr.data[stroke_idx].value = stroke_idx
-            
             for attr_name, attr_type, domain, source_name, access_type, multiplier in attr_defs:
                 if attr_name not in attrs:
                     attrs.new(attr_name, attr_type, domain)
@@ -136,7 +177,13 @@ def build(gp_obj):
     cache['layers'] = {}
 
     # Collect keyframe data
+    from ..operators.layer_filter import should_interpolate_layer
+    
     for layer_idx, layer in enumerate(gp_obj.data.layers):
+        # Skip layers that are excluded from interpolation
+        if not should_interpolate_layer(layer):
+            continue
+        
         layer_cache = {
             'keyframes': {},
             'sorted_frames': [],
@@ -164,6 +211,7 @@ def build(gp_obj):
             pos_attr = attrs['position']
             
             if len(frame.drawing.strokes) > 0 and len(pos_attr.data) > 0:
+                pass  # Cache entry created
                 all_positions = np.empty(len(pos_attr.data) * 3, dtype=np.float32)
                 pos_attr.data.foreach_get('vector', all_positions)
                 
@@ -179,12 +227,6 @@ def build(gp_obj):
                         buffer = np.empty(len(attrs[attr_name].data) * multiplier, dtype=np.float32)
                         attrs[attr_name].data.foreach_get(attr_type, buffer)
                         attr_data[attr_name] = buffer
-                
-                # Read match_id attribute if it exists (for interpolating to next keyframe)
-                match_ids = None
-                if 'match_id' in attrs and len(attrs['match_id'].data) > 0:
-                    match_ids = np.empty(len(attrs['match_id'].data), dtype=np.int32)
-                    attrs['match_id'].data.foreach_get('value', match_ids)
                 
                 stroke_data = []
                 pos_idx = 0
@@ -203,15 +245,6 @@ def build(gp_obj):
                         stroke_attrs['handle_left'] = attr_data['handle_left'][pos_idx : pos_idx + point_count * 3]
                     if 'handle_right' in attr_data:
                         stroke_attrs['handle_right'] = attr_data['handle_right'][pos_idx : pos_idx + point_count * 3]
-                    
-                    # Add match_id (for pairing with next keyframe, default to stroke_idx)
-                    if match_ids is not None and stroke_idx < len(match_ids):
-                        match_id = int(match_ids[stroke_idx])
-                        # Use FTP-SC match_id if set, otherwise default to position-based
-                        stroke_attrs['match_id'] = match_id if match_id >= 0 else stroke_idx
-                    else:
-                        # No match_id attribute exists - default to position-based
-                        stroke_attrs['match_id'] = stroke_idx
                     
                     stroke_data.append(stroke_attrs)
                     pos_idx += point_count * 3
@@ -248,8 +281,6 @@ def build(gp_obj):
                                 key_attr.data.foreach_set('value', key_values)
         
         cache['layers'][layer_idx] = layer_cache
-    
-    print("[GPAI] Cache build complete.")
 
 
 def clear():

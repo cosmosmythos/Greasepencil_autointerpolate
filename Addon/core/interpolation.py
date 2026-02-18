@@ -180,8 +180,16 @@ def process(context):
                 from ..utils import easing
                 easing_curve = easing.sample_easing_preset('LINEAR')
             
+            # Normalize easing curve to [0, 1] while preserving shape
+            from ..utils.easing import normalize_easing_curve
             easing_samples = np.array(easing_curve, dtype=np.float32)
             
+            # Safety: replace NaN/Inf with safe defaults
+            if np.any(np.isnan(easing_samples)) or np.any(np.isinf(easing_samples)):
+                easing_samples = np.nan_to_num(easing_samples, nan=0.0, posinf=1.0, neginf=0.0)
+            
+            # Normalize and clean — preserves acceleration feel, removes overshoot
+            easing_samples = np.array(normalize_easing_curve(easing_samples.tolist()), dtype=np.float32)            
             # Get arc parameters (arc_amount, arc_direction, curvature_blend, use_spiral)
             arc_params = layer_cache['arc_data'].get(prev_frame, (0.0, 0.0, 0.0, True))
             arc_amount = arc_params[0]
@@ -197,16 +205,13 @@ def process(context):
                 'handle_right': []
             }
             
-            # Pair strokes using match_id
-            # prev_stroke.match_id = index of the corresponding stroke in next_strokes
+            # Pair strokes by index (strokes are reordered by correspondence tool to align)
             for stroke_idx, prev_stroke in enumerate(prev_strokes):
-                match_id = prev_stroke.get('match_id', stroke_idx)
+                # Index-based matching: stroke i pairs with stroke i
+                if stroke_idx >= len(next_strokes):
+                    continue  # No matching stroke (mismatched stroke count)
                 
-                # match_id directly tells us which stroke in next_strokes to pair with
-                if 0 <= match_id < len(next_strokes):
-                    next_stroke = next_strokes[match_id]
-                else:
-                    continue  # No matching stroke (out of bounds)
+                next_stroke = next_strokes[stroke_idx]
                 
                 prev_positions = prev_stroke['position'] if isinstance(prev_stroke, dict) else prev_stroke
                 next_positions = next_stroke['position'] if isinstance(next_stroke, dict) else next_stroke

@@ -3,15 +3,15 @@ project(gp_linevector)
 
 set(CMAKE_CXX_STANDARD 17)
 
-message(STATUS "Building GP LineVector module for Arch Linux Blender 5.0 (EXPERIMENTAL)")
-message(STATUS "Python 3.14.x compatibility build - PolyVector vectorization")
+message(STATUS "Building GP LineVector module for Blender 4.3+")
+message(STATUS "PolyVector-based line art vectorization")
 
 # ============================================================================
 # CROSS-PLATFORM PYTHON DETECTION (same as interpolate.cpp)
 # ============================================================================
 
-# Find Python 3.14.x for Arch Linux Blender 5.0 (EXPERIMENTAL BUILD)
-find_package(Python3 3.14 COMPONENTS Interpreter Development REQUIRED)
+# Find Python 3.11.x for Blender 4.3+ compatibility
+find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
 
 # Verify Python version
 execute_process(
@@ -24,10 +24,10 @@ message(STATUS "Detected Python version: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 
-# Warn if not Python 3.14.x
-if(NOT Python3_VERSION_MAJOR EQUAL 3 OR NOT Python3_VERSION_MINOR EQUAL 14)
-    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found, but this build targets Python 3.14.x")
-    message(WARNING "This is an EXPERIMENTAL build for Arch Linux Blender 5.0")
+# Warn if not Python 3.11.x
+if(NOT Python3_VERSION_MAJOR EQUAL 3 OR NOT Python3_VERSION_MINOR EQUAL 11)
+    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found, but Blender 4.3+ requires Python 3.11.x")
+    message(WARNING "This may cause compatibility issues with Blender")
 endif()
 
 # Force pybind11 to use our detected Python
@@ -255,5 +255,5 @@ else()
     message(STATUS "Output: gp_linevector.so")
 endif()
 message(STATUS "Output directory: ${CMAKE_SOURCE_DIR}/output")
-message(STATUS "Compatible with: Arch Linux Blender 5.0 (EXPERIMENTAL)")
+message(STATUS "Compatible with: Blender 4.3+")
 message(STATUS "===========================")

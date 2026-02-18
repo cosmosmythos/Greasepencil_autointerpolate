@@ -104,6 +104,21 @@ def apply_interpolation_to_frame(gp_obj, layer_idx, frame_num, interpolated_data
                 if len(radii) == total_points:
                     attrs['radius'].data.foreach_set('value', radii)
             
+            # Write handle_left
+            if 'handle_left' in stroke_data and 'handle_left' in attrs:
+                handle_lefts = stroke_data['handle_left']
+                if len(handle_lefts) == total_points * 3:
+                    attrs['handle_left'].data.foreach_set('vector', handle_lefts)
+            
+            # Write handle_right
+            if 'handle_right' in stroke_data and 'handle_right' in attrs:
+                handle_rights = stroke_data['handle_right']
+                if len(handle_rights) == total_points * 3:
+                    attrs['handle_right'].data.foreach_set('vector', handle_rights)
+            
+            # CRITICAL: Tell Blender to update the stroke geometry after modifying positions/handles
+            drawing.tag_positions_changed()
+            
             break  # Only process the combined data once
     
     return True

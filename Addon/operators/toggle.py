@@ -25,6 +25,11 @@ class GP_ToggleInterpolation(Operator):
         scene.gp_interpolation_enabled = not scene.gp_interpolation_enabled
 
         if scene.gp_interpolation_enabled:
+            # Check for node group updates before building cache
+            from ..core.constants import NODEGROUP_VERSION
+            if cache.check_and_update_nodegroup():
+                self.report({'INFO'}, f"GPAI Nodes updated to {NODEGROUP_VERSION}")
+            
             # Enable: build cache, set target, add handler, start with proper visibility management
             cache.build(gp_obj)
             scene["gp_interpolation_target"] = gp_obj.name

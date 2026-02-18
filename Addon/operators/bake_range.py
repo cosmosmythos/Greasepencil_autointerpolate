@@ -9,7 +9,7 @@ from bpy.types import Operator
 
 def get_selected_keyframe_ranges(gp_obj):
     """
-    Get ranges of keyframes to bake for each layer.
+    Get ranges of keyframes to bake for all layers with selected keyframes.
     Returns: {layer_idx: [(start, end), (start, end), ...]}
     """
     ranges = {}
@@ -39,50 +39,11 @@ def get_selected_keyframe_ranges(gp_obj):
     return ranges
 
 
-def get_selected_keyframe_ranges_active_only(gp_obj, active_layer_idx):
-    """
-    Get ranges of keyframes to bake for ACTIVE layer only.
-    Returns: [(start, end), (start, end), ...]
-    """
-    layer = gp_obj.data.layers[active_layer_idx]
-    frame_numbers = sorted([f.frame_number for f in layer.frames])
-    
-    if len(frame_numbers) < 2:
-        return []
-    
-    layer_ranges = []
-    
-    for i in range(len(frame_numbers) - 1):
-        start = frame_numbers[i]
-        end = frame_numbers[i + 1]
-        
-        # Check if start frame is selected
-        for frame in layer.frames:
-            if frame.frame_number == start and frame.select:
-                if end - start > 1:
-                    layer_ranges.append((start, end))
-                break
-    
-    return layer_ranges
-
-
 def deselect_all_frames(gp_obj):
     """Deselect all frames on all layers"""
     for layer in gp_obj.data.layers:
         for frame in layer.frames:
             frame.select = False
-
-
-def duplicate_frame_safely(context, gp_obj, frame_num):
-    """Safely duplicate frame - deselects all first to avoid crashes"""
-    try:
-        deselect_all_frames(gp_obj)
-        context.scene.frame_set(frame_num)
-        bpy.ops.grease_pencil.frame_duplicate()
-        return True
-    except (RuntimeError, Exception) as e:
-        print(f"[GPAI] Frame duplication failed at {frame_num}: {e}")
-        return False
 
 
 def set_frame_to_jitter(layer, frame_num):
@@ -112,65 +73,50 @@ class GP_OT_BakeSelectedRange(Operator):
                 context.scene.gp_interpolation_enabled):
             return False
         
-        # Only allow if ACTIVE layer has selected keyframes
+        # Allow if ANY layer has selected keyframes
         gp_obj = context.active_object
-        active_layer = gp_obj.data.layers.active
-        
-        if not active_layer:
-            return False
-            
-        # Check if active layer has selected keyframes
-        return any(f.select for f in active_layer.frames)
+        for layer in gp_obj.data.layers:
+            if any(f.select for f in layer.frames):
+                return True
+        return False
     
     def execute(self, context):
         gp_obj = context.active_object
-        active_layer = gp_obj.data.layers.active
         
-        if not active_layer:
-            self.report({'ERROR'}, "No active layer")
-            return {'CANCELLED'}
+        # Store original active layer to restore later
+        original_active_layer = gp_obj.data.layers.active
         
-        # Find active layer index
-        layer_idx = None
-        for idx, layer in enumerate(gp_obj.data.layers):
-            if layer == active_layer:
-                layer_idx = idx
-                break
-                
-        if layer_idx is None:
-            self.report({'ERROR'}, "Could not find active layer index")
-            return {'CANCELLED'}
+        # Get selected ranges for ALL layers with selected keyframes
+        all_ranges = get_selected_keyframe_ranges(gp_obj)
         
-        # Get selected ranges for ACTIVE layer only
-        ranges = get_selected_keyframe_ranges_active_only(gp_obj, layer_idx)
-        
-        if not ranges:
-            self.report({'WARNING'}, "No selected keyframe ranges found in active layer")
+        if not all_ranges:
+            self.report({'WARNING'}, "No selected keyframe ranges found")
             return {'CANCELLED'}
         
         # Build complete list of frames to create with stepping
         work_list = []  # [(layer_idx, frame_num, start_frame, end_frame), ...]
-        
-        layer = gp_obj.data.layers[layer_idx]
         step = context.scene.gp_bake_step
         
-        for start_frame, end_frame in ranges:
-            # Generate frames based on step (Option B: even frame numbers)
-            if step == 1:
-                # Every frame
-                target_frames = range(start_frame + 1, end_frame)
-            else:
-                # Step-based: find frames that align with step pattern
-                target_frames = []
-                for frame_num in range(start_frame + 1, end_frame):
-                    if frame_num % step == 0:  # Even multiples (2s, 3s, etc.)
-                        target_frames.append(frame_num)
+        for layer_idx, ranges in all_ranges.items():
+            layer = gp_obj.data.layers[layer_idx]
             
-            for frame_num in target_frames:
-                # Check if frame exists
-                exists = any(f.frame_number == frame_num for f in layer.frames)
-                if not exists:
-                    work_list.append((layer_idx, frame_num, start_frame, end_frame))
+            for start_frame, end_frame in ranges:
+                # Generate frames based on step (Option B: even frame numbers)
+                if step == 1:
+                    # Every frame
+                    target_frames = range(start_frame + 1, end_frame)
+                else:
+                    # Step-based: find frames that align with step pattern
+                    target_frames = []
+                    for frame_num in range(start_frame + 1, end_frame):
+                        if frame_num % step == 0:  # Even multiples (2s, 3s, etc.)
+                            target_frames.append(frame_num)
+                
+                for frame_num in target_frames:
+                    # Check if frame exists
+                    exists = any(f.frame_number == frame_num for f in layer.frames)
+                    if not exists:
+                        work_list.append((layer_idx, frame_num, start_frame, end_frame))
         
         print(f"[BAKE] Frames to create: {len(work_list)}")
         
@@ -193,7 +139,14 @@ class GP_OT_BakeSelectedRange(Operator):
         
         # Group frames by their source frame for more efficient duplication
         current_source = None
+        current_layer_idx = None
         for layer_idx, frame_num, start_frame, end_frame in work_list:
+            # Switch active layer if needed (frame_duplicate works on active layer)
+            if current_layer_idx != layer_idx:
+                gp_obj.data.layers.active = gp_obj.data.layers[layer_idx]
+                current_layer_idx = layer_idx
+                current_source = None  # Reset source when switching layers
+            
             # Only set frame if we need to switch source
             if current_source != start_frame:
                 context.scene.frame_set(start_frame)
@@ -266,16 +219,13 @@ class GP_OT_BakeSelectedRange(Operator):
             # Pre-convert stroke data to numpy arrays once
             stroke_data_cache = []
             
-            # Pair strokes using match_id
-            # prev_stroke.match_id = index of the corresponding stroke in next_strokes
+            # Pair strokes by index (strokes are reordered by correspondence tool to align)
             for stroke_idx, prev_stroke in enumerate(prev_strokes):
-                match_id = prev_stroke.get('match_id', stroke_idx)
+                # Index-based matching: stroke i pairs with stroke i
+                if stroke_idx >= len(next_strokes):
+                    continue  # No matching stroke (mismatched stroke count)
                 
-                # match_id directly tells us which stroke in next_strokes to pair with
-                if 0 <= match_id < len(next_strokes):
-                    next_stroke = next_strokes[match_id]
-                else:
-                    continue  # No matching stroke (out of bounds)
+                next_stroke = next_strokes[stroke_idx]
                 
                 stroke_cache = {
                     'prev_pos': np.array(prev_stroke['position'], dtype=np.float32),
@@ -296,6 +246,22 @@ class GP_OT_BakeSelectedRange(Operator):
                     stroke_cache['prev_rad'] = np.array(prev_stroke['radius'], dtype=np.float32)
                     stroke_cache['next_rad'] = np.array(next_stroke['radius'], dtype=np.float32)
                 
+                # Cache handle_left if available
+                if 'handle_left' in prev_stroke and 'handle_left' in next_stroke:
+                    prev_hl = np.array(prev_stroke['handle_left'], dtype=np.float32)
+                    next_hl = np.array(next_stroke['handle_left'], dtype=np.float32)
+                    if len(prev_hl) == len(next_hl):
+                        stroke_cache['prev_hl'] = prev_hl
+                        stroke_cache['next_hl'] = next_hl
+                
+                # Cache handle_right if available
+                if 'handle_right' in prev_stroke and 'handle_right' in next_stroke:
+                    prev_hr = np.array(prev_stroke['handle_right'], dtype=np.float32)
+                    next_hr = np.array(next_stroke['handle_right'], dtype=np.float32)
+                    if len(prev_hr) == len(next_hr):
+                        stroke_cache['prev_hr'] = prev_hr
+                        stroke_cache['next_hr'] = next_hr
+                
                 stroke_data_cache.append(stroke_cache)
             
             # Process all frames in this group
@@ -304,6 +270,8 @@ class GP_OT_BakeSelectedRange(Operator):
                 all_positions = []
                 all_opacities = []
                 all_radii = []
+                all_handle_lefts = []
+                all_handle_rights = []
                 
                 # Interpolate all strokes for this frame and collect data
                 for stroke_idx, stroke_cache in enumerate(stroke_data_cache):
@@ -344,6 +312,26 @@ class GP_OT_BakeSelectedRange(Operator):
                         )
                         if radii is not None:
                             all_radii.extend(radii)
+                    
+                    # Handle Left (if cached)
+                    if 'prev_hl' in stroke_cache and 'next_hl' in stroke_cache:
+                        handle_lefts = interpolator.process_interpolation(
+                            frame_num, start_frame, stroke_cache['prev_hl'],
+                            end_frame, stroke_cache['next_hl'],
+                            stroke_idx, "handle_left", easing_samples
+                        )
+                        if handle_lefts is not None:
+                            all_handle_lefts.extend(handle_lefts)
+                    
+                    # Handle Right (if cached)
+                    if 'prev_hr' in stroke_cache and 'next_hr' in stroke_cache:
+                        handle_rights = interpolator.process_interpolation(
+                            frame_num, start_frame, stroke_cache['prev_hr'],
+                            end_frame, stroke_cache['next_hr'],
+                            stroke_idx, "handle_right", easing_samples
+                        )
+                        if handle_rights is not None:
+                            all_handle_rights.extend(handle_rights)
                 
                 # Prepare combined data for final attributes
                 combined_data = {0: {}}  # Use index 0 for all combined data
@@ -353,6 +341,10 @@ class GP_OT_BakeSelectedRange(Operator):
                     combined_data[0]['opacity'] = all_opacities
                 if all_radii:
                     combined_data[0]['radius'] = all_radii
+                if all_handle_lefts:
+                    combined_data[0]['handle_left'] = all_handle_lefts
+                if all_handle_rights:
+                    combined_data[0]['handle_right'] = all_handle_rights
                 
                 # Apply to frame using optimized foreach_set
                 if apply_interpolation_to_frame(gp_obj, layer_idx, frame_num, combined_data):
@@ -363,8 +355,13 @@ class GP_OT_BakeSelectedRange(Operator):
             layer = gp_obj.data.layers[layer_idx]
             set_frame_to_jitter(layer, frame_num)
         
+        # Restore original active layer
+        if original_active_layer:
+            gp_obj.data.layers.active = original_active_layer
+        
         if interpolated_count > 0:
-            self.report({'INFO'}, f"Baked {interpolated_count} interpolated frame(s)")
+            layers_processed = len(all_ranges)
+            self.report({'INFO'}, f"Baked {interpolated_count} frame(s) across {layers_processed} layer(s)")
             return {'FINISHED'}
         else:
             self.report({'WARNING'}, "No frames were interpolated")

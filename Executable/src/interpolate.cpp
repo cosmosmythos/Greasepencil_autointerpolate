@@ -326,10 +326,12 @@ public:
   float apply_easing(float t, py::array_t<float> curve) {
     if (!curve || curve.shape(0) != 64)
       return t;
+    
     if (t <= 0.0f)
       return 0.0f;
     if (t >= 1.0f)
       return 1.0f;
+    
     float idx = t * 63.0f;
     int lo = (int)idx, hi = std::min(lo + 1, 63);
     auto c = curve.unchecked<1>();

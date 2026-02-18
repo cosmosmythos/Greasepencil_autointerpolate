@@ -10,8 +10,6 @@ from bpy.props import IntProperty, FloatProperty, BoolProperty, EnumProperty
 from ..utils.correspondence_utils import (
     detect_keyframe_range,
     find_keyframe_pairs,
-    store_match_id_on_strokes,
-    clear_match_ids_for_layer_frame,
     collect_strokes_2d,
     to_cpp_strokes
 )
@@ -19,6 +17,7 @@ from ..utils.correspondence_utils import (
 _match_job_running = False
 _match_progress = {"current": 0, "total": 0, "status": ""}
 _link_constraints = []
+_stable_stroke_ids = {}  # {(layer_idx, frame_num): {current_idx: stable_id, ...}}
 
 
 def get_state():
@@ -30,6 +29,7 @@ def get_state():
         'link_constraints': gp_correspondence._link_constraints,
         'link_mode_active': gp_correspondence._link_mode_active,
         'viewport_context': gp_correspondence._viewport_context,
+        'stable_stroke_ids': gp_correspondence._stable_stroke_ids,
     }
 
 
@@ -49,8 +49,44 @@ def set_state(**kwargs):
             gp_correspondence._viewport_context = value
         elif key == 'show_linked_overlay':
             gp_correspondence._show_linked_overlay = value
+        elif key == 'stable_stroke_ids':
+            gp_correspondence._stable_stroke_ids = value
+def ensure_stable_ids(gp_obj, layer_idx, frame_num):
+    """
+    Ensure all strokes on a frame have stable IDs that persist across reorders.
+    Returns {current_idx: stable_id, ...}
+    """
+    state = get_state()
+    stable_stroke_ids = state['stable_stroke_ids']
+    key = (layer_idx, frame_num)
+    
+    # Get current drawing
+    layer = gp_obj.data.layers[layer_idx]
+    frame_obj = None
+    for f in layer.frames:
+        if f.frame_number == frame_num:
+            frame_obj = f
+            break
+    
+    if not frame_obj or not frame_obj.drawing:
+        return {}
+    
+    num_strokes = len(frame_obj.drawing.strokes)
+    
+    # Initialize if not present or stroke count changed (new strokes added/deleted)
+    if key not in stable_stroke_ids or len(stable_stroke_ids[key]) != num_strokes:
+        stable_stroke_ids[key] = {i: i for i in range(num_strokes)}
+        set_state(stable_stroke_ids=stable_stroke_ids)
+    
+    return stable_stroke_ids[key]
+
+
 def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
-    """Run correspondence matching between two frames. Returns (success, matches, message)."""
+    """
+    Run correspondence matching between two frames.
+    Instead of storing match_id, we reorder strokes on the later frame so indices align.
+    Returns (success, matches, message).
+    """
     try:
         import gp_autointerpolate
     except ImportError as e:
@@ -60,9 +96,9 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         state = get_state()
         link_constraints = state['link_constraints']
         
-        # Only clear match_ids on the earlier frame (frame1 stores match_id pointing to frame2)
-        earlier_frame = min(frame1, frame2)
-        clear_match_ids_for_layer_frame(gp_obj, layer_idx, earlier_frame)
+        # Ensure stable IDs exist for both frames
+        stable_ids1 = ensure_stable_ids(gp_obj, layer_idx, frame1)
+        stable_ids2 = ensure_stable_ids(gp_obj, layer_idx, frame2)
         
         s1, indices1 = collect_strokes_2d(gp_obj, layer_idx, frame1)
         s2, indices2 = collect_strokes_2d(gp_obj, layer_idx, frame2)
@@ -74,32 +110,39 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         cfg.enable_stage_two = True
         cfg.max_alpha = config['max_alpha']
         cfg.coincident_threshold = config['coincident_threshold']
-        cfg.debug = False
+        cfg.debug = False  # Disable verbose C++ debug output
         
         # Build seeds from linked constraints for this frame pair
-        # Seeds are passed to C++ to guide the matching algorithm (per FTP-SC paper)
         seeds = []
         
         lookup_frame1, lookup_frame2 = (frame1, frame2) if frame1 < frame2 else (frame2, frame1)
         swap_order = (frame1 > frame2)
         
+        # Build reverse mappings: stable_id -> current_idx
+        stable_to_current1 = {stable_id: curr_idx for curr_idx, stable_id in stable_ids1.items()}
+        stable_to_current2 = {stable_id: curr_idx for curr_idx, stable_id in stable_ids2.items()}
+        
         for constraint in link_constraints:
-            c_layer, c_frame1, c_stroke1, c_frame2, c_stroke2 = constraint
+            c_layer, c_frame1, c_stroke1_stable, c_frame2, c_stroke2_stable = constraint
             if c_layer == layer_idx and c_frame1 == lookup_frame1 and c_frame2 == lookup_frame2:
                 if swap_order:
-                    actual_stroke1 = c_stroke2
-                    actual_stroke2 = c_stroke1
+                    stable_id1 = c_stroke2_stable
+                    stable_id2 = c_stroke1_stable
                 else:
-                    actual_stroke1 = c_stroke1
-                    actual_stroke2 = c_stroke2
+                    stable_id1 = c_stroke1_stable
+                    stable_id2 = c_stroke2_stable
                 
-                # Map original stroke indices to collected stroke indices
-                try:
-                    idx1 = indices1.index(actual_stroke1)
-                    idx2 = indices2.index(actual_stroke2)
-                    seeds.append((idx1, idx2))
-                except ValueError:
-                    pass  # Stroke not found in collection (maybe filtered out)
+                # Map stable IDs to current indices, then to collected indices
+                if stable_id1 in stable_to_current1 and stable_id2 in stable_to_current2:
+                    current_idx1 = stable_to_current1[stable_id1]
+                    current_idx2 = stable_to_current2[stable_id2]
+                    
+                    try:
+                        idx1 = indices1.index(current_idx1)
+                        idx2 = indices2.index(current_idx2)
+                        seeds.append((idx1, idx2))
+                    except ValueError:
+                        pass  # Seed mapping failed, skip this constraint
         
         # Convert ALL strokes to C++ format (don't filter - let C++ handle seeds)
         S1 = to_cpp_strokes(s1)
@@ -118,50 +161,79 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         # Map collected indices back to original stroke indices
         result_matches = [(indices1[i], indices2[j]) for i, j in raw_matches]
         
-        matched_strokes = set()
+        # Log final match result
+        if seeds:
+            print(f"[GPCORR] Matched {len(result_matches)} pairs (manual seeds: {len(seeds)}, auto: {len(result_matches) - len(seeds)})")
+        else:
+            print(f"[GPCORR] Matched {len(result_matches)} pairs")
         
-        # Determine which frame is earlier (stores match_id) and which is later (target)
+        # Determine which frame is earlier (reference) and which is later (to be reordered)
         if frame1 < frame2:
-            src_frame, tgt_frame = frame1, frame2
-            src_indices, tgt_indices = indices1, indices2
-            # result_matches are (i, j) where i is src index, j is tgt index
+            ref_frame, reorder_frame = frame1, frame2
             swap_match = False
         else:
-            src_frame, tgt_frame = frame2, frame1
-            src_indices, tgt_indices = indices2, indices1
-            # result_matches are (i, j) but we need to swap them
+            ref_frame, reorder_frame = frame2, frame1
             swap_match = True
         
-        for idx, (i, j) in enumerate(result_matches):
-            if swap_match:
-                i, j = j, i
-            
-            src_stroke_idx = src_indices[i]
-            tgt_stroke_idx = tgt_indices[j]
-            
-            # Store the target stroke index as match_id on the source frame stroke
-            # This tells interpolation: "source stroke i corresponds to target stroke j"
-            store_match_id_on_strokes(gp_obj, layer_idx, src_frame, [src_stroke_idx], tgt_stroke_idx)
-            matched_strokes.add(src_stroke_idx)
-        
-        # Set unmatched strokes to their own index (position-based default)
+        # Get the drawing for the frame to reorder
         layer = gp_obj.data.layers[layer_idx]
-        frame_obj = None
+        reorder_frame_obj = None
         for f in layer.frames:
-            if f.frame_number == src_frame:
-                frame_obj = f
+            if f.frame_number == reorder_frame:
+                reorder_frame_obj = f
                 break
         
-        if frame_obj and frame_obj.drawing:
-            for stroke_idx in range(len(frame_obj.drawing.strokes)):
-                if stroke_idx not in matched_strokes:
-                    store_match_id_on_strokes(gp_obj, layer_idx, src_frame, [stroke_idx], stroke_idx)
+        if not reorder_frame_obj or not reorder_frame_obj.drawing:
+            return (False, [], f"Could not find drawing for frame {reorder_frame}")
         
-        return (True, result_matches, f"Matched {len(result_matches)} pairs (seeds: {len(seeds)})")
+        drawing = reorder_frame_obj.drawing
+        num_strokes = len(drawing.strokes)
+        
+        # Build reorder map: new_indices[new_position] = old_position
+        new_indices = list(range(num_strokes))
+        assigned_positions = set()
+        used_old_strokes = set()
+        
+        # First pass: assign matched strokes
+        for ref_idx, reorder_idx in result_matches:
+            if swap_match:
+                ref_idx, reorder_idx = reorder_idx, ref_idx
+            
+            if ref_idx < num_strokes and reorder_idx < num_strokes:
+                new_indices[ref_idx] = reorder_idx
+                assigned_positions.add(ref_idx)
+                used_old_strokes.add(reorder_idx)
+        
+        # Second pass: fill unassigned positions with remaining strokes
+        remaining_old = [i for i in range(num_strokes) if i not in used_old_strokes]
+        remaining_positions = [i for i in range(num_strokes) if i not in assigned_positions]
+        
+        for pos, old_stroke in zip(remaining_positions, remaining_old):
+            new_indices[pos] = old_stroke
+        
+        # Apply reorder
+        drawing.reorder_strokes(new_indices=new_indices)
+        
+        # Update stable ID mapping to reflect the reorder
+        state = get_state()
+        stable_stroke_ids = state['stable_stroke_ids']
+        key = (layer_idx, reorder_frame)
+        
+        if key in stable_stroke_ids:
+            old_stable_ids = stable_stroke_ids[key]
+            new_stable_ids = {}
+            
+            for new_pos, old_pos in enumerate(new_indices):
+                if old_pos in old_stable_ids:
+                    new_stable_ids[new_pos] = old_stable_ids[old_pos]
+            
+            stable_stroke_ids[key] = new_stable_ids
+            set_state(stable_stroke_ids=stable_stroke_ids)
+        
+        msg = f"Matched {len(result_matches)} pairs (seeds: {len(seeds)})"
+        return (True, result_matches, msg)
         
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         return (False, [], f"Match failed: {e}")
 
 
@@ -210,27 +282,24 @@ def run_match_job_step():
     
     success, matches, msg = run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config)
     
-    if not success:
-        print(f"[GPCORR] Error: {msg}")
-    
     match_progress['current'] = current + 1
     return 0.1
 
 
 def start_match_job(gp_obj, layer_idx, pairs, config):
-    """Start non-blocking multi-pair matching job"""
+    """Start non-blocking multi-pair matching job. Returns (success, camera_info)"""
     state = get_state()
     
     if state['match_job_running']:
-        return False
+        return (False, None)
     
-    pairs_set = set()
-    for f1, f2 in pairs:
-        norm = (f1, f2) if f1 < f2 else (f2, f1)
-        pairs_set.add(norm)
-    
-    # NOTE: We keep link_constraints - they should be used by the matcher, not cleared!
-    # Only clear constraints for frame pairs that no longer exist in the animation
+    # Check for camera info
+    import bpy
+    scene = bpy.context.scene
+    if scene.camera is None:
+        camera_info = {'type': 'WARNING', 'message': "No active camera detected. Using default view projection - results may vary with viewport angle"}
+    else:
+        camera_info = {'type': 'INFO', 'message': f"Matching from camera '{scene.camera.name}' view"}
     
     match_progress = {
         'current': 0,
@@ -249,7 +318,7 @@ def start_match_job(gp_obj, layer_idx, pairs, config):
     # Register timer to run job steps
     bpy.app.timers.register(run_match_job_step)
     
-    return True
+    return (True, camera_info)
 # Helper function to get layer items for EnumProperty
 def get_layer_items(self, context):
     """Generate layer items for dropdown"""
@@ -418,9 +487,12 @@ class GPCORR_OT_match(Operator):
         }
         
         # Start matching job
-        success = start_match_job(obj, layer_index, pairs, config)
+        success, camera_info = start_match_job(obj, layer_index, pairs, config)
         
         if success:
+            # Show camera info/warning
+            if camera_info:
+                self.report({camera_info['type']}, camera_info['message'])
             self.report({'INFO'}, f"Started matching job: {len(pairs)} frame pairs")
             return {'FINISHED'}
         else:
@@ -494,7 +566,8 @@ class GPCORR_OT_link_mode_toggle(Operator):
                 if frame.frame_number == frame_start or frame.frame_number == frame_end:
                     frame.select = True
             
-            self.report({'INFO'}, f"Link Mode ON | Frames: {frame_start}-{frame_end} selected | Select strokes to link")
+            # Info already visible in UI header
+            pass
             
             # Deselect all strokes on ALL layers
             for layer in obj.data.layers:
@@ -530,7 +603,8 @@ class GPCORR_OT_link_mode_toggle(Operator):
             # Return to previous mode (typically Paint)
             bpy.ops.object.mode_set(mode='PAINT_GREASE_PENCIL')
 
-            self.report({'INFO'}, "Link Mode OFF")
+            # Info already visible in UI header
+            pass
         
         return {'FINISHED'}
 # Operator: Link Selected Pair
@@ -596,15 +670,21 @@ class GPCORR_OT_link_selected(Operator):
             norm_frame1, norm_stroke1 = frame2, stroke2_idx
             norm_frame2, norm_stroke2 = frame1, stroke1_idx
         
-        # Add to linked constraints (normalized order)
-        constraint = (layer1, norm_frame1, norm_stroke1, norm_frame2, norm_stroke2)
+        # Ensure stable IDs exist and get stable IDs for the selected strokes
+        stable_ids1 = ensure_stable_ids(obj, layer1, norm_frame1)
+        stable_ids2 = ensure_stable_ids(obj, layer1, norm_frame2)
+        
+        # Get stable IDs for the selected stroke indices
+        stable_id1 = stable_ids1.get(norm_stroke1, norm_stroke1)
+        stable_id2 = stable_ids2.get(norm_stroke2, norm_stroke2)
+        
+        # Add to linked constraints (normalized order, storing STABLE IDs)
+        constraint = (layer1, norm_frame1, stable_id1, norm_frame2, stable_id2)
         link_constraints = get_state()['link_constraints']
         
         if constraint not in link_constraints:
             link_constraints.append(constraint)
             set_state(link_constraints=link_constraints)
-            
-            self.report({'INFO'}, f"Linked: Frame {norm_frame1} Stroke {norm_stroke1} → Frame {norm_frame2} Stroke {norm_stroke2}")
             
             # Auto-run matching on this frame pair
             # The new link constraint will be passed as a seed to C++, 
@@ -628,15 +708,54 @@ class GPCORR_OT_link_selected(Operator):
                 'max_alpha': 0.05,
                 'coincident_threshold': 0.05,
             }
-            success = start_match_job(obj, layer1, pairs, config)
+            success, _ = start_match_job(obj, layer1, pairs, config)
             if success:
-                self.report({'INFO'}, f"Linked and re-matching Frame {norm_frame1} → {norm_frame2}")
+                self.report({'INFO'}, f"Linked strokes on frames {norm_frame1}-{norm_frame2}")
         else:
             self.report({'INFO'}, "This pair is already linked")
 
         bpy.ops.grease_pencil.select_all(action='DESELECT')
         
         return {'FINISHED'}
+# Operator: Clear All Links
+class GPCORR_OT_clear_all_links(Operator):
+    bl_idname = "gpcorr.clear_all_links"
+    bl_label = "Clear All Links"
+    bl_description = "Remove all manual link constraints"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        state = get_state()
+        # Only enable if there are actually links to clear
+        return state['link_mode_active'] and len(state['link_constraints']) > 0
+
+    def invoke(self, context, event):
+        link_constraints = get_state()['link_constraints']
+        count = len(link_constraints)
+        
+        # Show confirmation dialog
+        return context.window_manager.invoke_confirm(
+            self, 
+            event,
+            message=f"Clear all {count} manual link(s)?",
+            confirm_text="Clear All"
+        )
+
+    def execute(self, context):
+        link_constraints = get_state()['link_constraints']
+        count = len(link_constraints)
+        
+        if count == 0:
+            self.report({'INFO'}, "No links to clear")
+            return {'CANCELLED'}
+        
+        set_state(link_constraints=[])
+        
+        self.report({'INFO'}, f"Cleared {count} link(s)")
+        return {'FINISHED'}
+
+
 # Operator: Unlink Selected Pair
 class GPCORR_OT_unlink_selected(Operator):
     bl_idname = "gpcorr.unlink_selected"
@@ -684,8 +803,14 @@ class GPCORR_OT_unlink_selected(Operator):
             norm_frame1, norm_stroke1 = frame2, stroke2_idx
             norm_frame2, norm_stroke2 = frame1, stroke1_idx
         
-        # Remove the normalized constraint
-        constraint = (layer1, norm_frame1, norm_stroke1, norm_frame2, norm_stroke2)
+        # Get stable IDs for the selected strokes
+        stable_ids1 = ensure_stable_ids(obj, layer1, norm_frame1)
+        stable_ids2 = ensure_stable_ids(obj, layer1, norm_frame2)
+        stable_id1 = stable_ids1.get(norm_stroke1, norm_stroke1)
+        stable_id2 = stable_ids2.get(norm_stroke2, norm_stroke2)
+        
+        # Remove the normalized constraint (using STABLE IDs)
+        constraint = (layer1, norm_frame1, stable_id1, norm_frame2, stable_id2)
         
         link_constraints = get_state()['link_constraints']
         before = len(link_constraints)
@@ -719,9 +844,9 @@ class GPCORR_OT_unlink_selected(Operator):
                 'max_alpha': 0.05,
                 'coincident_threshold': 0.05,
             }
-            success = start_match_job(obj, layer1, pairs, config)
+            success, _ = start_match_job(obj, layer1, pairs, config)
             if success:
-                self.report({'INFO'}, f"Unlinked and re-matching Frame {norm_frame1} → {norm_frame2}")
+                self.report({'INFO'}, f"Unlinked strokes on frames {norm_frame1}-{norm_frame2}")
         else:
             self.report({'INFO'}, "Selected pair was not linked")
 
@@ -731,6 +856,7 @@ classes = (
     GPCORR_OT_match,
     GPCORR_OT_link_mode_toggle,
     GPCORR_OT_link_selected,
+    GPCORR_OT_clear_all_links,
     GPCORR_OT_unlink_selected,
 )
 

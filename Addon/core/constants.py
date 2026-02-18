@@ -7,6 +7,10 @@ Centralizes magic strings used throughout the addon
 MODIFIER_NAME = "Auto-Interpolate (c)"
 NODEGROUP_NAME = "Auto-Interpolate (c)"
 
+# Node group version - update this when modifying the .blend node group
+# Must match the description field in the shipped .blend file
+NODEGROUP_VERSION = "v1.1.0"
+
 # Custom property keys
 EASING_DATA_KEY = "gp_easing_data"
 ARC_DATA_KEY = "gp_arc_data"

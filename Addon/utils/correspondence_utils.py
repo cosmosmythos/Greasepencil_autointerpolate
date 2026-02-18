@@ -1,13 +1,10 @@
 """
 Correspondence Utilities
-Handles keyframe detection, match_id storage/retrieval, and stroke collection
-for the GP correspondence system.
+Handles keyframe detection and stroke collection for the GP correspondence system.
 """
 
 import bpy
 
-# Module-level flag to show camera warning only once
-_camera_warning_shown = False
 def detect_keyframe_range(scene, layer):
     """Auto-detect keyframe range based on playhead position."""
     playhead = scene.frame_current
@@ -51,117 +48,6 @@ def find_keyframe_pairs(layer, start_frame, end_frame):
         return []
     
     return [(frames[i], frames[i + 1]) for i in range(len(frames) - 1)]
-def _get_existing_match_id_attr(drawing):
-    """Get existing match_id attribute or None."""
-    if drawing is None:
-        return None
-    for attr in drawing.attributes:
-        if attr.name == "match_id" and attr.data_type == 'INT' and attr.domain == 'CURVE':
-            return attr
-    return None
-
-
-def _ensure_match_id_attr(drawing):
-    """Ensure drawing has a match_id attribute."""
-    if drawing is None:
-        raise RuntimeError("Drawing is None")
-    
-    attr = _get_existing_match_id_attr(drawing)
-    if attr is not None:
-        return attr
-    
-    attr = drawing.attributes.new(name="match_id", type='INT', domain='CURVE')
-    
-    # Initialize to stroke index (position-based default)
-    for i in range(len(attr.data)):
-        attr.data[i].value = i
-    
-    return attr
-
-
-def store_match_id_on_strokes(gp_obj, layer_idx, frame_num, stroke_indices, match_id):
-    """
-    Store match_id on specified strokes.
-    
-    match_id indicates which stroke index in the NEXT keyframe this stroke corresponds to.
-    
-    Args:
-        gp_obj: Grease Pencil object
-        layer_idx: Layer index
-        frame_num: Frame number
-        stroke_indices: List of stroke indices to update
-        match_id: The match ID to store (index of corresponding stroke in next keyframe)
-    """
-    if gp_obj is None or gp_obj.data is None:
-        raise ValueError("Invalid GP object")
-    
-    layer = gp_obj.data.layers[layer_idx]
-    
-    frame = None
-    for f in layer.frames:
-        if f.frame_number == frame_num:
-            frame = f
-            break
-    
-    if frame is None:
-        raise ValueError(f"Frame {frame_num} not found in layer {layer.name}")
-    
-    drawing = frame.drawing
-    if drawing is None:
-        raise ValueError(f"No drawing data on frame {frame_num}")
-    
-    attr = _ensure_match_id_attr(drawing)
-    
-    for stroke_idx in stroke_indices:
-        if 0 <= stroke_idx < len(drawing.strokes):
-            attr.data[stroke_idx].value = match_id
-
-
-def get_match_id_from_stroke(gp_obj, layer_idx, frame_num, stroke_idx):
-    """Get match_id from stroke. Returns -1 if not found."""
-    try:
-        layer = gp_obj.data.layers[layer_idx]
-        
-        frame = None
-        for f in layer.frames:
-            if f.frame_number == frame_num:
-                frame = f
-                break
-        
-        if frame is None:
-            return -1
-        
-        drawing = frame.drawing
-        if drawing is None:
-            return -1
-        
-        attr = _get_existing_match_id_attr(drawing)
-        if attr is None:
-            return -1
-        
-        if 0 <= stroke_idx < len(attr.data):
-            return attr.data[stroke_idx].value
-        
-        return -1
-    except:
-        return -1
-
-
-def clear_match_ids_for_layer_frame(gp_obj, layer_idx, frame_num):
-    """
-    Reset all match_ids to default (stroke index) for a single frame.
-    
-    This resets the match_id attribute on the specified frame,
-    so each stroke's match_id equals its own index (position-based default).
-    """
-    layer = gp_obj.data.layers[layer_idx]
-    
-    for f in layer.frames:
-        if f.frame_number == frame_num and f.drawing is not None:
-            attr = _ensure_match_id_attr(f.drawing)
-            for i in range(len(attr.data)):
-                attr.data[i].value = i
-            break
 
 
 # Stroke Collection
@@ -203,11 +89,6 @@ def collect_strokes_2d(gp_obj, layer_idx, frame):
     camera = scene.camera
     
     if camera is None:
-        # Only warn once per session using a module-level flag
-        global _camera_warning_shown
-        if not _camera_warning_shown:
-            print("[GPCORR] Warning: No active camera in scene. Using front view (looking down -Y).")
-            _camera_warning_shown = True
         # Default: front view (looking down -Y axis)
         view_forward = Vector((0, -1, 0))
         view_up = Vector((0, 0, 1))
@@ -323,4 +204,7 @@ def to_cpp_strokes(strokes_2d):
         flat_data.pop()
         flat_data.pop()
     
-    return np.array(flat_data, dtype=np.float32)
+    result = np.array(flat_data, dtype=np.float32)
+    
+    return result
+

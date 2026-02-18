@@ -63,7 +63,7 @@ class GP_OT_ShowArcPopup(Operator):
             self.arc_curve = arc_amount * arc_direction if arc_amount > 0 else 0.0
             self.arc_type = 'SPIRAL' if params[3] else 'BEZIER'
         
-        return context.window_manager.invoke_props_dialog(self, width=200)
+        return context.window_manager.invoke_props_popup(self, event)
 
     def draw(self, context):
         layout = self.layout

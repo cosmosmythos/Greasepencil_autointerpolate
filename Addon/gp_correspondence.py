@@ -17,6 +17,16 @@ _link_mode_active = False
 _link_constraints = []  # [(layer_idx, frame1, stroke1_idx, frame2, stroke2_idx), ...]
 _viewport_context = {}  # Store viewport info (region, rv3d) for timer callbacks
 _show_linked_overlay = False  # Toggle for showing orange overlay on linked strokes
+_stable_stroke_ids = {}  # {(layer_idx, frame_num): {current_idx: stable_id, ...}}
+
+
+def _operator_exists(idname):
+    """Check if a Blender operator is registered and callable."""
+    parts = idname.split(".")
+    if len(parts) != 2:
+        return False
+    category, name = parts
+    return hasattr(getattr(bpy.ops, category, None), name)
 
 
 # Header UI Integration
@@ -26,6 +36,10 @@ def draw_gpcorr_header(self, context):
     
     obj = context.active_object
     if obj is None or obj.type != 'GREASEPENCIL':
+        return
+    
+    # Defensive check: ensure core operators are registered before drawing
+    if not _operator_exists("gpcorr.match") or not _operator_exists("gpcorr.link_mode"):
         return
     
     row = layout.row(align=True)
@@ -43,11 +57,13 @@ def draw_gpcorr_header(self, context):
     if _link_mode_active:
         row.operator("gpcorr.link_selected", text="Link", icon='ADD')
         row.operator("gpcorr.unlink_selected", text="Unlink", icon='REMOVE')
+        row.operator("gpcorr.clear_all_links", text="", icon='CANCEL')
     
     # Linked strokes overlay toggle (eye icon)
-    row.operator("gpcorr.toggle_linked_overlay", text="", 
-                 icon='HIDE_OFF' if _show_linked_overlay else 'HIDE_ON',
-                 depress=_show_linked_overlay)
+    if _operator_exists("gpcorr.toggle_linked_overlay"):
+        row.operator("gpcorr.toggle_linked_overlay", text="", 
+                     icon='HIDE_OFF' if _show_linked_overlay else 'HIDE_ON',
+                     depress=_show_linked_overlay)
     
     # Show progress if job running
     if _match_job_running:
@@ -56,11 +72,21 @@ def draw_gpcorr_header(self, context):
         total = _match_progress.get('total', 0)
         if total > 0:
             row.label(text=f"[{current}/{total}] {status}")
+
+
 def register():
     """Register correspondence UI."""
-    bpy.types.VIEW3D_HT_header.prepend(draw_gpcorr_header)
+    try:
+        bpy.types.VIEW3D_HT_tool_header.prepend(draw_gpcorr_header)
+        print("[GPCORR] Header UI registered successfully")
+    except Exception as e:
+        print(f"[GPCORR] ERROR: Failed to register header UI: {e}")
 
 
 def unregister():
     """Unregister correspondence UI."""
-    bpy.types.VIEW3D_HT_header.remove(draw_gpcorr_header)
+    try:
+        bpy.types.VIEW3D_HT_tool_header.remove(draw_gpcorr_header)
+        print("[GPCORR] Header UI unregistered")
+    except Exception as e:
+        print(f"[GPCORR] ERROR: Failed to unregister header UI: {e}")

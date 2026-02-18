@@ -11,31 +11,26 @@ def draw_gp_dopesheet_ui(self, context):
         enabled = context.scene.gp_interpolation_enabled
         icon = 'RECORD_ON' if enabled else 'RENDER_ANIMATION'
         
-        # 1. Interpolation toggle (always active)
-        self.layout.operator("gp.toggle_interpolation", text="", icon=icon, depress=enabled)
+        # SECTION 1: Interpolate & Refresh & Layer Filter
+        row1 = self.layout.row(align=True)
+        row1.operator("gp.toggle_interpolation", text="", icon=icon, depress=enabled)
+        sub1 = row1.row(align=True)
+        sub1.enabled = enabled
+        sub1.operator("gp.refresh_interpolation", text="", icon='FILE_REFRESH')
+        sub1.operator("gp.layer_filter_popup", text="", icon='DECORATE_LOCKED')
         
-        # Create row for other buttons - greyed out when interpolation disabled
-        row = self.layout.row(align=True)
-        row.enabled = enabled  # Grey out instead of hide
+        # SECTION 2: Easing & Trajectory
+        row2 = self.layout.row(align=True)
+        row2.enabled = enabled
+        row2.operator("gp.show_easing_popup", text="", icon='IPO_BEZIER')
+        row2.operator("gp.show_arc_popup", text="", icon='FORCE_CURVE')
         
-        # 2. Refresh Cache
-        row.operator("gp.refresh_interpolation", text="", icon='FILE_REFRESH')
-        
-        # 3. Easing button
-        row.operator("gp.show_easing_popup", text="", icon='IPO_BEZIER')
-        
-        # 4. Arc Settings button
-        row.operator("gp.show_arc_popup", text="", icon='FORCE_CURVE')
-        
-        # Separator before bake group
-        row.separator()
-        
-        # 5. Bake Single
-        row.operator("gp.bake_single", text="", icon='KEY_HLT')
-        
-        # 6. Bake Range with step input
-        row.operator("gp.bake_selected_range", text="", icon='GREASEPENCIL_LAYER_GROUP')
-        row.prop(context.scene, "gp_bake_step", text="")
+        # SECTION 3: Baking
+        row3 = self.layout.row(align=True)
+        row3.enabled = enabled
+        row3.operator("gp.bake_single", text="", icon='KEY_HLT')
+        row3.operator("gp.bake_selected_range", text="", icon='GREASEPENCIL_LAYER_GROUP')
+        row3.prop(context.scene, "gp_bake_step", text="")
 
 
 def register():

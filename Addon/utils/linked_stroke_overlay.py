@@ -16,6 +16,7 @@ import bpy_extras.view3d_utils
 overlay_state = {
     'draw_handler': None,
     'redraw_timer_running': False,
+    '_last_log_constraint_count': -1,  # Track for debounced logging
 }
 
 # Bright orange color for linked strokes
