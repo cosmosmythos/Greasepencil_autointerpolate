@@ -13,6 +13,10 @@ message(STATUS "PolyVector-based line art vectorization")
 
 # Find Python 3.11+ - minimum version for abi3 target
 # abi3 means this binary works on Python 3.11, 3.12, 3.13, 3.14... forever
+# NOTE: We intentionally do NOT use the EXACT keyword here.
+# "find_package(Python3 3.11 EXACT)" with only two version components does NOT
+# reliably enforce an exact minor version - CMake may still find 3.12+.
+# Python version is pinned by CI (setup-python: 3.11.9) - that is the real guard.
 find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
 
 # Verify Python version
@@ -26,8 +30,13 @@ message(STATUS "Detected Python version: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 
-# Force pybind11 to use our detected Python
-set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
+# NOTE: PYBIND11_FINDPYTHON OFF has been removed.
+# It was originally added to stop pybind11 grabbing the wrong Python on
+# multi-version local machines. However, setting it OFF activates pybind11's
+# legacy cmake tools which do NOT understand the STABLE_ABI keyword, causing
+# a build failure ("Cannot find source file: STABLE_ABI").
+# In CI, setup-python ensures only 3.11.9 exists - no ambiguity.
+# Locally, find_package(Python3 3.11) above already found the right one first.
 
 # ============================================================================
 # PYBIND11 SETUP
@@ -40,9 +49,6 @@ FetchContent_Declare(
     GIT_TAG v3.0.1
 )
 FetchContent_MakeAvailable(pybind11)
-
-# Force pybind11 to use our detected Python again (required twice!)
-set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
 
 # ============================================================================
 # OPENCV (REQUIRED)
@@ -181,25 +187,17 @@ set_target_properties(gp_linevector PROPERTIES
 
 # Enable maximum optimization for production builds
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    # GCC or Clang
-    # Use -O3 for optimization, but avoid -march=native for cross-platform compatibility
     if(APPLE)
-        # macOS: Don't use -march=native for universal/cross builds
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     else()
-        # Linux: -march=native is OK for local builds, CI overrides this
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
     endif()
     message(STATUS "Compiler flags (GCC/Clang): ${CMAKE_CXX_FLAGS}")
-    
     # Optional: Enable fast math (trades precision for speed)
     # Uncomment if you need maximum performance and can tolerate minor FP differences
     # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ffast-math")
-    
 elseif(MSVC)
-    # Visual Studio
-    # Using /fp:precise for better numerical accuracy (avoids aggressive FP optimizations)
-    # Changed from /fp:fast to reduce cross-platform variation in corner/intersection quality
+    # Using /fp:precise for better numerical accuracy
     # /arch:AVX2 removed - improves compatibility across older CPUs (pre-2013 hardware)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /fp:precise")
     message(STATUS "Compiler flags (MSVC): ${CMAKE_CXX_FLAGS}")
@@ -212,10 +210,8 @@ endif()
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     if(UNIX AND NOT APPLE)
-        # Try static OpenMP first for maximum Linux compatibility
         include(CheckLibraryExists)
         check_library_exists(gomp omp_get_num_threads "" HAVE_STATIC_GOMP)
-        
         if(HAVE_STATIC_GOMP)
             target_link_libraries(gp_linevector PRIVATE -Wl,-Bstatic -lgomp -Wl,-Bdynamic)
             message(STATUS "OpenMP statically linked for maximum Linux compatibility")

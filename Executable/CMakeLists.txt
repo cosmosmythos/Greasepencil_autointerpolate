@@ -12,6 +12,10 @@ message(STATUS "Stable ABI (abi3) build - compatible with Python 3.11+ (Blender 
 
 # Find Python 3.11+ - minimum version for abi3 target
 # abi3 means this binary works on Python 3.11, 3.12, 3.13, 3.14... forever
+# NOTE: We intentionally do NOT use the EXACT keyword here.
+# "find_package(Python3 3.11 EXACT)" with only two version components does NOT
+# reliably enforce an exact minor version - CMake may still find 3.12+.
+# Python version is pinned by CI (setup-python: 3.11.9) - that is the real guard.
 find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
 
 # Verify Python version
@@ -25,8 +29,13 @@ message(STATUS "Detected Python version: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 
-# Force pybind11 to use our detected Python (your fix!)
-set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
+# NOTE: PYBIND11_FINDPYTHON OFF has been removed.
+# It was originally added to stop pybind11 grabbing the wrong Python on
+# multi-version local machines. However, setting it OFF activates pybind11's
+# legacy cmake tools which do NOT understand the STABLE_ABI keyword, causing
+# a build failure ("Cannot find source file: STABLE_ABI").
+# In CI, setup-python ensures only 3.11.9 exists - no ambiguity.
+# Locally, find_package(Python3 3.11) above already found the right one first.
 
 # ============================================================================
 # PYBIND11 SETUP
@@ -40,9 +49,6 @@ FetchContent_Declare(
     GIT_TAG v3.0.1
 )
 FetchContent_MakeAvailable(pybind11)
-
-# Force pybind11 to use our detected Python again (your fix - required twice!)
-set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
 
 # ============================================================================
 # EIGEN3 DEPENDENCY (for stage_two.cpp)
