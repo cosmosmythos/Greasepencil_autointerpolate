@@ -4,16 +4,13 @@ project(gp_autointerpolate)
 set(CMAKE_CXX_STANDARD 17)
 
 message(STATUS "Building GP Auto Interpolate module for Blender 4.3+")
-message(STATUS "Stable ABI (abi3) build - compatible with Python 3.11+ (Blender 4.3, 5.0, 5.1 and beyond)")
+message(STATUS "Universal compatibility with Python 3.11.x")
 
 # ============================================================================
 # CROSS-PLATFORM PYTHON DETECTION
 # ============================================================================
 
-# Find Python 3.11+ - minimum version for abi3 target
-# abi3 means this binary works on Python 3.11, 3.12, 3.13, 3.14... forever
-# NOTE: We do NOT use EXACT here - CMake does not reliably enforce minor version
-# with two-component versions. The real pin is CI: setup-python: 3.11.9
+# Find Python 3.11.x for Blender 4.3+ compatibility
 find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
 
 # Verify Python version
@@ -27,9 +24,14 @@ message(STATUS "Detected Python version: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 
-# NOTE: PYBIND11_FINDPYTHON OFF removed intentionally.
-# Setting it OFF activates pybind11 legacy cmake tools which do not recognise
-# Py_LIMITED_API correctly. The CI setup-python step is the real version guard.
+# Warn if not Python 3.11.x
+if(NOT Python3_VERSION_MAJOR EQUAL 3 OR NOT Python3_VERSION_MINOR EQUAL 11)
+    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found, but Blender 4.3+ requires Python 3.11.x")
+    message(WARNING "This may cause compatibility issues with Blender")
+endif()
+
+# Force pybind11 to use our detected Python (your fix!)
+set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
 
 # ============================================================================
 # PYBIND11 SETUP
@@ -43,6 +45,9 @@ FetchContent_Declare(
     GIT_TAG v3.0.1
 )
 FetchContent_MakeAvailable(pybind11)
+
+# Force pybind11 to use our detected Python again (your fix - required twice!)
+set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
 
 # ============================================================================
 # EIGEN3 DEPENDENCY (for stage_two.cpp)
@@ -87,11 +92,6 @@ set(FTPSC_SOURCES
 )
 
 pybind11_add_module(gp_autointerpolate ${FTPSC_SOURCES})
-
-# Py_LIMITED_API=0x030B0000 enables the stable ABI targeting Python 3.11+
-# This is what makes the wheel work on 3.11, 3.12, 3.13, 3.14... forever
-# Combined with py_limited_api: "cp311" in setup.py, wheel is tagged cp311-abi3
-target_compile_definitions(gp_autointerpolate PRIVATE Py_LIMITED_API=0x030B0000)
 
 # Add compile definitions for optional dependencies
 if(FTPSC_USE_EIGEN)
@@ -179,7 +179,6 @@ message(STATUS "=== Build Configuration ===")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Python: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
-message(STATUS "ABI: Stable (abi3) via Py_LIMITED_API - works on Python 3.11+")
 if(WIN32)
     message(STATUS "Output: gp_autointerpolate.pyd")
 elseif(APPLE)
@@ -188,5 +187,5 @@ else()
     message(STATUS "Output: gp_autointerpolate.so")
 endif()
 message(STATUS "Output directory: ${CMAKE_SOURCE_DIR}/output")
-message(STATUS "Compatible with: Blender 4.3+ (all future versions)")
+message(STATUS "Compatible with: Blender 4.3+")
 message(STATUS "============================")
