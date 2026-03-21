@@ -18,6 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
         python-version: ['3.11.9', '3.13.9']
         include:
           - os: windows-latest
@@ -140,6 +141,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
         python-version: ['3.11.9', '3.13.9']
         include:
           - os: windows-latest
