@@ -387,6 +387,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11.9"
+
+      - name: Read version from manifest
+        run: |
+          VERSION=$(python -c "import tomllib; data=tomllib.load(open('Addon/blender_manifest.toml','rb')); print(data['version'])")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Building version: $VERSION"
+
       - name: Download all wheels
         uses: actions/download-artifact@v4
         with:
@@ -420,7 +431,7 @@ jobs:
           # END GENERATED CONTENT.
           EOF
           cd build_windows/Addon
-          zip -r ../../gp_auto_interpolate-2.3.0-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-${{ env.VERSION }}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           # macOS Universal (ARM64 + x86_64)
@@ -451,7 +462,7 @@ jobs:
           # END GENERATED CONTENT.
           EOF
           cd build_macos/Addon
-          zip -r ../../gp_auto_interpolate-2.3.0-macos-universal.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-${{ env.VERSION }}-macos-universal.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           # Linux
@@ -479,7 +490,7 @@ jobs:
           # END GENERATED CONTENT.
           EOF
           cd build_linux/Addon
-          zip -r ../../gp_auto_interpolate-2.3.0-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-${{ env.VERSION }}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           echo "✅ Platform-specific packages created:"
@@ -488,8 +499,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.3.0-build-${{ github.run_number }}
-          name: "GP Auto Interpolate v2.3.0"
+          tag_name: v${{ env.VERSION }}-build-${{ github.run_number }}
+          name: "GP Auto Interpolate v${{ env.VERSION }}"
           body: |
             🎉 **Wheel-based release with Local_Modern architecture**
             
@@ -509,9 +520,9 @@ jobs:
             2. Install in Blender Extensions
             3. Done!
           files: |
-            gp_auto_interpolate-2.3.0-windows-x64.zip
-            gp_auto_interpolate-2.3.0-macos-universal.zip
-            gp_auto_interpolate-2.3.0-linux-x64.zip
+            gp_auto_interpolate-${{ env.VERSION }}-windows-x64.zip
+            gp_auto_interpolate-${{ env.VERSION }}-macos-universal.zip
+            gp_auto_interpolate-${{ env.VERSION }}-linux-x64.zip
           draft: false
           prerelease: false
         env:
@@ -521,4 +532,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extension-packages
-          path: gp_auto_interpolate-2.3.0-*.zip
+          path: gp_auto_interpolate-${{ env.VERSION }}-*.zip

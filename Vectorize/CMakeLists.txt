@@ -3,15 +3,17 @@ project(gp_linevector)
 
 set(CMAKE_CXX_STANDARD 17)
 
-message(STATUS "Building GP LineVector module for Arch Linux Blender 5.0 (EXPERIMENTAL)")
-message(STATUS "Python 3.14.x compatibility build - PolyVector vectorization")
+message(STATUS "Building GP LineVector module for Blender 4.3+")
+message(STATUS "Stable ABI (abi3) build - compatible with Python 3.11+ (Blender 4.3 to 5.x and beyond)")
+message(STATUS "PolyVector-based line art vectorization")
 
 # ============================================================================
 # CROSS-PLATFORM PYTHON DETECTION (same as interpolate.cpp)
 # ============================================================================
 
-# Find Python 3.14.x for Arch Linux Blender 5.0 (EXPERIMENTAL BUILD)
-find_package(Python3 3.14 COMPONENTS Interpreter Development REQUIRED)
+# Find Python 3.11+ - minimum version for abi3 target
+# abi3 means this binary works on Python 3.11, 3.12, 3.13, 3.14... forever
+find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
 
 # Verify Python version
 execute_process(
@@ -23,12 +25,6 @@ execute_process(
 message(STATUS "Detected Python version: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
-
-# Warn if not Python 3.14.x
-if(NOT Python3_VERSION_MAJOR EQUAL 3 OR NOT Python3_VERSION_MINOR EQUAL 14)
-    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found, but this build targets Python 3.14.x")
-    message(WARNING "This is an EXPERIMENTAL build for Arch Linux Blender 5.0")
-endif()
 
 # Force pybind11 to use our detected Python
 set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
@@ -91,10 +87,12 @@ message(STATUS "Total: ${CMAKE_CURRENT_LIST_LENGTH} files (excluding pybind wrap
 # BUILD MODULE
 # ============================================================================
 
-pybind11_add_module(gp_linevector 
+# STABLE_ABI: compile once, works on Python 3.11, 3.12, 3.13, 3.14... forever
+pybind11_add_module(gp_linevector STABLE_ABI
     src_polyvector/polyvector_pybind.cpp
     ${POLYVECTOR_SOURCES}
 )
+target_compile_definitions(gp_linevector PRIVATE Py_LIMITED_API=0x030B0000)
 
 # Link libraries
 target_link_libraries(gp_linevector PRIVATE 
@@ -202,13 +200,8 @@ elseif(MSVC)
     # Visual Studio
     # Using /fp:precise for better numerical accuracy (avoids aggressive FP optimizations)
     # Changed from /fp:fast to reduce cross-platform variation in corner/intersection quality
+    # /arch:AVX2 removed - improves compatibility across older CPUs (pre-2013 hardware)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2 /fp:precise")
-    
-    # Auto-detect CPU features (VS 2017+)
-    if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|X86")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
-    endif()
-    
     message(STATUS "Compiler flags (MSVC): ${CMAKE_CXX_FLAGS}")
 endif()
 
@@ -219,10 +212,17 @@ endif()
 find_package(OpenMP)
 if(OpenMP_CXX_FOUND)
     if(UNIX AND NOT APPLE)
-        # Arch Linux doesn't provide static libgomp, use dynamic linking
-        # Other distros (Ubuntu/Fedora) can use static linking for max compatibility
-        target_link_libraries(gp_linevector PRIVATE OpenMP::OpenMP_CXX)
-        message(STATUS "OpenMP dynamically linked (Arch Linux experimental build)")
+        # Try static OpenMP first for maximum Linux compatibility
+        include(CheckLibraryExists)
+        check_library_exists(gomp omp_get_num_threads "" HAVE_STATIC_GOMP)
+        
+        if(HAVE_STATIC_GOMP)
+            target_link_libraries(gp_linevector PRIVATE -Wl,-Bstatic -lgomp -Wl,-Bdynamic)
+            message(STATUS "OpenMP statically linked for maximum Linux compatibility")
+        else()
+            target_link_libraries(gp_linevector PRIVATE OpenMP::OpenMP_CXX)
+            message(STATUS "OpenMP dynamically linked (static not available)")
+        endif()
     else()
         target_link_libraries(gp_linevector PRIVATE OpenMP::OpenMP_CXX)
         message(STATUS "OpenMP linked (Windows/macOS)")
@@ -240,6 +240,7 @@ message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Python: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
 message(STATUS "Boost: ${Boost_VERSION}")
+message(STATUS "ABI: Stable ABI (abi3) - works on Python 3.11+")
 if(WIN32)
     message(STATUS "Output: gp_linevector.pyd")
 elseif(APPLE)
@@ -248,5 +249,5 @@ else()
     message(STATUS "Output: gp_linevector.so")
 endif()
 message(STATUS "Output directory: ${CMAKE_SOURCE_DIR}/output")
-message(STATUS "Compatible with: Arch Linux Blender 5.0 (EXPERIMENTAL)")
+message(STATUS "Compatible with: Blender 4.3+ (all future versions)")
 message(STATUS "===========================")

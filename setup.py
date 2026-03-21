@@ -6,9 +6,19 @@ This wraps the CMake-built C++ extension into a proper Python wheel
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 import sys
-import os
+import tomllib
 import shutil
 from pathlib import Path
+
+
+# Read version from blender_manifest.toml - single source of truth
+def read_version():
+    manifest = Path(__file__).parent / "Addon" / "blender_manifest.toml"
+    with open(manifest, "rb") as f:
+        data = tomllib.load(f)
+    return data["version"]
+
+VERSION = read_version()
 
 
 class CMakeExtension(Extension):
@@ -42,10 +52,9 @@ class CMakeBuild(build_ext):
             executable_dir / "output" / "Release" / binary_name,
             executable_dir / "build" / "Release" / binary_name,
             executable_dir / "build" / binary_name,
-            executable_dir / "output" / binary_name,  # Added for macOS/Linux
+            executable_dir / "output" / binary_name,
         ]
         
-        # Also search recursively as a fallback
         source_binary = None
         for location in possible_locations:
             if location.exists():
@@ -81,11 +90,11 @@ class CMakeBuild(build_ext):
 
 setup(
     name="gp_autointerpolate",
-    version="2.3.0",
+    version=VERSION,
     description="High-performance C++ interpolation module for Blender Grease Pencil",
     author="cosmosmythos",
     url="https://cosmosmythos.gumroad.com/",
-    ext_modules=[CMakeExtension("gp_autointerpolate")],  # No version suffix
+    ext_modules=[CMakeExtension("gp_autointerpolate")],
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
     python_requires=">=3.11",

@@ -412,16 +412,51 @@ jobs:
 workflows:
   build_and_package:
     jobs:
-      - build_interpolate_windows
-      - build_interpolate_linux
-      - build_linevector_windows
-      - build_linevector_linux
+      - build_interpolate_windows:
+          filters:
+            branches:
+              only:
+                - main
+                - master
+            tags:
+              only: /^v.*/
+      - build_interpolate_linux:
+          filters:
+            branches:
+              only:
+                - main
+                - master
+            tags:
+              only: /^v.*/
+      - build_linevector_windows:
+          filters:
+            branches:
+              only:
+                - main
+                - master
+            tags:
+              only: /^v.*/
+      - build_linevector_linux:
+          filters:
+            branches:
+              only:
+                - main
+                - master
+            tags:
+              only: /^v.*/
       - package:
           requires:
             - build_interpolate_windows
             - build_interpolate_linux
             - build_linevector_windows
             - build_linevector_linux
+          filters:
+            branches:
+              only:
+                - main
+                - master
+            tags:
+              only: /^v.*/
   
   # Experimental workflow - only runs on experimental/py314 branch
   experimental_py314:

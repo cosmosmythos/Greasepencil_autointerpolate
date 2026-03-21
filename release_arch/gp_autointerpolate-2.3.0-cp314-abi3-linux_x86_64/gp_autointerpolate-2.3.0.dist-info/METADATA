@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: gp_autointerpolate
+Version: 2.3.0
+Summary: High-performance C++ interpolation module for Blender Grease Pencil
+Home-page: https://cosmosmythos.gumroad.com/
+Author: cosmosmythos
+Requires-Python: >=3.14
+License-File: LICENSE
+Dynamic: author
+Dynamic: home-page
+Dynamic: license-file
+Dynamic: requires-python
+Dynamic: summary
