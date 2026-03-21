@@ -9,12 +9,16 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build_interpolate:
     name: Build Interpolate - ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        python-version: ['3.11.9', '3.13.9']
         include:
           - os: windows-latest
             platform: windows-x64
@@ -33,7 +37,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.9"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -123,28 +127,12 @@ jobs:
       # Note: gp_linevector is built by build_polyvector.yml
       # (requires OpenCV, Eigen3, Boost - separate workflow)
 
-      - name: Rename wheels with correct platform tags
-        shell: bash
-        run: |
-          cd dist
-          for wheel in *.whl; do
-            if [[ $wheel =~ (gp_autointerpolate-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
-              base="${BASH_REMATCH[1]}"
-              new_name="${base}-cp311-abi3-${{ matrix.wheel_platform }}.whl"
-              if [ "$wheel" != "$new_name" ]; then
-                mv "$wheel" "$new_name"
-              fi
-            fi
-            # gp_linevector wheels are built by separate workflow
-            # (they require OpenCV dependencies)
-          done
-          echo "Wheels:"
-          ls -la
+
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-interpolate-${{ matrix.platform }}
+          name: wheel-interpolate-${{ matrix.platform }}-${{ matrix.python-version }}
           path: dist/*.whl
 
   build_linevector:
@@ -152,6 +140,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        python-version: ['3.11.9', '3.13.9']
         include:
           - os: windows-latest
             platform: windows-x64
@@ -170,7 +159,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11.9"
+          python-version: ${{ matrix.python-version }}
 
       # ============================================================================
       # Download Missing Headers
@@ -271,23 +260,7 @@ jobs:
         run: |
           python setup_vectorize.py bdist_wheel
 
-      - name: Rename wheels with correct platform tags (before bundling - except Linux)
-        if: runner.os != 'Linux'
-        shell: bash
-        run: |
-          cd dist
-          for wheel in *.whl; do
-            if [[ $wheel =~ (gp_linevector-[0-9]+\.[0-9]+\.[0-9]+)-.*\.whl ]]; then
-              base="${BASH_REMATCH[1]}"
-              new_name="${base}-cp311-abi3-${{ matrix.wheel_platform }}.whl"
-              if [ "$wheel" != "$new_name" ]; then
-                echo "Renaming: $wheel -> $new_name"
-                mv "$wheel" "$new_name"
-              fi
-            fi
-          done
-          echo "Wheels after renaming:"
-          ls -la
+
 
       - name: Bundle dependencies into wheel (Windows)
         if: runner.os == 'Windows'
@@ -374,7 +347,7 @@ jobs:
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-linevector-${{ matrix.platform }}
+          name: wheel-linevector-${{ matrix.platform }}-${{ matrix.python-version }}
           path: dist/*.whl
 
   package:
@@ -393,93 +366,76 @@ jobs:
           path: wheels-temp
           pattern: wheel-*
 
+      - name: Extract Version
+        id: extract_version
+        shell: bash
+        run: |
+          VERSION=$(grep -E '^version\s*=' Addon/blender_manifest.toml | cut -d'"' -f2)
+          echo "addon_version=$VERSION" >> $GITHUB_ENV
+          echo "Detected version: $VERSION"
+
       - name: Create platform-specific packages
         run: |
+          # Helper function for dynamic manifest generation
+          generate_manifest() {
+            local _platform=$1
+            local _dir=$2
+            echo '' >> "$_dir/blender_manifest.toml"
+            echo '# BEGIN GENERATED CONTENT.' >> "$_dir/blender_manifest.toml"
+            echo '[build.generated]' >> "$_dir/blender_manifest.toml"
+            echo "platforms = [\"$_platform\"]" >> "$_dir/blender_manifest.toml"
+            echo 'wheels = [' >> "$_dir/blender_manifest.toml"
+            local _first=true
+            for w in "$_dir/wheels/"*.whl; do
+              if [ "$_first" = true ]; then
+                _first=false
+              else
+                echo ',' >> "$_dir/blender_manifest.toml"
+              fi
+              echo -n "  \"./wheels/$(basename "$w")\"" >> "$_dir/blender_manifest.toml"
+            done
+            echo '' >> "$_dir/blender_manifest.toml"
+            echo ']' >> "$_dir/blender_manifest.toml"
+            echo '# END GENERATED CONTENT.' >> "$_dir/blender_manifest.toml"
+          }
+          
           # Windows
           echo "Creating Windows package..."
           mkdir -p build_windows/Addon
           cp -r Addon/* build_windows/Addon/
-          # Fresh wheels folder: do NOT package repo wheels
           rm -rf build_windows/Addon/wheels
           mkdir -p build_windows/Addon/wheels
           find wheels-temp -name "*win_amd64.whl" -exec cp {} build_windows/Addon/wheels/ \;
           
-          # Dynamically get actual wheel names
-          WIN_INTERP=$(ls build_windows/Addon/wheels/gp_autointerpolate*.whl | xargs -n1 basename)
-          WIN_LINEVEC=$(ls build_windows/Addon/wheels/gp_linevector*.whl | xargs -n1 basename)
-          
-          cat >> build_windows/Addon/blender_manifest.toml << EOF
-
-          # BEGIN GENERATED CONTENT.
-          [build.generated]
-          platforms = ["windows-x64"]
-          wheels = [
-            "./wheels/${WIN_INTERP}",
-            "./wheels/${WIN_LINEVEC}"
-          ]
-          # END GENERATED CONTENT.
-          EOF
+          generate_manifest "windows-x64" "build_windows/Addon"
           cd build_windows/Addon
-          zip -r ../../gp_auto_interpolate-2.3.0-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           # macOS Universal (ARM64 + x86_64)
           echo "Creating macOS universal package..."
           mkdir -p build_macos/Addon
           cp -r Addon/* build_macos/Addon/
-          # Fresh wheels folder: do NOT package repo wheels
           rm -rf build_macos/Addon/wheels
           mkdir -p build_macos/Addon/wheels
+          find wheels-temp -name "*universal2.whl" -exec cp {} build_macos/Addon/wheels/ \;
           
-          # Copy universal wheels from artifacts
-          find wheels-temp -name "*autointerpolate*universal2.whl" -exec cp {} build_macos/Addon/wheels/ \;
-          find wheels-temp -name "*linevector*universal2.whl" -exec cp {} build_macos/Addon/wheels/ \;
-          
-          # Dynamically get actual wheel names
-          MAC_INTERP=$(ls build_macos/Addon/wheels/gp_autointerpolate*.whl | xargs -n1 basename)
-          MAC_LINEVEC=$(ls build_macos/Addon/wheels/gp_linevector*.whl | xargs -n1 basename)
-          
-          cat >> build_macos/Addon/blender_manifest.toml << EOF
-
-          # BEGIN GENERATED CONTENT.
-          [build.generated]
-          platforms = ["macos-arm64", "macos-x64"]
-          wheels = [
-            "./wheels/${MAC_INTERP}",
-            "./wheels/${MAC_LINEVEC}"
-          ]
-          # END GENERATED CONTENT.
-          EOF
+          generate_manifest "macos-arm64\", \"macos-x64" "build_macos/Addon"
           cd build_macos/Addon
-          zip -r ../../gp_auto_interpolate-2.3.0-macos-universal.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-macos-universal.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           # Linux
           echo "Creating Linux package..."
           mkdir -p build_linux/Addon
           cp -r Addon/* build_linux/Addon/
-          # Fresh wheels folder: do NOT package repo wheels
           rm -rf build_linux/Addon/wheels
           mkdir -p build_linux/Addon/wheels
           find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \;
           
-          # Dynamically get actual wheel names (auditwheel determines manylinux version)
-          LINUX_INTERP=$(ls build_linux/Addon/wheels/gp_autointerpolate*.whl | xargs -n1 basename)
-          LINUX_LINEVEC=$(ls build_linux/Addon/wheels/gp_linevector*.whl | xargs -n1 basename)
-          
-          cat >> build_linux/Addon/blender_manifest.toml << EOF
-
-          # BEGIN GENERATED CONTENT.
-          [build.generated]
-          platforms = ["linux-x64"]
-          wheels = [
-            "./wheels/${LINUX_INTERP}",
-            "./wheels/${LINUX_LINEVEC}"
-          ]
-          # END GENERATED CONTENT.
-          EOF
+          generate_manifest "linux-x64" "build_linux/Addon"
           cd build_linux/Addon
-          zip -r ../../gp_auto_interpolate-2.3.0-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
+          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
           cd ../..
           
           echo "✅ Platform-specific packages created:"
@@ -488,8 +444,8 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v2.3.0-build-${{ github.run_number }}
-          name: "GP Auto Interpolate v2.3.0"
+          tag_name: v${{ env.addon_version }}-build-${{ github.run_number }}
+          name: "GP Auto Interpolate v${{ env.addon_version }}"
           body: |
             🎉 **Wheel-based release with Local_Modern architecture**
             
@@ -509,9 +465,9 @@ jobs:
             2. Install in Blender Extensions
             3. Done!
           files: |
-            gp_auto_interpolate-2.3.0-windows-x64.zip
-            gp_auto_interpolate-2.3.0-macos-universal.zip
-            gp_auto_interpolate-2.3.0-linux-x64.zip
+            gp_auto_interpolate-${{ env.addon_version }}-windows-x64.zip
+            gp_auto_interpolate-${{ env.addon_version }}-macos-universal.zip
+            gp_auto_interpolate-${{ env.addon_version }}-linux-x64.zip
           draft: false
           prerelease: false
         env:
@@ -521,4 +477,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extension-packages
-          path: gp_auto_interpolate-2.3.0-*.zip
+          path: gp_auto_interpolate-${{ env.addon_version }}-*.zip
