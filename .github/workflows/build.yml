@@ -382,9 +382,6 @@ jobs:
           generate_manifest() {
             local _platform=$1
             local _dir=$2
-            echo '' >> "$_dir/blender_manifest.toml"
-            echo '# BEGIN GENERATED CONTENT.' >> "$_dir/blender_manifest.toml"
-            echo '[build.generated]' >> "$_dir/blender_manifest.toml"
             echo "platforms = [\"$_platform\"]" >> "$_dir/blender_manifest.toml"
             echo 'wheels = [' >> "$_dir/blender_manifest.toml"
             local _first=true
@@ -398,7 +395,7 @@ jobs:
             done
             echo '' >> "$_dir/blender_manifest.toml"
             echo ']' >> "$_dir/blender_manifest.toml"
-            echo '# END GENERATED CONTENT.' >> "$_dir/blender_manifest.toml"
+            echo '[permissions]' >> "$_dir/blender_manifest.toml"
           }
           
           # Windows

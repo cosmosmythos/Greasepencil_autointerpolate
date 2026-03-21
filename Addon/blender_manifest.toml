@@ -10,8 +10,3 @@ blender_version_min = "4.3.0"
 license = ["SPDX:GPL-3.0-or-later"]
 copyright = ["2025- cosmosmythos"]
 website = "https://cosmosmythos.gumroad.com/"
-
-# NOTE: platforms and wheels are set dynamically during CI packaging
-# via the [build.generated] section appended by .github/workflows/build.yml
-
-[permissions]

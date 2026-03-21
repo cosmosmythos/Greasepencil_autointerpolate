@@ -73,8 +73,8 @@ class GPENCIL_OT_import_lineart(Operator, ImportHelper):
 
     downscale: IntProperty(
         name="Downscale",
-        description="Lower resolution for faster vectorization.",
-        default=2,
+        description="Factor to reduce image resolution. Higher values are faster but lose detail.",
+        default=1,
         min=1,
         max=4,
     )
