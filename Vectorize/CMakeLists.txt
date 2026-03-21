@@ -10,7 +10,7 @@ message(STATUS "PolyVector-based line art vectorization")
 # CROSS-PLATFORM PYTHON DETECTION (same as interpolate.cpp)
 # ============================================================================
 
-# Find Python 3.11.x for Blender 4.3+ compatibility
+# Find Python 3.11+ for Blender 4.2+ compatibility
 find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
 
 # Verify Python version
@@ -24,10 +24,11 @@ message(STATUS "Detected Python version: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 
-# Warn if not Python 3.11.x
-if(NOT Python3_VERSION_MAJOR EQUAL 3 OR NOT Python3_VERSION_MINOR EQUAL 11)
-    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found, but Blender 4.3+ requires Python 3.11.x")
-    message(WARNING "This may cause compatibility issues with Blender")
+# Check Python version compatibility
+if(Python3_VERSION_MAJOR EQUAL 3 AND (Python3_VERSION_MINOR EQUAL 11 OR Python3_VERSION_MINOR EQUAL 13))
+    message(STATUS "Python ${DETECTED_PYTHON_VERSION} is officially supported (Blender 4.2+ / 4.4+).")
+else()
+    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found. Officially tested versions are 3.11 and 3.13.")
 endif()
 
 # Force pybind11 to use our detected Python
@@ -206,7 +207,7 @@ elseif(MSVC)
     
     # Auto-detect CPU features (VS 2017+)
     if(CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|X86")
-        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
+        # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /arch:AVX2")
     endif()
     
     message(STATUS "Compiler flags (MSVC): ${CMAKE_CXX_FLAGS}")

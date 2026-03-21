@@ -1,7 +1,7 @@
 schema_version = "1.0.0"
 id = "gp_auto_interpolate"
 name = "GP Auto Interpolate"
-version = "2.3.2"
+version = "2.4.0"
 tagline = "Grease Pencil Real-time Auto-Interpolation"
 maintainer = "cosmosmythos"
 type = "add-on"

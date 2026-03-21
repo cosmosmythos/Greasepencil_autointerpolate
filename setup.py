@@ -79,9 +79,18 @@ class CMakeBuild(build_ext):
         shutil.copy(source_binary, dest_binary)
 
 
+def get_version():
+    manifest_path = Path(__file__).parent / "Addon" / "blender_manifest.toml"
+    import re
+    if manifest_path.exists():
+        content = manifest_path.read_text(encoding="utf-8")
+        if match := re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE):
+            return match.group(1)
+    return "2.3.0"  # Fallback
+
 setup(
     name="gp_autointerpolate",
-    version="2.3.0",
+    version=get_version(),
     description="High-performance C++ interpolation module for Blender Grease Pencil",
     author="cosmosmythos",
     url="https://cosmosmythos.gumroad.com/",
@@ -89,10 +98,4 @@ setup(
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
     python_requires=">=3.11",
-    # Use limited API for Python 3.11+
-    options={
-        "bdist_wheel": {
-            "py_limited_api": "cp311",
-        }
-    },
 )

@@ -14,6 +14,13 @@ commands:
 jobs:
   # Build Interpolate Modules
   build_interpolate_windows:
+    parameters:
+      python_version:
+        type: string
+        default: "3.11.9"
+      python_short:
+        type: string
+        default: "3.11"
     machine:
       image: windows-server-2022-gui:current
     resource_class: windows.medium
@@ -25,21 +32,21 @@ jobs:
           command: |
             choco install cmake visualstudio2022buildtools eigen -y
             # Pin Python exactly like GitHub Actions
-            choco install python --version=3.11.9 -y --force
-            py -3.11 --version
+            choco install python --version=<< parameters.python_version >> -y --force
+            py -<< parameters.python_short >> --version
             & "C:\Program Files\CMake\bin\cmake.exe" --version
       - run:
           name: Install Python build deps (Windows)
           shell: powershell.exe
           command: |
-            py -3.11 -m pip install --upgrade pip
-            py -3.11 -m pip install setuptools wheel build
+            py -<< parameters.python_short >> -m pip install --upgrade pip
+            py -<< parameters.python_short >> -m pip install setuptools wheel build
       - run:
           name: Build C++ extension (Windows)
           shell: powershell.exe
           command: |
             # Get Python 3.11 executable path
-            $PythonExe = py -3.11 -c "import sys; print(sys.executable)"
+            $PythonExe = py -<< parameters.python_short >> -c "import sys; print(sys.executable)"
             Write-Host "Using Python: $PythonExe"
             
             New-Item -ItemType Directory -Force -Path Executable\build | Out-Null
@@ -51,7 +58,7 @@ jobs:
           name: Build wheel (Windows)
           shell: powershell.exe
           command: |
-            py -3.11 setup.py bdist_wheel
+            py -<< parameters.python_short >> setup.py bdist_wheel
       - store_artifacts:
           path: dist/*.whl
       - persist_to_workspace:
@@ -60,8 +67,15 @@ jobs:
             - dist/*.whl
 
   build_interpolate_linux:
+    parameters:
+      python_version:
+        type: string
+        default: "3.11.9"
+      python_short:
+        type: string
+        default: "3.11"
     docker:
-      - image: cimg/python:3.11.9
+      - image: cimg/python:<< parameters.python_version >>
     steps:
       - checkout
       - run:
@@ -91,6 +105,13 @@ jobs:
 
   # Build LineVector Module
   build_linevector_windows:
+    parameters:
+      python_version:
+        type: string
+        default: "3.11.9"
+      python_short:
+        type: string
+        default: "3.11"
     machine:
       image: windows-server-2022-gui:current
     resource_class: windows.medium
@@ -102,17 +123,17 @@ jobs:
           command: |
             choco install cmake visualstudio2022buildtools -y
             # Pin Python exactly like GitHub Actions
-            choco install python --version=3.11.9 -y --force
+            choco install python --version=<< parameters.python_version >> -y --force
             # Match GitHub Actions: opencv + eigen + boost-msvc-14.3
             choco install opencv eigen boost-msvc-14.3 -y
-            py -3.11 --version
+            py -<< parameters.python_short >> --version
             & "C:\Program Files\CMake\bin\cmake.exe" --version
       - run:
           name: Install Python build deps (Windows)
           shell: powershell.exe
           command: |
-            py -3.11 -m pip install --upgrade pip
-            py -3.11 -m pip install setuptools wheel build
+            py -<< parameters.python_short >> -m pip install --upgrade pip
+            py -<< parameters.python_short >> -m pip install setuptools wheel build
       - run:
           name: Ensure simple_svg header exists
           shell: powershell.exe
@@ -134,7 +155,7 @@ jobs:
             
             Write-Host "=== Running CMake Configure ===" -ForegroundColor Cyan
             # Get Python 3.11 executable path
-            $PythonExe = py -3.11 -c "import sys; print(sys.executable)"
+            $PythonExe = py -<< parameters.python_short >> -c "import sys; print(sys.executable)"
             Write-Host "Using Python: $PythonExe"
             
             # Match GitHub Actions OpenCV_DIR and explicitly set Python paths
@@ -188,16 +209,16 @@ jobs:
           name: Build wheel (Windows)
           shell: powershell.exe
           command: |
-            py -3.11 setup_vectorize.py bdist_wheel
+            py -<< parameters.python_short >> setup_vectorize.py bdist_wheel
       - run:
           name: Bundle dependencies (Windows)
           shell: powershell.exe
           command: |
-            py -3.11 -m pip install delvewheel
+            py -<< parameters.python_short >> -m pip install delvewheel
             Set-Location dist
             Get-ChildItem -Filter *.whl | ForEach-Object {
               Write-Host "Repairing wheel: $($_.Name)"
-              py -3.11 -m delvewheel repair $_.Name -w . --add-path "C:/tools/opencv/build/x64/vc16/bin"
+              py -<< parameters.python_short >> -m delvewheel repair $_.Name -w . --add-path "C:/tools/opencv/build/x64/vc16/bin"
             }
             Set-Location ..
       - store_artifacts:
@@ -208,8 +229,15 @@ jobs:
             - dist/*.whl
 
   build_linevector_linux:
+    parameters:
+      python_version:
+        type: string
+        default: "3.11.9"
+      python_short:
+        type: string
+        default: "3.11"
     docker:
-      - image: cimg/python:3.11.9
+      - image: cimg/python:<< parameters.python_version >>
     steps:
       - checkout
       - run:
@@ -272,6 +300,28 @@ jobs:
             echo "Collected wheels:"
             ls -la wheels-temp
             
+            generate_manifest() {
+              local _platform=$1
+              local _dir=$2
+              echo '' >> "$_dir/blender_manifest.toml"
+              echo '# BEGIN GENERATED CONTENT.' >> "$_dir/blender_manifest.toml"
+              echo '[build.generated]' >> "$_dir/blender_manifest.toml"
+              echo "platforms = [\"$_platform\"]" >> "$_dir/blender_manifest.toml"
+              echo 'wheels = [' >> "$_dir/blender_manifest.toml"
+              local _first=true
+              for w in "$_dir/wheels/"*.whl; do
+                if [ "$_first" = true ]; then
+                  _first=false
+                else
+                  echo ',' >> "$_dir/blender_manifest.toml"
+                fi
+                echo -n "  \"./wheels/$(basename "$w")\"" >> "$_dir/blender_manifest.toml"
+              done
+              echo '' >> "$_dir/blender_manifest.toml"
+              echo ']' >> "$_dir/blender_manifest.toml"
+              echo '# END GENERATED CONTENT.' >> "$_dir/blender_manifest.toml"
+            }
+            
             # Windows package
             echo "Creating Windows package..."
             mkdir -p build_windows/Addon
@@ -279,20 +329,10 @@ jobs:
             rm -rf build_windows/Addon/wheels
             mkdir -p build_windows/Addon/wheels
             find wheels-temp -name "*win_amd64.whl" -exec cp {} build_windows/Addon/wheels/ \;
+            generate_manifest "windows-x64" "build_windows/Addon"
             
-            WIN_INTERP=$(ls build_windows/Addon/wheels/*autointerpolate*win_amd64.whl 2>/dev/null | head -n 1)
-            WIN_LINE=$(ls build_windows/Addon/wheels/*linevector*win_amd64.whl 2>/dev/null | head -n 1)
-            
-            if [ -z "$WIN_INTERP" ] || [ -z "$WIN_LINE" ]; then
-              echo "❌ Missing required Windows wheels"; ls -la build_windows/Addon/wheels; exit 1;
-            fi
-            
-            WIN_INTERP_BN=$(basename "$WIN_INTERP")
-            WIN_LINE_BN=$(basename "$WIN_LINE")
-            
-            printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["windows-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$WIN_INTERP_BN" "$WIN_LINE_BN" >> build_windows/Addon/blender_manifest.toml
             cd build_windows/Addon
-            WIN_ZIP_VER=$(echo "$WIN_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+            WIN_ZIP_VER=$(grep -E '^version\s*=' blender_manifest.toml | cut -d'"' -f2)
             if [ -z "$WIN_ZIP_VER" ]; then WIN_ZIP_VER="unknown"; fi
             zip -r ../../gp_auto_interpolate-${WIN_ZIP_VER}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
             cd ../..
@@ -305,23 +345,10 @@ jobs:
             mkdir -p build_linux/Addon/wheels
             find wheels-temp -name "*linux_x86_64.whl" -exec cp {} build_linux/Addon/wheels/ \; || true
             find wheels-temp -name "*manylinux*.whl" -exec cp {} build_linux/Addon/wheels/ \; || true
+            generate_manifest "linux-x64" "build_linux/Addon"
             
-            LINUX_INTERP=$(ls build_linux/Addon/wheels/*autointerpolate*linux_x86_64.whl 2>/dev/null | head -n 1)
-            if [ -z "$LINUX_INTERP" ]; then
-              LINUX_INTERP=$(ls build_linux/Addon/wheels/*autointerpolate*manylinux*.whl 2>/dev/null | head -n 1)
-            fi
-            LINUX_LINE=$(ls build_linux/Addon/wheels/*linevector*manylinux*.whl 2>/dev/null | head -n 1)
-            
-            if [ -z "$LINUX_INTERP" ] || [ -z "$LINUX_LINE" ]; then
-              echo "❌ Missing required Linux wheels"; ls -la build_linux/Addon/wheels; exit 1;
-            fi
-            
-            LINUX_INTERP_BN=$(basename "$LINUX_INTERP")
-            LINUX_LINE_BN=$(basename "$LINUX_LINE")
-            
-            printf '\n# BEGIN GENERATED CONTENT.\n[build.generated]\nplatforms = ["linux-x64"]\nwheels = [\n  "./wheels/%s",\n  "./wheels/%s"\n]\n# END GENERATED CONTENT.\n' "$LINUX_INTERP_BN" "$LINUX_LINE_BN" >> build_linux/Addon/blender_manifest.toml
             cd build_linux/Addon
-            LINUX_ZIP_VER=$(echo "$LINUX_INTERP_BN" | sed -n 's/^gp_autointerpolate-\([0-9]\+\.[0-9]\+\.[0-9]\+\).*/\1/p')
+            LINUX_ZIP_VER=$(grep -E '^version\s*=' blender_manifest.toml | cut -d'"' -f2)
             if [ -z "$LINUX_ZIP_VER" ]; then LINUX_ZIP_VER="unknown"; fi
             zip -r ../../gp_auto_interpolate-${LINUX_ZIP_VER}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store"
             cd ../..
@@ -339,13 +366,49 @@ jobs:
 workflows:
   build_and_package:
     jobs:
-      - build_interpolate_windows
-      - build_interpolate_linux
-      - build_linevector_windows
-      - build_linevector_linux
+      - build_interpolate_windows:
+          name: build_interpolate_windows_3_11
+          python_version: "3.11.9"
+          python_short: "3.11"
+      - build_interpolate_windows:
+          name: build_interpolate_windows_3_13
+          python_version: "3.13.9"
+          python_short: "3.13"
+          
+      - build_interpolate_linux:
+          name: build_interpolate_linux_3_11
+          python_version: "3.11.9"
+          python_short: "3.11"
+      - build_interpolate_linux:
+          name: build_interpolate_linux_3_13
+          python_version: "3.13.9"
+          python_short: "3.13"
+
+      - build_linevector_windows:
+          name: build_linevector_windows_3_11
+          python_version: "3.11.9"
+          python_short: "3.11"
+      - build_linevector_windows:
+          name: build_linevector_windows_3_13
+          python_version: "3.13.9"
+          python_short: "3.13"
+
+      - build_linevector_linux:
+          name: build_linevector_linux_3_11
+          python_version: "3.11.9"
+          python_short: "3.11"
+      - build_linevector_linux:
+          name: build_linevector_linux_3_13
+          python_version: "3.13.9"
+          python_short: "3.13"
+
       - package:
           requires:
-            - build_interpolate_windows
-            - build_interpolate_linux
-            - build_linevector_windows
-            - build_linevector_linux
+            - build_interpolate_windows_3_11
+            - build_interpolate_windows_3_13
+            - build_interpolate_linux_3_11
+            - build_interpolate_linux_3_13
+            - build_linevector_windows_3_11
+            - build_linevector_windows_3_13
+            - build_linevector_linux_3_11
+            - build_linevector_linux_3_13
