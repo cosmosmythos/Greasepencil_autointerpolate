@@ -1,5 +1,5 @@
 """
-Toggle Interpolation Operator (robust, minimal)
+Toggle Interpolation Operator for GP Auto Interpolate
 """
 
 import bpy
@@ -12,11 +12,11 @@ class GP_ToggleInterpolation(Operator):
     bl_idname = "gp.toggle_interpolation"
     bl_label = "Interpolation"
     bl_description = "Toggle real-time interpolation processing"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'REGISTER'}
 
     @classmethod
     def poll(cls, context):
-        return (context.active_object and context.active_object.type == 'GREASEPENCIL')
+        return context.active_object and context.active_object.type == 'GREASEPENCIL'
 
     def execute(self, context):
         scene = context.scene
@@ -25,38 +25,30 @@ class GP_ToggleInterpolation(Operator):
         scene.gp_interpolation_enabled = not scene.gp_interpolation_enabled
 
         if scene.gp_interpolation_enabled:
-            # Check for node group updates before building cache
-            from ..core.constants import NODEGROUP_VERSION
-            if cache.check_and_update_nodegroup():
-                self.report({'INFO'}, f"GPAI Nodes updated to {NODEGROUP_VERSION}")
-            
-            # Enable: build cache, set target, add handler, start with proper visibility management
+            cache.ensure_modifier(gp_obj)
             cache.build(gp_obj)
             scene["gp_interpolation_target"] = gp_obj.name
 
             if visibility.on_frame_change not in bpy.app.handlers.frame_change_post:
                 bpy.app.handlers.frame_change_post.append(visibility.on_frame_change)
+            if visibility.on_undo_redo not in bpy.app.handlers.undo_post:
+                bpy.app.handlers.undo_post.append(visibility.on_undo_redo)
+            if visibility.on_undo_redo not in bpy.app.handlers.redo_post:
+                bpy.app.handlers.redo_post.append(visibility.on_undo_redo)
 
-            # Initialize visibility system properly
             visibility.update_modifier_visibility()
         else:
-            # Disable: clean shutdown with proper state cleanup
             try:
                 if visibility.on_frame_change in bpy.app.handlers.frame_change_post:
                     bpy.app.handlers.frame_change_post.remove(visibility.on_frame_change)
-            except Exception:
+                if visibility.on_undo_redo in bpy.app.handlers.undo_post:
+                    bpy.app.handlers.undo_post.remove(visibility.on_undo_redo)
+                if visibility.on_undo_redo in bpy.app.handlers.redo_post:
+                    bpy.app.handlers.redo_post.remove(visibility.on_undo_redo)
+            except (ValueError, AttributeError):
                 pass
 
-            # Stop scrub timer and clean visibility state
-            visibility.stop_scrub_timer()
-            
-            # Ensure modifier is turned off
-            try:
-                visibility._set_modifier_visible(False)
-            except Exception:
-                pass
-
-            # Clear all state
+            visibility.force_modifier_off_for_authoring()
             visibility.clear()
             cache.clear()
             scene["gp_interpolation_target"] = ""
@@ -65,16 +57,8 @@ class GP_ToggleInterpolation(Operator):
 
 
 def register():
-    try:
-        bpy.utils.register_class(GP_ToggleInterpolation)
-    except ValueError:
-        # Class already registered, skip
-        pass
+    bpy.utils.register_class(GP_ToggleInterpolation)
 
 
 def unregister():
-    try:
-        bpy.utils.unregister_class(GP_ToggleInterpolation)
-    except (ValueError, RuntimeError):
-        # Class not registered or already unregistered, skip
-        pass
+    bpy.utils.unregister_class(GP_ToggleInterpolation)

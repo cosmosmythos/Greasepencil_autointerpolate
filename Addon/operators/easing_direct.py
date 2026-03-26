@@ -2,7 +2,7 @@ import bpy
 from bpy.types import Operator
 from bpy.props import EnumProperty
 from ..utils import easing
-from ..utils.easing import get_easing_curve_node
+from ..utils.easing import get_layer_id_readonly, get_easing_curve_node, apply_control_points_to_curve
 from ..core import cache
 
 
@@ -15,39 +15,35 @@ def apply_preset_to_curve(preset_name, stored_data=None):
     curve_mapping = curve_node.mapping
     curve = curve_mapping.curves[0]
     
-    while len(curve.points) > 2:
-        curve.points.remove(curve.points[1])
-    
-    curve.points[0].location = (0.0, 0.0)
-    curve.points[-1].location = (1.0, 1.0)
-    
-    if preset_name == 'LINEAR':
-        curve.points[0].handle_type = 'VECTOR'
-        curve.points[-1].handle_type = 'VECTOR'
-    elif preset_name == 'EASE_IN':
-        curve.points[0].handle_type = 'AUTO'
-        curve.points[-1].handle_type = 'AUTO'
-        curve.points.new(0.5, 0.25).handle_type = 'AUTO_CLAMPED'
-    elif preset_name == 'EASE_OUT':
-        curve.points[0].handle_type = 'AUTO'
-        curve.points[-1].handle_type = 'AUTO'
-        curve.points.new(0.5, 0.75).handle_type = 'AUTO_CLAMPED'
-    elif preset_name == 'EASE_IN_OUT':
-        curve.points[0].handle_type = 'AUTO'
-        curve.points[-1].handle_type = 'AUTO'
-        curve.points.new(0.25, 0.1).handle_type = 'AUTO_CLAMPED'
-        curve.points.new(0.75, 0.9).handle_type = 'AUTO_CLAMPED'
-    elif preset_name == 'CUSTOM' and stored_data:
+    if preset_name == 'CUSTOM' and stored_data:
         if isinstance(stored_data, list) and len(stored_data) > 0:
             if isinstance(stored_data[0], dict):
-                from ..utils.easing import deserialize_curve_control_points
-                deserialize_curve_control_points(stored_data)
+                apply_control_points_to_curve(curve, curve_mapping, stored_data)
             else:
                 curve.points[0].location = (0.0, stored_data[0])
                 curve.points[-1].location = (1.0, stored_data[-1])
                 for i in [8, 16, 24, 32, 40, 48, 56]:
                     if i < len(stored_data):
                         curve.points.new(i / 63.0, stored_data[i]).handle_type = 'AUTO_CLAMPED'
+    else:
+        while len(curve.points) > 2:
+            curve.points.remove(curve.points[1])        
+        if preset_name == 'LINEAR':
+            curve.points[0].handle_type = 'VECTOR'
+            curve.points[-1].handle_type = 'VECTOR'
+        elif preset_name == 'EASE_IN':
+            curve.points[0].handle_type = 'AUTO'
+            curve.points[-1].handle_type = 'AUTO'
+            curve.points.new(0.5, 0.25).handle_type = 'AUTO_CLAMPED'
+        elif preset_name == 'EASE_OUT':
+            curve.points[0].handle_type = 'AUTO'
+            curve.points[-1].handle_type = 'AUTO'
+            curve.points.new(0.5, 0.75).handle_type = 'AUTO_CLAMPED'
+        elif preset_name == 'EASE_IN_OUT':
+            curve.points[0].handle_type = 'AUTO'
+            curve.points[-1].handle_type = 'AUTO'
+            curve.points.new(0.25, 0.1).handle_type = 'AUTO_CLAMPED'
+            curve.points.new(0.75, 0.9).handle_type = 'AUTO_CLAMPED'  
     
     curve_mapping.update()
     
@@ -66,7 +62,9 @@ def get_stored_easing_data(gp_data, layer_idx, frame_number):
     
     try:
         all_easing = json.loads(gp_data["gp_easing_data"])
-        layer_id = get_or_create_layer_id(gp_data, layer_idx)
+        layer_id = get_layer_id_readonly(gp_data, layer_idx)
+        if layer_id is None:
+            return None, None
         layer_key = str(layer_id)
         
         if layer_key in all_easing:

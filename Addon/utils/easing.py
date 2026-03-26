@@ -7,6 +7,37 @@ import bpy
 import json
 import hashlib
 
+def get_layer_id_readonly(gp_data, layer_idx):
+    """Read-only layer ID lookup for draw-time code. Returns None if not assigned."""
+    if "gpai_layer_id" not in gp_data.attributes:
+        return None
+    attr = gp_data.attributes["gpai_layer_id"]
+    if layer_idx >= len(attr.data):
+        return None
+    val = attr.data[layer_idx].value
+    return val if val != 0 else None
+
+
+def apply_control_points_to_curve(curve, curve_mapping, control_points):
+    if not control_points or len(control_points) < 2:
+        curve_mapping.update()
+        return False
+    # Clear intermediate points; keep the two endpoints
+    while len(curve.points) > 2:
+        curve.points.remove(curve.points[1])
+    # Apply endpoints; keep stored handle or fallback to AUTO
+    curve.points[0].location = control_points[0]['loc']
+    curve.points[0].handle_type = control_points[0].get('handle', 'AUTO')
+    curve.points[-1].location = control_points[-1]['loc']
+    curve.points[-1].handle_type = control_points[-1].get('handle', 'AUTO')
+    for i in range(1, len(control_points) - 1):
+        pt_data = control_points[i]
+        new_pt = curve.points.new(pt_data['loc'][0], pt_data['loc'][1])
+        new_pt.handle_type = pt_data.get('handle', 'AUTO_CLAMPED')
+    
+    curve_mapping.update()
+    return True
+
 
 def normalize_easing_curve(curve_samples):
     """
@@ -79,7 +110,6 @@ def get_easing_curve_node():
     return None
 
 
-# Easing presets - generate 64 samples on demand
 def sample_easing_preset(preset_name, samples=64):
     """Generate easing curve samples for a preset"""
     from ..core.constants import NODEGROUP_NAME
@@ -146,17 +176,7 @@ def calculate_frame_signature(layer, frame_number):
 
 
 def sample_curve_from_control_points(control_points, samples=64):
-    """
-    Sample a curve from control_points data WITHOUT modifying the UI node permanently.
-    Temporarily uses the curve node but saves and restores its state.
-    
-    Args:
-        control_points: List of dicts with 'loc' and 'handle' keys
-        samples: Number of samples to generate (default 64)
-    
-    Returns:
-        List of sampled values, or None if failed
-    """
+
     if not control_points or len(control_points) < 2:
         return None
     
@@ -164,113 +184,47 @@ def sample_curve_from_control_points(control_points, samples=64):
     if not curve_node:
         return None
     
+    curve_mapping = curve_node.mapping
+    curve = curve_mapping.curves[0]
+    
+    saved_points = []
+    for pt in curve.points:
+        saved_points.append({
+            'loc': [pt.location.x, pt.location.y],
+            'handle': pt.handle_type
+        })
+    
+    result = None
     try:
-        # Save current curve state
-        curve_mapping = curve_node.mapping
-        curve = curve_mapping.curves[0]
-        
-        saved_points = []
-        for pt in curve.points:
-            saved_points.append({
-                'loc': [pt.location.x, pt.location.y],
-                'handle': pt.handle_type
-            })
-        
-        # Temporarily load the control_points we want to sample
-        while len(curve.points) > 2:
-            curve.points.remove(curve.points[1])
-        
-        if len(control_points) >= 2:
-            curve.points[0].location = control_points[0]['loc']
-            curve.points[0].handle_type = control_points[0].get('handle', 'AUTO')
-            curve.points[-1].location = control_points[-1]['loc']
-            curve.points[-1].handle_type = control_points[-1].get('handle', 'AUTO')
-            
-            for i in range(1, len(control_points) - 1):
-                pt_data = control_points[i]
-                new_pt = curve.points.new(pt_data['loc'][0], pt_data['loc'][1])
-                new_pt.handle_type = 'AUTO_CLAMPED'
-        
-        curve_mapping.update()
+        # Load temporary control points
+        if not apply_control_points_to_curve(curve, curve_mapping, control_points):
+            return None      
+        curve_mapping.initialize()
         
         # Sample the curve
         result = []
         for i in range(samples):
             t = i / (samples - 1)
-            value = curve_mapping.evaluate(curve, t)
-            result.append(value)
-        
-        # Restore original curve state
-        while len(curve.points) > 2:
-            curve.points.remove(curve.points[1])
-        
-        if len(saved_points) >= 2:
-            curve.points[0].location = saved_points[0]['loc']
-            curve.points[0].handle_type = saved_points[0]['handle']
-            curve.points[-1].location = saved_points[-1]['loc']
-            curve.points[-1].handle_type = saved_points[-1]['handle']
-            
-            for i in range(1, len(saved_points) - 1):
-                pt_data = saved_points[i]
-                new_pt = curve.points.new(pt_data['loc'][0], pt_data['loc'][1])
-                new_pt.handle_type = pt_data['handle']
-        
-        curve_mapping.update()
-        
-        return result
-        
+            result.append(curve_mapping.evaluate(curve, t))
     except Exception as e:
-        print(f"[GPAI] Warning: Failed to sample curve from control points: {e}")
-        # Try to restore original state even on error
-        try:
-            curve_mapping = curve_node.mapping
-            curve = curve_mapping.curves[0]
-            while len(curve.points) > 2:
-                curve.points.remove(curve.points[1])
-            if 'saved_points' in locals() and len(saved_points) >= 2:
-                curve.points[0].location = saved_points[0]['loc']
-                curve.points[0].handle_type = saved_points[0]['handle']
-                curve.points[-1].location = saved_points[-1]['loc']
-                curve.points[-1].handle_type = saved_points[-1]['handle']
-                for i in range(1, len(saved_points) - 1):
-                    pt_data = saved_points[i]
-                    new_pt = curve.points.new(pt_data['loc'][0], pt_data['loc'][1])
-                    new_pt.handle_type = pt_data['handle']
-                curve_mapping.update()
-        except:
-            pass
-        return None
+        print(f"[GPAI]: Failed to sample curve: {e}")
+        result = None
+    finally:
+        # Always restore (replace restore manual rebuild block)
+        apply_control_points_to_curve(curve, curve_mapping, saved_points)
+    
+    return result
 
 
 def deserialize_curve_control_points(control_points):
-    """Restore curve from control points (modifies UI node - use for display only!)"""
+    """Restore curve from control points (modifies UI - display only!)"""
     curve_node = get_easing_curve_node()
-    if not curve_node or not control_points:
+    if not curve_node:
         return False
     
     curve_mapping = curve_node.mapping
     curve = curve_mapping.curves[0]
-    
-    # Clear intermediate points
-    while len(curve.points) > 2:
-        curve.points.remove(curve.points[1])
-    
-    # Restore points
-    if len(control_points) >= 2:
-        # Endpoints: keep stored handle type (AUTO)
-        curve.points[0].location = control_points[0]['loc']
-        curve.points[0].handle_type = control_points[0].get('handle', 'AUTO')
-        curve.points[-1].location = control_points[-1]['loc']
-        curve.points[-1].handle_type = control_points[-1].get('handle', 'AUTO')
-        
-        # Middle points: force AUTO_CLAMPED to prevent overshoot
-        for i in range(1, len(control_points) - 1):
-            pt_data = control_points[i]
-            new_pt = curve.points.new(pt_data['loc'][0], pt_data['loc'][1])
-            new_pt.handle_type = 'AUTO_CLAMPED'
-    
-    curve_mapping.update()
-    return True
+    return apply_control_points_to_curve(curve, curve_mapping, control_points)
 
 
 def get_easing_curve_from_frame(gp_data, layer_idx, frame_number, layer=None):
@@ -301,49 +255,31 @@ def get_easing_curve_from_frame(gp_data, layer_idx, frame_number, layer=None):
                             preset = data['preset']
                             
                             # For CUSTOM, use stored samples or generate from stored control points
+                            preset = data['preset']
                             if preset == 'CUSTOM':
-                                curve_samples = None
-                                if 'samples' in data:
-                                    curve_samples = data['samples']
-                                elif 'control_points' in data:
-                                    # CRITICAL FIX: Sample from control_points WITHOUT modifying UI node
-                                    # This preserves UI display while getting correct cache data
+                                curve_samples = data.get('samples')
+                                if not curve_samples and 'control_points' in data:
                                     curve_samples = sample_curve_from_control_points(data['control_points'])
-                                
-                                if curve_samples:
-                                    curve_samples = normalize_easing_curve(curve_samples)
-                                
                                 return curve_samples if curve_samples else sample_easing_preset('LINEAR')
                             else:
                                 return sample_easing_preset(preset)
                 
                 # Fallback: Try signature match (for old data or moved frames)
                 signature = calculate_frame_signature(layer, frame_number)
-                if signature:
-                    for stored_key, layer_data in all_easing.items():
-                        for uuid, data in layer_data.items():
-                            if data.get('signature') == signature:
-                                # Update stored data with new layer key
-                                data['frame'] = frame_number
-                                gp_data["gp_easing_data"] = json.dumps(all_easing)
+                if signature and layer_key in all_easing:
+                    for uuid, data in all_easing[layer_key].items():
+                        if data.get('signature') == signature:
+                            data['frame'] = frame_number
+                            gp_data["gp_easing_data"] = json.dumps(all_easing)
                                 
-                                preset = data['preset']
-                                # For CUSTOM, use stored samples
-                                if preset == 'CUSTOM':
-                                    curve_samples = None
-                                    if 'samples' in data:
-                                        curve_samples = data['samples']
-                                    elif 'control_points' in data:
-                                        # CRITICAL FIX: Sample from control_points WITHOUT modifying UI node
-                                        # This preserves UI display while getting correct cache data
-                                        curve_samples = sample_curve_from_control_points(data['control_points'])
-                                    
-                                    if curve_samples:
-                                        curve_samples = normalize_easing_curve(curve_samples)
-                                    
-                                    return curve_samples if curve_samples else sample_easing_preset('LINEAR')
-                                else:
-                                    return sample_easing_preset(preset)
+                            preset = data['preset']
+                            if preset == 'CUSTOM':
+                                curve_samples = data.get('samples')
+                                if not curve_samples and 'control_points' in data:
+                                    curve_samples = sample_curve_from_control_points(data['control_points'])
+                                return curve_samples if curve_samples else sample_easing_preset('LINEAR')
+                            else:
+                                return sample_easing_preset(preset)
         except (json.JSONDecodeError, KeyError, TypeError) as e:
             print(f"[GPAI] Warning: Failed to parse easing data: {e}")
     
@@ -499,9 +435,6 @@ def set_easing_curve_to_frame(gp_data, layer, layer_idx, frame_number, preset_na
     
     gp_data["gp_easing_data"] = json.dumps(all_easing)
     return True
-
-
-
 
 
 def get_selected_keyframes(context):

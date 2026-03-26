@@ -37,55 +37,35 @@ def get_signature(gp_obj):
 def append_nodegroup(nodegroup_name):
     import os
     filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Auto-Interpolate (c).blend")
-    
-    # Use link instead of append to avoid context issues
-    # Then make it local so it can be modified
     with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
         if nodegroup_name in data_from.node_groups:
             data_to.node_groups = [nodegroup_name]
 
 
 def check_and_update_nodegroup():
-    """
-    Check if the scene's node group matches the expected version.
-    If outdated, remove it from all GP objects and re-append fresh.
-    Returns True if an update was performed, False otherwise.
-    """
+    """Check and update outdated node group. Returns True if updated."""
     from .constants import NODEGROUP_NAME, NODEGROUP_VERSION, MODIFIER_NAME
     
     existing = bpy.data.node_groups.get(NODEGROUP_NAME)
-    
     if not existing:
-        # No node group exists yet, nothing to update
         return False
     
-    # Check version via description field
-    current_version = existing.description or ""
-    
-    if current_version == NODEGROUP_VERSION:
-        # Up to date
+    if (existing.description or "") == NODEGROUP_VERSION:
         return False
     
-    print(f"[GPAI] Node group outdated: '{current_version}' -> '{NODEGROUP_VERSION}'")
+    print(f"[GPAI] Node group outdated: '{existing.description}' -> '{NODEGROUP_VERSION}'")
     
-    # Track which GP objects had the modifier
     objects_with_modifier = []
-    
-    # Remove modifier from all GP objects that use this node group
     for obj in bpy.data.objects:
         if obj.type == 'GREASEPENCIL':
-            for mod in list(obj.modifiers):  # list() to avoid modifying while iterating
+            for mod in list(obj.modifiers):
                 if mod.type == 'NODES' and mod.node_group == existing:
                     objects_with_modifier.append(obj)
                     obj.modifiers.remove(mod)
     
-    # Remove the old node group
     bpy.data.node_groups.remove(existing)
-    
-    # Append fresh from .blend
     append_nodegroup(NODEGROUP_NAME)
     
-    # Re-apply modifier to objects that had it
     new_nodegroup = bpy.data.node_groups.get(NODEGROUP_NAME)
     if new_nodegroup:
         for obj in objects_with_modifier:
@@ -94,6 +74,26 @@ def check_and_update_nodegroup():
     
     print(f"[GPAI] Node group updated to {NODEGROUP_VERSION}")
     return True
+
+
+def ensure_nodegroup():
+    """Ensure node group exists. Call from operators only, not handlers."""
+    nodegroup_name = "Auto-Interpolate (c)"
+    if nodegroup_name not in bpy.data.node_groups:
+        append_nodegroup(nodegroup_name)
+    return bpy.data.node_groups.get(nodegroup_name)
+
+
+def ensure_modifier(gp_obj):
+    """Ensure modifier exists on object. Call from operators only."""
+    nodegroup = ensure_nodegroup()
+    if not nodegroup:
+        return None
+    modifier = gp_obj.modifiers.get("Auto-Interpolate (c)")
+    if modifier is None:
+        modifier = gp_obj.modifiers.new(name="Auto-Interpolate (c)", type='NODES')
+        modifier.node_group = nodegroup
+    return modifier
 
 
 def build(gp_obj):
@@ -115,26 +115,14 @@ def build(gp_obj):
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return
 
-    # Setup node group and modifier
     nodegroup = "Auto-Interpolate (c)"
-    if nodegroup not in bpy.data.node_groups:
-        current_mode = bpy.context.mode
-        try:
-            bpy.ops.object.mode_set(mode='OBJECT')
-            append_nodegroup(nodegroup)
-            if current_mode == 'EDIT_GREASE_PENCIL':
-                bpy.ops.object.mode_set(mode='EDIT')
-            else:
-                bpy.ops.object.mode_set(mode=current_mode)
-            gp_obj.select_set(True)
-        except Exception as e:
-            print(f"Failed to append node group: {e}")
-            return              
-        
     modifier = gp_obj.modifiers.get("Auto-Interpolate (c)")
     if modifier is None:
-        modifier = gp_obj.modifiers.new(name="Auto-Interpolate (c)", type='NODES')
-        modifier.node_group = bpy.data.node_groups.get(nodegroup)
+        try:
+            modifier = gp_obj.modifiers.new(name="Auto-Interpolate (c)", type='NODES')
+            modifier.node_group = bpy.data.node_groups.get(nodegroup)
+        except:
+            print("[GPAI]: Modifier not found during cache build")
 
     # Create attributes on all frames
     for layer in gp_obj.data.layers:
@@ -146,7 +134,6 @@ def build(gp_obj):
             if total_points == 0:
                 continue
             
-            # Create/initialize attributes
             attr_defs = [
                 ("position_i", 'FLOAT_VECTOR', 'POINT', "position", 'vector', 3),
                 ("opacity_i", 'FLOAT', 'POINT', "opacity", 'value', 1),
@@ -176,11 +163,9 @@ def build(gp_obj):
     cache['signature'] = get_signature(gp_obj)
     cache['layers'] = {}
 
-    # Collect keyframe data
     from ..operators.layer_filter import should_interpolate_layer
     
     for layer_idx, layer in enumerate(gp_obj.data.layers):
-        # Skip layers that are excluded from interpolation
         if not should_interpolate_layer(layer):
             continue
         
@@ -284,6 +269,5 @@ def build(gp_obj):
 
 
 def clear():
-    """Clear the cache"""
     global cache
     cache.clear()

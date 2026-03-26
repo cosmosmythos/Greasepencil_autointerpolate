@@ -1,7 +1,7 @@
 import bpy
 from bpy.types import Panel
 from ..utils.easing import get_easing_curve_node
-
+from ..operators.easing_direct import get_stored_easing_data
 
 def get_current_keyframe_at_playhead(context):
     if not context.active_object or context.active_object.type != 'GREASEPENCIL':
@@ -21,8 +21,6 @@ def get_current_keyframe_at_playhead(context):
     prev_key = max((f.frame_number for f in active_layer.frames if f.frame_number <= current_frame), default=None)
     
     return prev_key, layer_idx, active_layer
-
-
 
 
 EASING_LABELS = {
@@ -71,7 +69,6 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
         current_key, layer_idx, active_layer = get_current_keyframe_at_playhead(context)
         
         # Get current easing preset
-        from ..operators.easing_direct import get_stored_easing_data
         current_easing = 'LINEAR'
         if layer_idx is not None and current_key is not None:
             stored_preset, _ = get_stored_easing_data(gp_data, layer_idx, current_key)
@@ -115,8 +112,6 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
             col.template_curve_mapping(curve_node, "mapping", type='NONE')
         elif enabled:
             col.label(text="Refresh to show curve", icon='INFO')
-        
-
 
 
 def register():

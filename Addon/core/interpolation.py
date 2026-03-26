@@ -180,16 +180,13 @@ def process(context):
                 from ..utils import easing
                 easing_curve = easing.sample_easing_preset('LINEAR')
             
-            # Normalize easing curve to [0, 1] while preserving shape
-            from ..utils.easing import normalize_easing_curve
+
             easing_samples = np.array(easing_curve, dtype=np.float32)
             
             # Safety: replace NaN/Inf with safe defaults
             if np.any(np.isnan(easing_samples)) or np.any(np.isinf(easing_samples)):
                 easing_samples = np.nan_to_num(easing_samples, nan=0.0, posinf=1.0, neginf=0.0)
-            
-            # Normalize and clean — preserves acceleration feel, removes overshoot
-            easing_samples = np.array(normalize_easing_curve(easing_samples.tolist()), dtype=np.float32)            
+        
             # Get arc parameters (arc_amount, arc_direction, curvature_blend, use_spiral)
             arc_params = layer_cache['arc_data'].get(prev_frame, (0.0, 0.0, 0.0, True))
             arc_amount = arc_params[0]
@@ -277,35 +274,42 @@ def process(context):
                         if interpolated_radius is not None and interpolated_radius.size > 0:
                             all_interpolated_data['radius'].append(interpolated_radius)
                     
-                    # Process handles - use same resampling path as position so easing
-                    # is always applied, even when point counts differ between keyframes.
+                    # Process handles (simplified - no point count mismatch handling for now)
                     if (isinstance(prev_stroke, dict) and 'handle_left' in prev_stroke and 
                         isinstance(next_stroke, dict) and 'handle_left' in next_stroke):
                         
-                        interpolated_handle_left = interpolator.process_interpolation(
-                            current_frame,
-                            prev_frame, prev_stroke['handle_left'],
-                            next_frame, next_stroke['handle_left'],
-                            stroke_idx,
-                            "position",
-                            easing_samples
-                        )
-                        if interpolated_handle_left is not None and interpolated_handle_left.size > 0:
-                            all_interpolated_data['handle_left'].append(interpolated_handle_left)
+                        prev_points = len(prev_stroke['handle_left']) // 3
+                        next_points = len(next_stroke['handle_left']) // 3
+                        
+                        if prev_points == next_points:
+                            interpolated_handle_left = interpolator.process_interpolation(
+                                current_frame,
+                                prev_frame, prev_stroke['handle_left'],
+                                next_frame, next_stroke['handle_left'],
+                                stroke_idx,
+                                "position",
+                                easing_samples
+                            )
+                            if interpolated_handle_left is not None and interpolated_handle_left.size > 0:
+                                all_interpolated_data['handle_left'].append(interpolated_handle_left)
                     
                     if (isinstance(prev_stroke, dict) and 'handle_right' in prev_stroke and 
                         isinstance(next_stroke, dict) and 'handle_right' in next_stroke):
                         
-                        interpolated_handle_right = interpolator.process_interpolation(
-                            current_frame,
-                            prev_frame, prev_stroke['handle_right'],
-                            next_frame, next_stroke['handle_right'],
-                            stroke_idx,
-                            "position",
-                            easing_samples
-                        )
-                        if interpolated_handle_right is not None and interpolated_handle_right.size > 0:
-                            all_interpolated_data['handle_right'].append(interpolated_handle_right)
+                        prev_points = len(prev_stroke['handle_right']) // 3
+                        next_points = len(next_stroke['handle_right']) // 3
+                        
+                        if prev_points == next_points:
+                            interpolated_handle_right = interpolator.process_interpolation(
+                                current_frame,
+                                prev_frame, prev_stroke['handle_right'],
+                                next_frame, next_stroke['handle_right'],
+                                stroke_idx,
+                                "position",
+                                easing_samples
+                            )
+                            if interpolated_handle_right is not None and interpolated_handle_right.size > 0:
+                                all_interpolated_data['handle_right'].append(interpolated_handle_right)
             
             write_interpolated_data_to_frame(gp_obj, prev_frame, all_interpolated_data, layer_idx)
                         

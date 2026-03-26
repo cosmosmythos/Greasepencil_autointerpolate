@@ -5,6 +5,7 @@ Manages curve loading and auto-saving for the N-Panel UI
 
 import bpy
 from bpy.app.handlers import persistent
+from ..operators.easing_direct import get_stored_easing_data
 
 # Global state
 _last_curve_hash = None
@@ -178,7 +179,6 @@ def on_depsgraph_update(scene, depsgraph):
     if prev_key is None:
         return
     
-    from ..operators.easing_direct import get_stored_easing_data
     stored_preset, _ = get_stored_easing_data(gp_data, layer_idx, prev_key)
     
     if stored_preset == 'CUSTOM' and context.scene.gp_interpolation_enabled:
