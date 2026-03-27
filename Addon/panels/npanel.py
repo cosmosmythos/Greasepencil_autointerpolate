@@ -1,4 +1,4 @@
-import bpy
+﻿import bpy
 from bpy.types import Panel
 from ..utils.easing import get_easing_curve_node
 from ..operators.easing_direct import get_stored_easing_data
@@ -110,8 +110,7 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
         curve_node = get_easing_curve_node()
         if curve_node:
             col.template_curve_mapping(curve_node, "mapping", type='NONE')
-        elif enabled:
-            col.label(text="Refresh to show curve", icon='INFO')
+
 
 
 def register():

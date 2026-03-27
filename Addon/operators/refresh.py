@@ -1,4 +1,4 @@
-"""Refresh Cache Operator"""
+﻿"""Refresh Cache Operator"""
 
 import bpy
 from bpy.types import Operator
@@ -22,6 +22,8 @@ class GP_RefreshInterpolation(Operator):
         cache.ensure_modifier(gp_obj)
         cache.clear()
         cache.build(gp_obj)
+        for area in context.screen.areas:
+            area.tag_redraw()
         self.report({'INFO'}, "Interpolation cache refreshed")
         return {'FINISHED'}
 

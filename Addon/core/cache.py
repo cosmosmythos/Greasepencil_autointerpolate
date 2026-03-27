@@ -79,6 +79,7 @@ def check_and_update_nodegroup():
 def ensure_nodegroup():
     """Ensure node group exists. Call from operators only, not handlers."""
     nodegroup_name = "Auto-Interpolate (c)"
+    check_and_update_nodegroup()
     if nodegroup_name not in bpy.data.node_groups:
         append_nodegroup(nodegroup_name)
     return bpy.data.node_groups.get(nodegroup_name)
