@@ -262,8 +262,8 @@ def run_match_job_step():
 
         scene = bpy.context.scene
         if scene.gp_interpolation_enabled:
-            target_name = scene.get("gp_interpolation_target")
-            if target_name and target_name == gp_obj.name:
+            from ..core.registry import is_object_enabled
+            if is_object_enabled(scene, gp_obj.name):
                 from ..core import cache
                 cache.build(gp_obj)
 

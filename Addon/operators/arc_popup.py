@@ -110,7 +110,7 @@ class GP_OT_ShowArcPopup(Operator):
             )
         
         if context.scene.gp_interpolation_enabled:
-            cache.clear()
+            cache.clear(gp_obj.name)
             cache.build(gp_obj)
         
         self.report({'INFO'}, f"Arc settings applied to {len(selected_keys)} keyframe(s)")

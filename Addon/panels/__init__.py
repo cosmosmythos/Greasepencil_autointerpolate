@@ -1,5 +1,5 @@
 """
-UI Panels for GP Auto Interpolate
+UI
 """
 
 from . import dopesheet

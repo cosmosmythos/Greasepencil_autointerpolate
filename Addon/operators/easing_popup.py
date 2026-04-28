@@ -91,7 +91,7 @@ class GP_OT_ShowEasingPopup(Operator):
             easing.set_easing_curve_to_frame(gp_obj.data, layer, layer_idx, frame_num, self.easing_type)
         
         if context.scene.gp_interpolation_enabled:
-            cache.clear()
+            cache.clear(gp_obj.name)
             cache.build(gp_obj)
 
         return {'FINISHED'}

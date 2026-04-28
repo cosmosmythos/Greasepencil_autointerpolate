@@ -159,7 +159,7 @@ class GP_OT_ApplyEasingDirect(Operator):
                         easing.set_easing_curve_to_frame(gp_obj.data, lyr, lidx, fnum, 'CUSTOM')
                 
                 if context.scene.gp_interpolation_enabled:
-                    cache.clear()
+                    cache.clear(gp_obj.name)
                     cache.build(gp_obj)
             finally:
                 set_loading_flag(False)
@@ -172,7 +172,7 @@ class GP_OT_ApplyEasingDirect(Operator):
                     easing.set_easing_curve_to_frame(gp_obj.data, lyr, lidx, fnum, self.easing_type)
                 
                 if context.scene.gp_interpolation_enabled:
-                    cache.clear()
+                    cache.clear(gp_obj.name)
                     cache.build(gp_obj)
             finally:
                 set_loading_flag(False)

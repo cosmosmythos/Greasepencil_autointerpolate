@@ -147,7 +147,7 @@ class GP_OT_bake_single_frame(Operator):
                 return {'CANCELLED'}
             
             interpolator = cpp_module.get_interpolator()
-            gpa_cache = cache.cache
+            gpa_cache = cache.get_cache(gp_obj.name)
             
             baked_count = 0
             

@@ -89,7 +89,7 @@ class GP_OT_LayerFilterPopup(Operator):
         from ..core import cache
         gp_obj = context.active_object
         if gp_obj and context.scene.gp_interpolation_enabled:
-            cache.clear()
+            cache.clear(gp_obj.name)
             cache.build(gp_obj)
         return {'FINISHED'}
 

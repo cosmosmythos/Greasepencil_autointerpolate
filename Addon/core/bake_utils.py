@@ -1,6 +1,6 @@
 """
-Shared Bake Utilities for GP Auto Interpolate
-Contains common functions used by bake_range.py and bake_single.py
+Shared Bake Utilities
+Common functions used by bake_range.py and bake_single.py
 """
 
 import numpy as np
@@ -119,6 +119,6 @@ def apply_interpolation_to_frame(gp_obj, layer_idx, frame_num, interpolated_data
             # CRITICAL: Tell Blender to update the stroke geometry after modifying positions/handles
             drawing.tag_positions_changed()
             
-            break  # Only process the combined data once
+            break
     
     return True

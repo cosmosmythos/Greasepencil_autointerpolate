@@ -1,5 +1,5 @@
 """
-Operators for GP Auto Interpolate
+Operators
 """
 
 from . import toggle

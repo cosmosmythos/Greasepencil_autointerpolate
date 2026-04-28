@@ -179,7 +179,7 @@ class GP_OT_BakeSelectedRange(Operator):
             return {'CANCELLED'}
         
         interpolator = cpp_module.get_interpolator()
-        gpa_cache = cache.cache
+        gpa_cache = cache.get_cache(gp_obj.name)
         
         # Group frames by their start/end pair to minimize cache lookups
         frame_groups = {}

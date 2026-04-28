@@ -26,7 +26,7 @@ def load():
         interpolator_module = gp_autointerpolate
         print("[GPAI] Module loaded successfully")
     except ImportError as e:
-        print(f"[GPAI] ERROR: Failed to load C++ module from wheel: {e}")
+        print(f"[GPAI] ERROR: Failed to load module from wheel: {e}")
         import sys
         print(f"[GPAI] DEBUG: sys.path contains:")
         for p in sys.path:
@@ -38,5 +38,5 @@ def load():
 def get_interpolator():
     """Get an instance of the C++ Interpolator"""
     if interpolator_module is None:
-        raise RuntimeError("C++ module not loaded. Call cpp_module.load() first.")
+        raise RuntimeError("Module not loaded")
     return interpolator_module.Interpolator()

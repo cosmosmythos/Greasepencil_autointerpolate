@@ -1,10 +1,15 @@
 """
 Toggle Interpolation Operator for GP Auto Interpolate
+
+v2: Per-object toggle — adds/removes the active GP object from the
+    multi-object registry.  The global gp_interpolation_enabled bool
+    is derived: True if ANY object is in the registry.
 """
 
 import bpy
 from bpy.types import Operator
 from ..core import cache
+from ..core.registry import get_targets, set_targets, is_object_enabled
 from ..utils import visibility
 
 
@@ -21,14 +26,32 @@ class GP_ToggleInterpolation(Operator):
     def execute(self, context):
         scene = context.scene
         gp_obj = context.active_object
+        targets = get_targets(scene)
 
-        scene.gp_interpolation_enabled = not scene.gp_interpolation_enabled
-
-        if scene.gp_interpolation_enabled:
+        if gp_obj.name in targets:
+            # --- Disable for this object ---
+            targets.discard(gp_obj.name)
+            cache.clear(gp_obj.name)
+            visibility.force_modifier_off_for_object(gp_obj)
+        else:
+            # --- Enable for this object ---
+            targets.add(gp_obj.name)
             cache.ensure_modifier(gp_obj)
             cache.build(gp_obj)
-            scene["gp_interpolation_target"] = gp_obj.name
 
+        set_targets(scene, targets)
+
+        # Derive master switch
+        scene.gp_interpolation_enabled = len(targets) > 0
+
+        # Also maintain legacy key for backward compat
+        if targets:
+            scene["gp_interpolation_target"] = gp_obj.name
+        else:
+            scene["gp_interpolation_target"] = ""
+
+        if scene.gp_interpolation_enabled:
+            # Register handlers (idempotent — only if not already registered)
             if visibility.on_frame_change not in bpy.app.handlers.frame_change_post:
                 bpy.app.handlers.frame_change_post.append(visibility.on_frame_change)
             if visibility.on_undo_redo not in bpy.app.handlers.undo_post:
@@ -38,6 +61,7 @@ class GP_ToggleInterpolation(Operator):
 
             visibility.update_modifier_visibility()
         else:
+            # Unregister handlers when no objects are enabled
             try:
                 if visibility.on_frame_change in bpy.app.handlers.frame_change_post:
                     bpy.app.handlers.frame_change_post.remove(visibility.on_frame_change)
@@ -48,10 +72,9 @@ class GP_ToggleInterpolation(Operator):
             except (ValueError, AttributeError):
                 pass
 
-            visibility.force_modifier_off_for_authoring()
+            visibility.force_all_modifiers_off()
             visibility.clear()
             cache.clear()
-            scene["gp_interpolation_target"] = ""
 
         return {'FINISHED'}
 

@@ -18,6 +18,7 @@ def on_load_post(dummy):
     """Handler called after a .blend file is loaded."""
     from .core import cache
     from .core.constants import NODEGROUP_VERSION
+    from .core.registry import migrate_legacy_target, get_targets, set_targets
     from .utils import visibility
 
     if cache.check_and_update_nodegroup():
@@ -26,13 +27,24 @@ def on_load_post(dummy):
         bpy.context.window_manager.popup_menu(draw_message, title="GP Auto Interpolate", icon='INFO')
 
     scene = bpy.context.scene
-    if scene.gp_interpolation_enabled:
-        target_name = scene.get("gp_interpolation_target", "")
-        gp_obj = bpy.data.objects.get(target_name)
 
-        if gp_obj and gp_obj.type == 'GREASEPENCIL':
-            cache.ensure_modifier(gp_obj)
-            cache.build(gp_obj)
+    # Migrate old single-target format → new multi-target list
+    migrate_legacy_target(scene)
+
+    if scene.gp_interpolation_enabled:
+        targets = get_targets(scene)
+
+        # Validate targets still exist
+        valid_targets = set()
+        for target_name in targets:
+            gp_obj = bpy.data.objects.get(target_name)
+            if gp_obj and gp_obj.type == 'GREASEPENCIL':
+                cache.ensure_modifier(gp_obj)
+                cache.build(gp_obj)
+                valid_targets.add(target_name)
+
+        if valid_targets:
+            set_targets(scene, valid_targets)
 
             if visibility.on_frame_change not in bpy.app.handlers.frame_change_post:
                 bpy.app.handlers.frame_change_post.append(visibility.on_frame_change)
@@ -44,6 +56,7 @@ def on_load_post(dummy):
             visibility.update_modifier_visibility()
         else:
             scene.gp_interpolation_enabled = False
+            set_targets(scene, set())
             scene["gp_interpolation_target"] = ""
 
 
@@ -101,7 +114,7 @@ def unregister():
             pass
 
     try:
-        visibility._set_modifier_visible(False)
+        visibility.force_modifier_off_for_authoring()
     except (AttributeError, KeyError):
         pass
 

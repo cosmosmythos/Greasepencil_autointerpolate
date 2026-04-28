@@ -1,26 +1,36 @@
-﻿import bpy
+import bpy
 from bpy.types import Panel
 from ..utils.easing import get_easing_curve_node
 from ..operators.easing_direct import get_stored_easing_data
+from ..core.registry import is_object_enabled
+
 
 def get_current_keyframe_at_playhead(context):
+    """Return (frame_num, layer_idx, active_layer) for the previewed key.
+
+    Uses the same resolver as the handlers so the N-panel label and the
+    curve preview never disagree.
+    """
+    from ..core.npanel_handlers import resolve_preview_key
+
     if not context.active_object or context.active_object.type != 'GREASEPENCIL':
         return None, None, None
-    
+
     gp_data = context.active_object.data
-    if not gp_data.layers.active:
-        return None, None, None
-    
     active_layer = gp_data.layers.active
-    layer_idx = next((idx for idx, layer in enumerate(gp_data.layers) if layer == active_layer), None)
-    
-    if layer_idx is None:
+    if not active_layer:
         return None, None, None
-    
-    current_frame = context.scene.frame_current
-    prev_key = max((f.frame_number for f in active_layer.frames if f.frame_number <= current_frame), default=None)
-    
-    return prev_key, layer_idx, active_layer
+
+    layer_idx, frame_num = resolve_preview_key(context)
+    if layer_idx is None:
+        # Still return the layer so the panel can show "No Key" gracefully
+        layer_idx_only = next(
+            (i for i, l in enumerate(gp_data.layers) if l == active_layer),
+            None,
+        )
+        return None, layer_idx_only, active_layer
+
+    return frame_num, layer_idx, active_layer
 
 
 EASING_LABELS = {
@@ -34,7 +44,7 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
     bl_region_type = 'UI'
     bl_category = 'GPAI'
     bl_label = "GP Auto Interpolate"
-    bl_options = {'DEFAULT_CLOSED'}
+
     
     @classmethod
     def poll(cls, context):
@@ -49,14 +59,15 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
         gp_obj = context.active_object
         gp_data = gp_obj.data
         enabled = scene.gp_interpolation_enabled
+        obj_enabled = is_object_enabled(scene, gp_obj.name)
         
         # Main Controls
         box = layout.box()
         row = box.row(align=True)
-        icon = 'RECORD_ON' if enabled else 'RENDER_ANIMATION'
-        row.operator("gp.toggle_interpolation", text="", icon=icon, depress=enabled)
+        icon = 'RECORD_ON' if obj_enabled else 'RENDER_ANIMATION'
+        row.operator("gp.toggle_interpolation", text="", icon=icon, depress=obj_enabled)
         sub = row.row(align=True)
-        sub.enabled = enabled
+        sub.enabled = obj_enabled
         sub.operator("gp.refresh_interpolation", text="", icon='FILE_REFRESH')
         sub.operator("gp.layer_filter_popup", text="", icon='DECORATE_LOCKED')
         sub.operator("gp.show_arc_popup", text="", icon='FORCE_CURVE')
@@ -98,7 +109,7 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
         
         # Easing Buttons
         row3 = col.row(align=True)
-        row3.enabled = enabled and current_key is not None
+        row3.enabled = obj_enabled and current_key is not None
         row3.scale_y = 0.9
         for easing_id, icon in [('LINEAR', 'IPO_LINEAR'), ('EASE_IN', 'IPO_EASE_IN'), 
                                  ('EASE_OUT', 'IPO_EASE_OUT'), ('EASE_IN_OUT', 'IPO_EASE_IN_OUT'),
