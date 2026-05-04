@@ -8,6 +8,7 @@ v2: Multi-object support via process_object() / process_all().
 """
 
 import bpy
+from bisect import bisect_right
 import numpy as np
 from . import cpp_module
 from . import cache
@@ -22,24 +23,23 @@ def calculate_stroke_normal(positions):
     if point_count < 3:
         return np.array([0.0, 0.0, 1.0], dtype=np.float32)  # Default: Z-up
 
-    # Get first, middle, and last points
-    p0 = np.array([positions[0], positions[1], positions[2]])
     mid_idx = (point_count // 2) * 3
-    p_mid = np.array([positions[mid_idx], positions[mid_idx+1], positions[mid_idx+2]])
-    p_end = np.array([positions[-3], positions[-2], positions[-1]])
+    p0x, p0y, p0z = positions[0], positions[1], positions[2]
+    pmx, pmy, pmz = positions[mid_idx], positions[mid_idx + 1], positions[mid_idx + 2]
+    pex, pey, pez = positions[-3], positions[-2], positions[-1]
 
-    # Two vectors in the stroke plane
-    v1 = p_mid - p0
-    v2 = p_end - p0
+    v1x, v1y, v1z = pmx - p0x, pmy - p0y, pmz - p0z
+    v2x, v2y, v2z = pex - p0x, pey - p0y, pez - p0z
 
-    # Cross product = normal
-    normal = np.cross(v1, v2)
-    norm_len = np.linalg.norm(normal)
+    nx = v1y * v2z - v1z * v2y
+    ny = v1z * v2x - v1x * v2z
+    nz = v1x * v2y - v1y * v2x
+    norm_len = (nx * nx + ny * ny + nz * nz) ** 0.5
 
     if norm_len < 1e-6:
         return np.array([0.0, 0.0, 1.0], dtype=np.float32)  # Default: Z-up
 
-    return (normal / norm_len).astype(np.float32)
+    return np.array([nx / norm_len, ny / norm_len, nz / norm_len], dtype=np.float32)
 
 
 def write_interpolated_data_to_frame(gp_obj, target_frame_num,
@@ -50,6 +50,7 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
     Populates with original data first, then overwrites with interpolation.
     """
     try:
+        cache.begin_runtime_update(gp_obj.name)
         obj_cache = cache.get_cache(gp_obj.name)
         layer_cache = obj_cache.get('layers', {}).get(target_layer_idx)
         if not layer_cache or target_frame_num not in layer_cache['frame_lookup']:
@@ -129,6 +130,8 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
 
     except Exception as e:
         print(f"[GPAI] ERROR Writing Attributes: {e}")
+    finally:
+        cache.end_runtime_update(gp_obj.name)
 
 
 def process_object(gp_obj, current_frame):
@@ -143,6 +146,16 @@ def process_object(gp_obj, current_frame):
         if cache.is_dirty(obj_name):
             cache.build(gp_obj)
             # build() calls clear_dirty() internally
+        else:
+            # Safety net: keyframe time moves may not emit geometry updates, so
+            # depsgraph dirty flags can miss them. A cheap structure signature
+            # comparison restores the old “always rebuild on keyframe moves”
+            # behavior without hashing point data.
+            obj_cache = cache.get_cache(obj_name)
+            cached_sig = obj_cache.get('signature') if obj_cache else None
+            current_sig = cache.get_signature(gp_obj)
+            if cached_sig is not None and current_sig is not None and cached_sig != current_sig:
+                cache.build(gp_obj)
 
         obj_cache = cache.get_cache(obj_name)
         if not obj_cache or not obj_cache.get('layers'):
@@ -158,16 +171,11 @@ def process_object(gp_obj, current_frame):
                 continue
 
             sorted_frames = layer_cache['sorted_frames']
+            next_idx = bisect_right(sorted_frames, current_frame)
+            prev_idx = next_idx - 1
 
-            prev_frame = None
-            next_frame = None
-
-            for frame_num in sorted_frames:
-                if frame_num <= current_frame:
-                    prev_frame = frame_num
-                elif frame_num > current_frame and next_frame is None:
-                    next_frame = frame_num
-                    break
+            prev_frame = sorted_frames[prev_idx] if prev_idx >= 0 else None
+            next_frame = sorted_frames[next_idx] if next_idx < len(sorted_frames) else None
 
             if prev_frame is not None and next_frame is not None:
                 layers_to_process.append(
@@ -175,17 +183,22 @@ def process_object(gp_obj, current_frame):
 
         # Process each layer
         for layer_idx, layer_cache, prev_frame, next_frame in layers_to_process:
+            if current_frame == prev_frame or current_frame == next_frame:
+                continue
             keyframes = layer_cache['keyframes']
             prev_strokes = keyframes[prev_frame]
             next_strokes = keyframes[next_frame]
 
             # Get easing curve
-            easing_curve = layer_cache['easing_data'].get(prev_frame, None)
-            if easing_curve is None:
-                from ..utils import easing
-                easing_curve = easing.sample_easing_preset('LINEAR')
-
-            easing_samples = np.array(easing_curve, dtype=np.float32)
+            easing_samples = layer_cache.get('easing_samples', {}).get(prev_frame)
+            if easing_samples is None:
+                easing_curve = layer_cache['easing_data'].get(prev_frame, None)
+                if easing_curve is None:
+                    from ..utils import easing
+                    easing_curve = easing.sample_easing_preset('LINEAR')
+                easing_samples = np.array(easing_curve, dtype=np.float32)
+            else:
+                easing_samples = easing_samples.copy()
 
             # Safety: replace NaN/Inf with safe defaults
             if np.any(np.isnan(easing_samples)) or np.any(np.isinf(easing_samples)):
@@ -298,10 +311,15 @@ def process_all(context):
     Each object is wrapped in try/except so one corrupt object does NOT
     block the rest of the rig.
     """
+    process_scene(context.scene)
+
+
+def process_scene(scene):
+    """Process all registered GP objects for an explicit scene."""
     from .registry import validate_targets
 
-    targets = validate_targets(context.scene)
-    current_frame = context.scene.frame_current
+    targets = validate_targets(scene)
+    current_frame = scene.frame_current
 
     for obj_name in targets:
         gp_obj = bpy.data.objects.get(obj_name)

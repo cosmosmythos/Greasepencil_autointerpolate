@@ -7,14 +7,15 @@ Architecture (v2 — multi-object):
       obj_name: {
           'signature': tuple,
           'layers': {
-              layer_idx: {
-                  'keyframes': { frame_num: [stroke_dicts] },
-                  'sorted_frames': [int],
-                  'frame_lookup': { frame_num: frame_ref },
-                  'easing_data': { frame_num: [samples] },
-                  'arc_data': { frame_num: (amount, direction, blend, spiral) },
-              }
-          }
+                layer_idx: {
+                    'keyframes': { frame_num: [stroke_dicts] },
+                    'sorted_frames': [int],
+                    'frame_lookup': { frame_num: frame_ref },
+                    'easing_data': { frame_num: [samples] },
+                    'easing_samples': { frame_num: np.float32[64] },
+                    'arc_data': { frame_num: (amount, direction, blend, spiral) },
+                }
+            }
       }
   }
 
@@ -25,6 +26,7 @@ Dirty-flag invalidation:
 """
 
 import bpy
+import hashlib
 import numpy as np
 
 
@@ -38,6 +40,9 @@ cache_registry = {}
 # Dirty flags: object names that need a cache rebuild
 _dirty_objects = set()
 
+# Suppress depsgraph invalidation caused by our own writes/rebuilds.
+_runtime_update_depth = {}
+_runtime_update_grace = {}
 
 # ---------------------------------------------------------------------------
 # Dirty-flag API
@@ -60,6 +65,52 @@ def clear_dirty(obj_name):
     _dirty_objects.discard(obj_name)
 
 
+def begin_runtime_update(obj_name):
+    """Mark an object as being updated internally by the addon."""
+    _runtime_update_depth[obj_name] = _runtime_update_depth.get(obj_name, 0) + 1
+
+
+def end_runtime_update(obj_name, grace_updates=2):
+    """End an internal update and ignore the next few depsgraph updates."""
+    depth = _runtime_update_depth.get(obj_name, 0)
+    if depth <= 1:
+        _runtime_update_depth.pop(obj_name, None)
+        _runtime_update_grace[obj_name] = max(
+            _runtime_update_grace.get(obj_name, 0),
+            grace_updates,
+        )
+    else:
+        _runtime_update_depth[obj_name] = depth - 1
+
+
+def is_runtime_update_active(obj_name):
+    """Return True while the addon is actively mutating this object."""
+    return _runtime_update_depth.get(obj_name, 0) > 0
+
+
+def has_runtime_update_grace(obj_name):
+    """Return True when post-write depsgraph grace updates are still pending."""
+    return _runtime_update_grace.get(obj_name, 0) > 0
+
+
+def consume_runtime_update_grace(obj_name):
+    """Consume one pending post-write grace update, if any."""
+    grace = _runtime_update_grace.get(obj_name, 0)
+    if grace <= 0:
+        return False
+
+    if grace == 1:
+        _runtime_update_grace.pop(obj_name, None)
+    else:
+        _runtime_update_grace[obj_name] = grace - 1
+    return True
+
+
+def clear_runtime_update_grace(obj_name):
+    """Clear any pending post-write grace updates."""
+    _runtime_update_grace.pop(obj_name, None)
+
+
 # ---------------------------------------------------------------------------
 # Cache accessors
 # ---------------------------------------------------------------------------
@@ -75,9 +126,13 @@ def clear(obj_name=None):
     if obj_name:
         cache_registry.pop(obj_name, None)
         _dirty_objects.discard(obj_name)
+        _runtime_update_depth.pop(obj_name, None)
+        _runtime_update_grace.pop(obj_name, None)
     else:
         cache_registry.clear()
         _dirty_objects.clear()
+        _runtime_update_depth.clear()
+        _runtime_update_grace.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +162,51 @@ def get_signature(gp_obj):
 
     return (layer_count, tuple(frame_counts), tuple(stroke_counts),
             tuple(point_counts), tuple(keyframe_numbers))
+
+
+def _hash_attribute_array(attr, access_type, data_size, dtype=np.float32):
+    """Hash a Blender drawing attribute into a compact stable digest."""
+    if attr is None or len(attr.data) == 0 or data_size <= 0:
+        return None
+
+    buffer = np.empty(data_size, dtype=dtype)
+    attr.data.foreach_get(access_type, buffer)
+    return hashlib.blake2b(buffer.tobytes(), digest_size=16).hexdigest()
+
+
+def get_source_signature(gp_obj):
+    """Fingerprint only artist-authored interpolation inputs."""
+    if not gp_obj or gp_obj.type != 'GREASEPENCIL' or not gp_obj.data:
+        return None
+
+    from ..operators.layer_filter import should_interpolate_layer
+
+    layer_signatures = []
+    for layer in gp_obj.data.layers:
+        frame_signatures = []
+        for frame in layer.frames:
+            drawing = frame.drawing
+            strokes = drawing.strokes if drawing else []
+            point_counts = tuple(len(stroke.points) for stroke in strokes)
+            total_points = sum(point_counts)
+            attrs = drawing.attributes if drawing and hasattr(drawing, 'attributes') else {}
+
+            frame_signatures.append((
+                frame.frame_number,
+                point_counts,
+                _hash_attribute_array(attrs.get('position'), 'vector', total_points * 3),
+                _hash_attribute_array(attrs.get('opacity'), 'value', total_points),
+                _hash_attribute_array(attrs.get('radius'), 'value', total_points),
+                _hash_attribute_array(attrs.get('handle_left'), 'vector', total_points * 3),
+                _hash_attribute_array(attrs.get('handle_right'), 'vector', total_points * 3),
+            ))
+
+        layer_signatures.append((
+            should_interpolate_layer(layer),
+            tuple(frame_signatures),
+        ))
+
+    return tuple(layer_signatures)
 
 
 # ---------------------------------------------------------------------------
@@ -190,153 +290,152 @@ def build(gp_obj):
     global cache_registry
 
     obj_name = gp_obj.name
+    begin_runtime_update(obj_name)
+    try:
+        if not gp_obj or gp_obj.type != 'GREASEPENCIL':
+            cache_registry.pop(obj_name, None)
+            return
 
-    if not gp_obj or gp_obj.type != 'GREASEPENCIL':
-        cache_registry.pop(obj_name, None)
-        return
+        old_entry = cache_registry.get(obj_name, {})
+        old_easing_data = {}
+        old_arc_data = {}
+        if 'layers' in old_entry:
+            for layer_idx, layer_cache in old_entry['layers'].items():
+                if 'easing_data' in layer_cache:
+                    old_easing_data[layer_idx] = layer_cache['easing_data'].copy()
+                if 'arc_data' in layer_cache:
+                    old_arc_data[layer_idx] = layer_cache['arc_data'].copy()
 
-    # Preserve existing easing/arc data across rebuilds
-    old_entry = cache_registry.get(obj_name, {})
-    old_easing_data = {}
-    old_arc_data = {}
-    if 'layers' in old_entry:
-        for layer_idx, layer_cache in old_entry['layers'].items():
-            if 'easing_data' in layer_cache:
-                old_easing_data[layer_idx] = layer_cache['easing_data'].copy()
-            if 'arc_data' in layer_cache:
-                old_arc_data[layer_idx] = layer_cache['arc_data'].copy()
-
-    # Start fresh entry for this object
-    new_entry = {
-        'signature': get_signature(gp_obj),
-        'layers': {},
-    }
-
-    # Ensure modifier exists
-    nodegroup = "Auto-Interpolate (c)"
-    modifier = gp_obj.modifiers.get("Auto-Interpolate (c)")
-    if modifier is None:
-        try:
-            modifier = gp_obj.modifiers.new(name="Auto-Interpolate (c)", type='NODES')
-            modifier.node_group = bpy.data.node_groups.get(nodegroup)
-        except Exception:
-            print("[GPAI]: Modifier not found during cache build")
-
-    # Create / initialise _i attributes on all frames
-    _ensure_interpolation_attributes(gp_obj)
-
-    from ..operators.layer_filter import should_interpolate_layer
-
-    for layer_idx, layer in enumerate(gp_obj.data.layers):
-        if not should_interpolate_layer(layer):
-            continue
-
-        layer_cache = {
-            'keyframes': {},
-            'sorted_frames': [],
-            'frame_lookup': {},
-            'easing_data': {},
-            'arc_data': {},
+        new_entry = {
+            'signature': get_signature(gp_obj),
+            'source_signature': get_source_signature(gp_obj),
+            'layers': {},
         }
 
-        # Restore old easing/arc data
-        if layer_idx in old_easing_data:
-            layer_cache['easing_data'] = old_easing_data[layer_idx]
-        if layer_idx in old_arc_data:
-            layer_cache['arc_data'] = old_arc_data[layer_idx]
+        nodegroup = "Auto-Interpolate (c)"
+        modifier = gp_obj.modifiers.get("Auto-Interpolate (c)")
+        if modifier is None:
+            try:
+                modifier = gp_obj.modifiers.new(name="Auto-Interpolate (c)", type='NODES')
+                modifier.node_group = bpy.data.node_groups.get(nodegroup)
+            except Exception:
+                print("[GPAI]: Modifier not found during cache build")
 
-        keyframes_dict = {}
-        for frame in layer.frames:
-            layer_cache['frame_lookup'][frame.frame_number] = frame
+        _ensure_interpolation_attributes(gp_obj)
 
-            if (not hasattr(frame.drawing, 'attributes')
-                    or 'position' not in frame.drawing.attributes):
+        from ..operators.layer_filter import should_interpolate_layer
+
+        for layer_idx, layer in enumerate(gp_obj.data.layers):
+            if not should_interpolate_layer(layer):
                 continue
 
-            attrs = frame.drawing.attributes
-            pos_attr = attrs['position']
+            layer_cache = {
+                'keyframes': {},
+                'sorted_frames': [],
+                'frame_lookup': {},
+                'easing_data': {},
+                'easing_samples': {},
+                'arc_data': {},
+            }
 
-            if len(frame.drawing.strokes) == 0 or len(pos_attr.data) == 0:
-                continue
+            if layer_idx in old_easing_data:
+                layer_cache['easing_data'] = old_easing_data[layer_idx]
+            if layer_idx in old_arc_data:
+                layer_cache['arc_data'] = old_arc_data[layer_idx]
 
-            # Read all positions
-            all_positions = np.empty(len(pos_attr.data) * 3, dtype=np.float32)
-            pos_attr.data.foreach_get('vector', all_positions)
+            keyframes_dict = {}
+            for frame in layer.frames:
+                layer_cache['frame_lookup'][frame.frame_number] = frame
 
-            # Read optional attributes
-            attr_data = {}
-            for attr_name, attr_type, multiplier in [
-                ('opacity', 'value', 1),
-                ('radius', 'value', 1),
-                ('handle_left', 'vector', 3),
-                ('handle_right', 'vector', 3),
-            ]:
-                if attr_name in attrs and len(attrs[attr_name].data) > 0:
-                    buffer = np.empty(len(attrs[attr_name].data) * multiplier,
-                                      dtype=np.float32)
-                    attrs[attr_name].data.foreach_get(attr_type, buffer)
-                    attr_data[attr_name] = buffer
+                if (not hasattr(frame.drawing, 'attributes')
+                        or 'position' not in frame.drawing.attributes):
+                    continue
 
-            # Slice per-stroke — always emit normalised dicts (Phase 0C)
-            stroke_data = []
-            pos_idx = 0
-            attr_idx = 0
-            for stroke in frame.drawing.strokes:
-                point_count = len(stroke.points)
-                stroke_dict = {
-                    'position': all_positions[pos_idx:pos_idx + point_count * 3],
-                    'opacity': (attr_data['opacity'][attr_idx:attr_idx + point_count]
-                                if 'opacity' in attr_data
-                                else np.ones(point_count, dtype=np.float32)),
-                    'radius': (attr_data['radius'][attr_idx:attr_idx + point_count]
-                               if 'radius' in attr_data
-                               else np.zeros(point_count, dtype=np.float32)),
-                    'handle_left': (attr_data['handle_left'][pos_idx:pos_idx + point_count * 3]
-                                    if 'handle_left' in attr_data
-                                    else np.zeros(point_count * 3, dtype=np.float32)),
-                    'handle_right': (attr_data['handle_right'][pos_idx:pos_idx + point_count * 3]
-                                     if 'handle_right' in attr_data
-                                     else np.zeros(point_count * 3, dtype=np.float32)),
-                }
-                stroke_data.append(stroke_dict)
-                pos_idx += point_count * 3
-                attr_idx += point_count
+                attrs = frame.drawing.attributes
+                pos_attr = attrs['position']
 
-            keyframes_dict[frame.frame_number] = stroke_data
+                if len(frame.drawing.strokes) == 0 or len(pos_attr.data) == 0:
+                    continue
 
-        if keyframes_dict:
-            layer_cache['keyframes'] = keyframes_dict
-            layer_cache['sorted_frames'] = sorted(keyframes_dict.keys())
+                all_positions = np.empty(len(pos_attr.data) * 3, dtype=np.float32)
+                pos_attr.data.foreach_get('vector', all_positions)
 
-            # Load easing + arc data from GP custom properties
-            from ..utils import easing
-            from ..utils import arc_data
-            for frame_num in keyframes_dict.keys():
-                easing_curve = easing.get_easing_curve_from_frame(
-                    gp_obj.data, layer_idx, frame_num, layer)
-                layer_cache['easing_data'][frame_num] = easing_curve
+                attr_data = {}
+                for attr_name, attr_type, multiplier in [
+                    ('opacity', 'value', 1),
+                    ('radius', 'value', 1),
+                    ('handle_left', 'vector', 3),
+                    ('handle_right', 'vector', 3),
+                ]:
+                    if attr_name in attrs and len(attrs[attr_name].data) > 0:
+                        buffer = np.empty(len(attrs[attr_name].data) * multiplier,
+                                          dtype=np.float32)
+                        attrs[attr_name].data.foreach_get(attr_type, buffer)
+                        attr_data[attr_name] = buffer
 
-                arc_params = arc_data.get_arc_params_from_frame(
-                    gp_obj.data, layer_idx, frame_num, layer)
-                layer_cache['arc_data'][frame_num] = arc_params
+                stroke_data = []
+                pos_idx = 0
+                attr_idx = 0
+                for stroke in frame.drawing.strokes:
+                    point_count = len(stroke.points)
+                    stroke_dict = {
+                        'position': all_positions[pos_idx:pos_idx + point_count * 3],
+                        'opacity': (attr_data['opacity'][attr_idx:attr_idx + point_count]
+                                    if 'opacity' in attr_data
+                                    else np.ones(point_count, dtype=np.float32)),
+                        'radius': (attr_data['radius'][attr_idx:attr_idx + point_count]
+                                   if 'radius' in attr_data
+                                   else np.zeros(point_count, dtype=np.float32)),
+                        'handle_left': (attr_data['handle_left'][pos_idx:pos_idx + point_count * 3]
+                                        if 'handle_left' in attr_data
+                                        else np.zeros(point_count * 3, dtype=np.float32)),
+                        'handle_right': (attr_data['handle_right'][pos_idx:pos_idx + point_count * 3]
+                                         if 'handle_right' in attr_data
+                                         else np.zeros(point_count * 3, dtype=np.float32)),
+                    }
+                    stroke_data.append(stroke_dict)
+                    pos_idx += point_count * 3
+                    attr_idx += point_count
 
-            # Update "key" attribute (frame-number stamp per point)
-            for frame_num, frame in layer_cache['frame_lookup'].items():
-                if frame_num in keyframes_dict:
-                    f_attrs = frame.drawing.attributes
-                    if "key" in f_attrs:
-                        key_attr = f_attrs["key"]
-                        total_points = sum(len(s.points)
-                                           for s in frame.drawing.strokes)
-                        if total_points > 0 and len(key_attr.data) == total_points:
-                            key_values = np.full(total_points, frame_num,
-                                                 dtype=np.int32)
-                            key_attr.data.foreach_set('value', key_values)
+                keyframes_dict[frame.frame_number] = stroke_data
 
-        new_entry['layers'][layer_idx] = layer_cache
+            if keyframes_dict:
+                layer_cache['keyframes'] = keyframes_dict
+                layer_cache['sorted_frames'] = sorted(keyframes_dict.keys())
 
-    cache_registry[obj_name] = new_entry
-    clear_dirty(obj_name)
+                from ..utils import easing
+                from ..utils import arc_data
+                for frame_num in keyframes_dict.keys():
+                    easing_curve = easing.get_easing_curve_from_frame(
+                        gp_obj.data, layer_idx, frame_num, layer)
+                    layer_cache['easing_data'][frame_num] = easing_curve
+                    layer_cache['easing_samples'][frame_num] = np.array(
+                        easing_curve, dtype=np.float32)
+
+                    arc_params = arc_data.get_arc_params_from_frame(
+                        gp_obj.data, layer_idx, frame_num, layer)
+                    layer_cache['arc_data'][frame_num] = arc_params
+
+                for frame_num, frame in layer_cache['frame_lookup'].items():
+                    if frame_num in keyframes_dict:
+                        f_attrs = frame.drawing.attributes
+                        if "key" in f_attrs:
+                            key_attr = f_attrs["key"]
+                            total_points = sum(len(s.points)
+                                               for s in frame.drawing.strokes)
+                            if total_points > 0 and len(key_attr.data) == total_points:
+                                key_values = np.full(total_points, frame_num, dtype=np.int32)
+                                existing_key_values = np.empty(total_points, dtype=np.int32)
+                                key_attr.data.foreach_get('value', existing_key_values)
+                                if not np.array_equal(existing_key_values, key_values):
+                                    key_attr.data.foreach_set('value', key_values)
+
+            new_entry['layers'][layer_idx] = layer_cache
+
+        cache_registry[obj_name] = new_entry
+        clear_dirty(obj_name)
+    finally:
+        end_runtime_update(obj_name)
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Bake System for GP Auto Interpolate
 Creates real keyframes from interpolation data - ROBUST VERSION
 """
@@ -46,11 +46,11 @@ def deselect_all_frames(gp_obj):
             frame.select = False
 
 
-def set_frame_to_jitter(layer, frame_num):
-    """Set a frame's keyframe type to JITTER"""
+def set_frame_to_BREAKDOWN(layer, frame_num):
+    """Set a frame's keyframe type to BREAKDOWN"""
     for frame in layer.frames:
         if frame.frame_number == frame_num:
-            frame.keyframe_type = 'JITTER'
+            frame.keyframe_type = 'BREAKDOWN'
             return True
     return False
 
@@ -132,7 +132,7 @@ class GP_OT_BakeSelectedRange(Operator):
         print("[BAKE] Creating frames in batch...")
         created_frames = []
         
-        # CRITICAL FIX: Temporarily disable interpolation to prevent cache rebuilds
+        # Temporarily disable interpolation to prevent cache rebuilds
         interpolation_was_enabled = context.scene.gp_interpolation_enabled
         if interpolation_was_enabled:
             context.scene.gp_interpolation_enabled = False
@@ -169,7 +169,7 @@ class GP_OT_BakeSelectedRange(Operator):
             self.report({'WARNING'}, "Failed to create frames")
             return {'CANCELLED'}
         
-        # STEP 4: Batch interpolation processing (major optimization)
+        # STEP 4: Batch interpolation processing
         from ..core import cpp_module, cache
         from ..utils import easing
         import numpy as np
@@ -350,10 +350,10 @@ class GP_OT_BakeSelectedRange(Operator):
                 if apply_interpolation_to_frame(gp_obj, layer_idx, frame_num, combined_data):
                     interpolated_count += 1
         
-        # Set frames to JITTER type
+        # Set frames to BREAKDOWN type
         for layer_idx, frame_num, _, _ in created_frames:
             layer = gp_obj.data.layers[layer_idx]
-            set_frame_to_jitter(layer, frame_num)
+            set_frame_to_BREAKDOWN(layer, frame_num)
         
         # Restore original active layer
         if original_active_layer:

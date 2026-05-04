@@ -16,6 +16,34 @@ _last_preview_key = None      # (layer_idx, frame_num) or None
 _last_playhead_frame = None
 
 
+def _gp_id_types():
+    """RNA classes for Grease Pencil datablocks (4.2 vs 4.3+ names differ)."""
+    types = []
+    for name in ("GreasePencil", "GreasePencilv3"):
+        t = getattr(bpy.types, name, None)
+        if t is not None:
+            types.append(t)
+    return tuple(types)
+
+
+def _targets_by_gp_data(target_names):
+    """Map gp_obj.data pointer -> list of registered target names.
+
+    Cheap O(#enabled targets): avoids bpy.data.objects.get inside the depsgraph
+    update loop (which can be very hot in large scenes).
+    """
+    by_data = {}
+    objects = bpy.data.objects
+    for name in target_names:
+        ob = objects.get(name)
+        if ob and ob.type == "GREASEPENCIL":
+            gp_data = ob.data
+            if gp_data is not None:
+                lst = by_data.setdefault(gp_data, [])
+                lst.append(name)
+    return by_data
+
+
 # ---------------------------------------------------------------------------
 # Single source of truth: which key should the N-panel preview?
 # ---------------------------------------------------------------------------
@@ -177,16 +205,66 @@ def on_depsgraph_update(scene, depsgraph):
     except Exception:
         return
 
+    screen = getattr(context, "screen", None)
+    is_playing = bool(screen and screen.is_animation_playing)
+
+    try:
+        from ..utils import visibility
+        is_rendering = visibility._is_rendering()
+    except Exception:
+        is_rendering = False
+
     # --- PHASE 0: Dirty flags for cache invalidation ---
     if scene.gp_interpolation_enabled:
         from ..core import cache
         from ..core.registry import get_targets
         targets = get_targets(scene)
 
-        for update in depsgraph.updates:
-            if hasattr(update.id, 'name') and update.id.name in targets:
-                if update.is_updated_geometry:
-                    cache.mark_dirty(update.id.name)
+        if not is_playing and not is_rendering:
+            grease_pencil_types = _gp_id_types()
+            if grease_pencil_types and targets:
+                targets_by_gp = _targets_by_gp_data(targets)
+                objects = bpy.data.objects
+
+                for update in depsgraph.updates:
+                    update_id = getattr(update, "id", None)
+                    is_geom_update = bool(getattr(update, "is_updated_geometry", False))
+                    if not isinstance(update_id, grease_pencil_types):
+                        continue
+
+                    matched_names = targets_by_gp.get(update_id)
+                    if not matched_names:
+                        continue
+
+                    for target_name in matched_names:
+                        gp_obj = objects.get(target_name)
+                        if not gp_obj:
+                            continue
+
+                        if cache.is_dirty(target_name):
+                            continue
+
+                        if cache.is_runtime_update_active(target_name):
+                            continue
+
+                        cached_entry = cache.get_cache(target_name)
+                        if is_geom_update:
+                            current_sig = cache.get_source_signature(gp_obj)
+                            cached_sig = cached_entry.get('source_signature')
+                        else:
+                            current_sig = cache.get_signature(gp_obj)
+                            cached_sig = cached_entry.get('signature')
+
+                        if (
+                            cached_sig is not None
+                            and current_sig is not None
+                            and cached_sig == current_sig
+                        ):
+                            cache.consume_runtime_update_grace(target_name)
+                            continue
+
+                        cache.clear_runtime_update_grace(target_name)
+                        cache.mark_dirty(target_name)
 
     # The rest is easing-only and concerns the active object only.
     if not context.active_object or context.active_object.type != 'GREASEPENCIL':

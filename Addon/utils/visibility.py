@@ -10,6 +10,7 @@ import bpy
 import time
 
 from ..core.constants import MODIFIER_NAME
+from ..core import cache
 
 SCRUB_DETECTION_THRESHOLD = 0.1
 SCRUB_TIMEOUT_DELAY = 0.05
@@ -18,7 +19,8 @@ visibility_state = {
     'last_frame': None,
     'last_frame_time': None,
     'is_scrubbing': False,
-    'scrub_timer': None
+    'scrub_timer': None,
+    'is_rendering': False,
 }
 
 
@@ -26,17 +28,34 @@ def ensure_visibility_state():
     global visibility_state
     if not isinstance(visibility_state, dict):
         visibility_state = {}
-    for key in ('last_frame', 'last_frame_time', 'is_scrubbing', 'scrub_timer'):
+    for key in ('last_frame', 'last_frame_time', 'is_scrubbing', 'scrub_timer', 'is_rendering'):
         if key not in visibility_state:
-            visibility_state[key] = False if key == 'is_scrubbing' else None
+            visibility_state[key] = False if key in {'is_scrubbing', 'is_rendering'} else None
 
 
-def detect_scrubbing():
+def _get_screen():
+    try:
+        return bpy.context.screen
+    except Exception:
+        return None
+
+
+def _is_animation_playing():
+    screen = _get_screen()
+    return bool(screen and screen.is_animation_playing)
+
+
+def _is_rendering():
+    ensure_visibility_state()
+    return visibility_state['is_rendering']
+
+
+def detect_scrubbing(scene):
     global visibility_state
     ensure_visibility_state()
 
     current_time = time.time()
-    current_frame = bpy.context.scene.frame_current
+    current_frame = scene.frame_current
 
     if visibility_state['last_frame_time'] is None:
         visibility_state['last_frame_time'] = current_time
@@ -63,7 +82,10 @@ def playback_watchdog():
     if not scene.gp_interpolation_enabled:
         return None
 
-    if not bpy.context.screen.is_animation_playing:
+    if _is_rendering():
+        return 0.05
+
+    if not _is_animation_playing():
         _set_all_modifiers_visible(False)
         return None
 
@@ -93,6 +115,8 @@ def _set_all_modifiers_visible(visible: bool):
     for _obj, mod in _get_target_objects():
         if mod.show_viewport != visible:
             mod.show_viewport = visible
+        if hasattr(mod, "show_render") and mod.show_render != visible:
+            mod.show_render = visible
 
 
 def _set_modifier_visible(visible: bool):
@@ -102,10 +126,11 @@ def _set_modifier_visible(visible: bool):
 
 def update_modifier_visibility():
     """Enforce visibility rule. Used as initial sync after toggling ON."""
-    is_playing = bpy.context.screen.is_animation_playing
-    is_scrubbing = detect_scrubbing()
+    scene = bpy.context.scene
+    is_playing = _is_animation_playing()
+    is_scrubbing = detect_scrubbing(scene)
 
-    if is_playing or is_scrubbing:
+    if _is_rendering() or is_playing or is_scrubbing:
         _set_all_modifiers_visible(True)
     else:
         force_all_modifiers_off()
@@ -123,7 +148,7 @@ def stop_scrub_timer():
 
 def scrub_timeout():
     """Dead-man timer: hide modifier when scrubbing ends."""
-    if not bpy.context.screen.is_animation_playing:
+    if not _is_animation_playing() and not _is_rendering():
         _set_all_modifiers_visible(False)
     return None
 
@@ -141,10 +166,12 @@ def on_frame_change(scene, depsgraph=None):
         force_all_modifiers_off()
         return
 
-    is_playing = bpy.context.screen.is_animation_playing
-    is_scrubbing = detect_scrubbing()
+    is_playing = _is_animation_playing()
+    is_rendering = _is_rendering()
+    is_scrubbing = False if is_rendering else detect_scrubbing(scene)
+    mode = "render" if is_rendering else "play" if is_playing else "scrub" if is_scrubbing else "idle"
 
-    if is_playing or is_scrubbing:
+    if is_rendering or is_playing or is_scrubbing:
         _set_all_modifiers_visible(True)
 
         if bpy.app.timers.is_registered(scrub_timeout):
@@ -157,7 +184,7 @@ def on_frame_change(scene, depsgraph=None):
 
         # Process ALL registered objects
         from ..core import interpolation
-        interpolation.process_all(bpy.context)
+        interpolation.process_scene(scene)
     else:
         force_all_modifiers_off()
 
@@ -175,6 +202,7 @@ def force_all_modifiers_off():
     ensure_visibility_state()
     stop_scrub_timer()
     visibility_state['is_scrubbing'] = False
+    visibility_state['is_rendering'] = False
     _set_all_modifiers_visible(False)
 
 
@@ -193,8 +221,22 @@ def on_undo_redo(scene, depsgraph=None):
         from ..core import cache
         cache.clear()
 
-    if not scene.gp_interpolation_enabled or not bpy.context.screen.is_animation_playing:
+    if not scene.gp_interpolation_enabled or not _is_animation_playing():
         _set_all_modifiers_visible(False)
+
+
+def on_render_pre(scene, depsgraph=None):
+    """Keep interpolation active during F12 render animation."""
+    ensure_visibility_state()
+    visibility_state['is_rendering'] = True
+    _set_all_modifiers_visible(True)
+
+
+def on_render_post(scene, depsgraph=None):
+    """Restore normal visibility behavior after render/cancel."""
+    ensure_visibility_state()
+    visibility_state['is_rendering'] = False
+    update_modifier_visibility()
 
 
 def clear():
@@ -204,5 +246,6 @@ def clear():
         'last_frame': None,
         'last_frame_time': None,
         'is_scrubbing': False,
-        'scrub_timer': None
+        'scrub_timer': None,
+        'is_rendering': False,
     }

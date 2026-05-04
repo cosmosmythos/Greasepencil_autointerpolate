@@ -52,6 +52,12 @@ def on_load_post(dummy):
                 bpy.app.handlers.undo_post.append(visibility.on_undo_redo)
             if visibility.on_undo_redo not in bpy.app.handlers.redo_post:
                 bpy.app.handlers.redo_post.append(visibility.on_undo_redo)
+            if visibility.on_render_pre not in bpy.app.handlers.render_pre:
+                bpy.app.handlers.render_pre.append(visibility.on_render_pre)
+            if visibility.on_render_post not in bpy.app.handlers.render_post:
+                bpy.app.handlers.render_post.append(visibility.on_render_post)
+            if visibility.on_render_post not in bpy.app.handlers.render_cancel:
+                bpy.app.handlers.render_cancel.append(visibility.on_render_post)
 
             visibility.update_modifier_visibility()
         else:
@@ -106,6 +112,9 @@ def unregister():
         (bpy.app.handlers.frame_change_post, visibility.on_frame_change),
         (bpy.app.handlers.undo_post, visibility.on_undo_redo),
         (bpy.app.handlers.redo_post, visibility.on_undo_redo),
+        (bpy.app.handlers.render_pre, visibility.on_render_pre),
+        (bpy.app.handlers.render_post, visibility.on_render_post),
+        (bpy.app.handlers.render_cancel, visibility.on_render_post),
     ]:
         try:
             if func in handler_list:

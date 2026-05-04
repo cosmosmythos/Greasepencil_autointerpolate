@@ -5,11 +5,12 @@ Loads the wheel-provided C++ module
 
 # Global reference to C++ module
 interpolator_module = None
+_interpolator_instance = None
 
 
 def load():
     """Load the C++ interpolation module from wheel"""
-    global interpolator_module
+    global interpolator_module, _interpolator_instance
     
     if interpolator_module is not None:
         return  # Already loaded
@@ -24,19 +25,18 @@ def load():
 
         import gp_autointerpolate  # Direct import from wheel
         interpolator_module = gp_autointerpolate
-        print("[GPAI] Module loaded successfully")
+        _interpolator_instance = None
     except ImportError as e:
         print(f"[GPAI] ERROR: Failed to load module from wheel: {e}")
-        import sys
-        print(f"[GPAI] DEBUG: sys.path contains:")
-        for p in sys.path:
-            if 'gp_auto' in p.lower() or 'extension' in p.lower():
-                print(f"  {p}")
         interpolator_module = None
+        _interpolator_instance = None
 
 
 def get_interpolator():
     """Get an instance of the C++ Interpolator"""
+    global _interpolator_instance
     if interpolator_module is None:
         raise RuntimeError("Module not loaded")
-    return interpolator_module.Interpolator()
+    if _interpolator_instance is None:
+        _interpolator_instance = interpolator_module.Interpolator()
+    return _interpolator_instance

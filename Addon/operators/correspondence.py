@@ -160,13 +160,7 @@ def run_correspondence_match(gp_obj, layer_idx, frame1, frame2, config):
         
         # Map collected indices back to original stroke indices
         result_matches = [(indices1[i], indices2[j]) for i, j in raw_matches]
-        
-        # Log final match result
-        if seeds:
-            print(f"[GPCORR] Matched {len(result_matches)} pairs (manual seeds: {len(seeds)}, auto: {len(result_matches) - len(seeds)})")
-        else:
-            print(f"[GPCORR] Matched {len(result_matches)} pairs")
-        
+
         # Determine which frame is earlier (reference) and which is later (to be reordered)
         if frame1 < frame2:
             ref_frame, reorder_frame = frame1, frame2

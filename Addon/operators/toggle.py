@@ -58,6 +58,12 @@ class GP_ToggleInterpolation(Operator):
                 bpy.app.handlers.undo_post.append(visibility.on_undo_redo)
             if visibility.on_undo_redo not in bpy.app.handlers.redo_post:
                 bpy.app.handlers.redo_post.append(visibility.on_undo_redo)
+            if visibility.on_render_pre not in bpy.app.handlers.render_pre:
+                bpy.app.handlers.render_pre.append(visibility.on_render_pre)
+            if visibility.on_render_post not in bpy.app.handlers.render_post:
+                bpy.app.handlers.render_post.append(visibility.on_render_post)
+            if visibility.on_render_post not in bpy.app.handlers.render_cancel:
+                bpy.app.handlers.render_cancel.append(visibility.on_render_post)
 
             visibility.update_modifier_visibility()
         else:
@@ -69,6 +75,12 @@ class GP_ToggleInterpolation(Operator):
                     bpy.app.handlers.undo_post.remove(visibility.on_undo_redo)
                 if visibility.on_undo_redo in bpy.app.handlers.redo_post:
                     bpy.app.handlers.redo_post.remove(visibility.on_undo_redo)
+                if visibility.on_render_pre in bpy.app.handlers.render_pre:
+                    bpy.app.handlers.render_pre.remove(visibility.on_render_pre)
+                if visibility.on_render_post in bpy.app.handlers.render_post:
+                    bpy.app.handlers.render_post.remove(visibility.on_render_post)
+                if visibility.on_render_post in bpy.app.handlers.render_cancel:
+                    bpy.app.handlers.render_cancel.remove(visibility.on_render_post)
             except (ValueError, AttributeError):
                 pass
 

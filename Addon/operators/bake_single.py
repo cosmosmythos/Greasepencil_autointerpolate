@@ -1,4 +1,4 @@
-"""
+﻿"""
 Bake Single Frame Operator for GP Auto Interpolate (Optimized)
 Uses the same high-performance system as bake_range for consistency and speed.
 """
@@ -277,10 +277,10 @@ class GP_OT_bake_single_frame(Operator):
                 apply_result = apply_interpolation_to_frame(gp_obj, layer_idx, current_frame, combined_data)
                 
                 if apply_result:
-                    # Set frame to JITTER style
+                    # Set frame to BREAKDOWN style
                     for frame in layer.frames:
                         if frame.frame_number == current_frame:
-                            frame.keyframe_type = 'JITTER'
+                            frame.keyframe_type = 'BREAKDOWN'
                             break
                     baked_count += 1
             
