@@ -165,8 +165,9 @@ jobs:
       # BUILD WHEELS
       # ============================================================================
       - name: Build wheel - Interpolate
-        run: |
-          ENABLE_ABI3=${{ matrix.enable_abi3 }} python -m build --wheel
+        env:
+          ENABLE_ABI3: ${{ matrix.enable_abi3 }}
+        run: python -m build --wheel
 
       # Note: gp_linevector is built by build_polyvector.yml
       # (requires OpenCV, Eigen3, Boost - separate workflow)
@@ -265,6 +266,18 @@ jobs:
           echo "OPENCV_ROOT=$PWD/opencv" >> $GITHUB_ENV
           echo "OpenCV extracted to $PWD/opencv"
           ls -la opencv/build/ | head -5
+
+          # Patch OpenCVConfig.cmake: pre-built binaries are vc16 (VS2022) but
+          # runner has VS2026 (MSVC 14.51). MSVC is forward-compatible, so bypass
+          # the version check that rejects unknown MSVC versions.
+          python -c "
+          import pathlib, re
+          p = pathlib.Path('opencv/build/OpenCVConfig.cmake')
+          t = p.read_text()
+          t = re.sub(r'set\(OpenCV_FOUND\s+FALSE\)\s+return\(\)', 'set(OpenCV_FOUND TRUE) /* patched */', t)
+          p.write_text(t)
+          print('Patched OpenCVConfig.cmake to skip MSVC version check')
+          "
 
           # Eigen: header-only, download from GitLab
           curl -fsSL -o eigen.tar.gz https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
