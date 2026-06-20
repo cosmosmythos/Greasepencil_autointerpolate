@@ -4,7 +4,7 @@ This wraps the CMake-built C++ extension into a proper Python wheel
 
 Environment variables:
   ENABLE_ABI3=1  — build abi3 wheel (cp312-abi3, covers Python 3.12+)
-  unset           — build standard wheel (cp311-cp311, Python 3.11 only)
+  unset           — build non-abi3 wheel (cp311-cp311, Python 3.11 only)
 """
 
 from setuptools import setup, Extension
@@ -113,6 +113,6 @@ if enable_abi3:
     print("Building abi3 wheel (cp312-abi3, covers Python 3.12+)")
 else:
     setup_kwargs["python_requires"] = ">=3.11"
-    print("Building standard wheel (Python 3.11+)")
+    print("Building non-abi3 wheel (Python 3.11+)")
 
 setup(**setup_kwargs)

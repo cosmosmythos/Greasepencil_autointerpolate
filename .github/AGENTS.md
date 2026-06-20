@@ -12,14 +12,15 @@ GitHub Actions workflows for building, testing, and releasing Blender extension 
 
 ## Local Contracts
 
-- **Two wheel types per platform.** `build_interpolate` produces `cp311` (standard, Python 3.11) and `cp312-abi3` (stable ABI, Python 3.12+). The abi3 wheel covers all future Python versions.
+- **Two wheel types per platform.** `build_interpolate` produces `cp311` (non-abi3, Python 3.11) and `cp312-abi3` (stable ABI, Python 3.12+). The abi3 wheel covers all future Python versions.
 - **abi3 build uses Python 3.12** (the minimum floor). CMake flag: `-DENABLE_ABI3=ON`. setup.py env var: `ENABLE_ABI3=1`.
 - **Wheel assembly is decoupled from C++.** CMake builds the `.pyd`/`.so` first, then `setup.py`'s `CMakeBuild` copies it into the wheel.
-- **Package job** collects all wheels by platform suffix (`*win_amd64.whl`, `*universal2.whl`, `*manylinux*.whl`) and bundles into per-platform zips.
+- **Package job** collects all wheels by platform suffix (`*win_amd64.whl`, `*universal2.whl`, `*manylinux*.whl`) and bundles into per-platform zips. It runs on push to main/master, tag push (`v*`), manual workflow dispatch, and pull requests.
+- **Release creation** happens automatically for main/master pushes, manual dispatches, and tag pushes, but is skipped on pull requests (where zips are only kept as workflow run artifacts). Tag pushes use the Git tag directly for the release, while branch pushes and manual runs generate a tag using the current version and build number.
 
 ## Work Guidance
 
-- Standard builds pin `python-version: '3.11.9'`. abi3 builds use `python-version: '3.12'` (latest patch, forward-compatible).
+- cp311 builds pin `python-version: '3.11.9'`. abi3 builds use `python-version: '3.12'` (latest patch, forward-compatible).
 - Do not add per-version wheels for Python 3.12+ — the abi3 wheel covers them.
 - The `build_py314_experimental.yml` was deleted — abi3 makes it obsolete.
 - **All builds use Ninja** (`CMAKE_GENERATOR: Ninja` env var + `pip install ninja`). No Visual Studio generator — `windows-latest` runners don't have it pre-installed.
@@ -32,4 +33,4 @@ GitHub Actions workflows for building, testing, and releasing Blender extension 
 ## Verification
 
 - Each build job uploads a wheel artifact. The package job bundles them into release zips.
-- `dumpbin /dependents <pyd>` must show `python3.dll` for abi3 wheels, `python3XX.dll` for standard wheels.
+- `dumpbin /dependents <pyd>` must show `python3.dll` for abi3 wheels, `python3XX.dll` for non-abi3 wheels.
