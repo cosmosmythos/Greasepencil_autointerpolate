@@ -118,7 +118,7 @@ jobs:
           python -c "import sys; print(f'Using Python: {sys.version}')"
           EIGEN_FLAGS=""
           if [ -n "$EIGEN3_ROOT" ]; then
-            EIGEN_FLAGS="-DCMAKE_PREFIX_PATH=$EIGEN3_ROOT"
+            EIGEN_FLAGS="-DCMAKE_MODULE_PATH=$EIGEN3_ROOT/cmake"
           fi
           cmake .. -DCMAKE_BUILD_TYPE=Release ${{ matrix.cmake_abi3 }} $EIGEN_FLAGS
         shell: bash
@@ -294,9 +294,9 @@ jobs:
           if [ "$RUNNER_OS" == "Windows" ]; then
             # OpenCV: pre-built binary layout — cmake config is at opencv/build/
             OPENCV_DIR="${OPENCV_ROOT}/build"
-            # Eigen3Config.cmake is at eigen-3.4.0/cmake/ — use Eigen3_DIR
+            # Eigen3: use FindEigen3.cmake from the extracted source via CMAKE_MODULE_PATH
             # Boost: header-only, CMake FindBoost searches CMAKE_PREFIX_PATH for boost/ headers
-            EXTRA_FLAGS="-DOpenCV_DIR=${OPENCV_DIR} -DEigen3_DIR=${EIGEN3_ROOT}/cmake -DCMAKE_PREFIX_PATH=${BOOST_ROOT}"
+            EXTRA_FLAGS="-DOpenCV_DIR=${OPENCV_DIR} -DCMAKE_MODULE_PATH=${EIGEN3_ROOT}/cmake -DCMAKE_PREFIX_PATH=${BOOST_ROOT}"
             
           elif [ "$RUNNER_OS" == "macOS" ]; then
             # macOS: Homebrew packages need explicit paths
