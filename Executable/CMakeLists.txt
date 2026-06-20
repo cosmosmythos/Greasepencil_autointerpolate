@@ -119,6 +119,19 @@ else()
     nanobind_add_module(gp_autointerpolate ${FTPSC_SOURCES})
 endif()
 
+# macOS: force nanobind static library to build as universal binary too.
+# Without this, the module (x86_64+arm64) can't link against the nanobind lib (arm64 only).
+if(APPLE)
+    foreach(_nb_target IN ITEMS nanobind-static nanobind-static-abi3)
+        if(TARGET ${_nb_target})
+            set_target_properties(${_nb_target} PROPERTIES
+                OSX_ARCHITECTURES "x86_64;arm64"
+                MACOSX_DEPLOYMENT_TARGET "10.15"
+            )
+        endif()
+    endforeach()
+endif()
+
 # Add compile definitions for optional dependencies
 if(FTPSC_USE_EIGEN)
     target_compile_definitions(gp_autointerpolate PRIVATE FTPSC_USE_EIGEN)

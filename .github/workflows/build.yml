@@ -88,7 +88,11 @@ jobs:
       - name: Install Eigen3 (Windows)
         if: runner.os == 'Windows'
         run: |
-          choco install eigen -y
+          curl -fsSL -o eigen.tar.gz https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+          tar xzf eigen.tar.gz
+          echo "EIGEN3_ROOT=$PWD/eigen-3.4.0" >> $GITHUB_ENV
+          echo "Eigen3 downloaded to $PWD/eigen-3.4.0"
+        shell: bash
 
       - name: Install dependencies (Ubuntu)
         if: runner.os == 'Linux'
@@ -109,10 +113,14 @@ jobs:
           mkdir -p Executable/build
           cd Executable/build
           python -c "import sys; print(f'Using Python: {sys.version}')"
+          EIGEN_FLAGS=""
+          if [ -n "$EIGEN3_ROOT" ]; then
+            EIGEN_FLAGS="-DCMAKE_PREFIX_PATH=$EIGEN3_ROOT"
+          fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-            cmake .. -G "Visual Studio 17 2022" -A x64 ${{ matrix.cmake_abi3 }}
+            cmake .. -G "Visual Studio 17 2022" -A x64 ${{ matrix.cmake_abi3 }} $EIGEN_FLAGS
           else
-            cmake .. ${{ matrix.cmake_abi3 }}
+            cmake .. ${{ matrix.cmake_abi3 }} $EIGEN_FLAGS
           fi
         shell: bash
 
