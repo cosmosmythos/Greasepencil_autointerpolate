@@ -178,6 +178,7 @@ jobs:
         with:
           name: wheel-interpolate-${{ matrix.platform }}-${{ matrix.build_type }}
           path: dist/*.whl
+          retention-days: 1
 
   build_linevector:
     name: Build LineVector - ${{ matrix.os }}
@@ -389,6 +390,7 @@ jobs:
         with:
           name: wheel-linevector-${{ matrix.platform }}-${{ matrix.python-version }}
           path: dist/*.whl
+          retention-days: 1
 
   package:
     name: Package Extension
@@ -515,3 +517,4 @@ jobs:
         with:
           name: extension-packages
           path: gp_auto_interpolate-${{ env.addon_version }}-*.zip
+          retention-days: 1
