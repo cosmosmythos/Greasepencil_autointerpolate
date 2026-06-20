@@ -1,0 +1,47 @@
+name: Cleanup Old Artifacts
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 0'  # Weekly on Sunday at 03:00 UTC
+
+jobs:
+  cleanup:
+    name: Delete Old Artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete all artifacts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const artifacts = await github.paginate(
+              github.rest.actions.listArtifactsForRepo,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo
+              }
+            );
+
+            let deleted = 0;
+            let kept = 0;
+
+            for (const artifact of artifacts) {
+              // Skip release assets (uploaded via release step, not upload-artifact)
+              const isReleaseAsset = artifact.name.startsWith('gp_auto_interpolate-') &&
+                                     artifact.name.endsWith('.zip');
+
+              if (isReleaseAsset) {
+                kept++;
+                continue;
+              }
+
+              console.log(`Deleting: ${artifact.name} (${Math.round(artifact.size_in_bytes / 1024)}KB, created ${artifact.created_at})`);
+              await github.rest.actions.deleteArtifact({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                artifact_id: artifact.id
+              });
+              deleted++;
+            }
+
+            console.log(`\nDone: ${deleted} deleted, ${kept} kept (release assets)`);
