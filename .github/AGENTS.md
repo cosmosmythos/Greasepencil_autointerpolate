@@ -22,6 +22,12 @@ GitHub Actions workflows for building, testing, and releasing Blender extension 
 - Standard builds pin `python-version: '3.11.9'`. abi3 builds use `python-version: '3.12'` (latest patch, forward-compatible).
 - Do not add per-version wheels for Python 3.12+ — the abi3 wheel covers them.
 - The `build_py314_experimental.yml` was deleted — abi3 makes it obsolete.
+- **All builds use Ninja** (`CMAKE_GENERATOR: Ninja` env var + `pip install ninja`). No Visual Studio generator — `windows-latest` runners don't have it pre-installed.
+- **MSVC setup**: `ilammy/msvc-dev-cmd@v1` (not `microsoft/setup-msbuild`). Works with `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true` for Node 24 compatibility.
+- **Eigen3 on Windows**: Downloaded directly from GitLab (not choco). Set `EIGEN3_ROOT` env var and pass `-DCMAKE_PREFIX_PATH` to cmake. Linux/macOS use apt/brew.
+- **OpenCV on Windows**: Official dist is a self-extracting `.exe` — download and extract with `7z` (pre-installed on runners). Do NOT use a `.zip` URL (doesn't exist). Set `OPENCV_ROOT` env var; pass `-DOpenCV_DIR=${OPENCV_ROOT}/build` to cmake.
+- **Boost on Windows**: Downloaded as full source archive from `archives.boost.io`. Header-only; pass `-DCMAKE_PREFIX_PATH=${BOOST_ROOT}` for `find_package(Boost)`. Linux/macOS use apt/brew.
+- **LineVector Windows DLL bundling**: `delvewheel repair --add-path "${OPENCV_ROOT}/build/x64/vc16/bin"` to bundle OpenCV DLLs.
 
 ## Verification
 
