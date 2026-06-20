@@ -156,18 +156,6 @@ def process_object(gp_obj, current_frame):
             if not obj_cache or not obj_cache.get('layers'):
                 return
 
-        # Lightweight staleness check: catch moved / added / removed
-        # keyframes that the dirty flag might have missed (e.g. grace
-        # counter suppression, or depsgraph not firing is_updated_geometry
-        # for certain keyframe-move operations).
-        cached_kf_sig = obj_cache.get('_keyframe_signature')
-        current_kf_sig = cache.get_keyframe_signature(gp_obj)
-        if current_kf_sig is not None and cached_kf_sig != current_kf_sig:
-            cache.build(gp_obj)
-            obj_cache = cache.get_cache(obj_name)
-            if not obj_cache or not obj_cache.get('layers'):
-                return
-
         interpolator = cpp_module.get_interpolator()
 
         # Find layers that need interpolation

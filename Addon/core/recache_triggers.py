@@ -7,8 +7,8 @@ Covers:
 
 NOT covered here (handled elsewhere):
   - Geometry edits             -> core.npanel_handlers.on_depsgraph_update
-  - Dopesheet key shift        -> caught by lightweight keyframe-signature
-                                  check in interpolation.process_object()
+  - Dopesheet key shift        -> deferred keyframe-signature check via
+                                  npanel_handlers._deferred_sig_check() timer
   - Undo / Redo                -> same depsgraph path within 0.15 s
 
 Subscriptions are owned by `_owner` and MUST be re-installed on every

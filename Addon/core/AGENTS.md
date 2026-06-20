@@ -21,18 +21,18 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 ## Local Contracts
 
 - **Primary per-frame entry point is `utils/visibility.on_frame_change`, not a core handler.** When playing / scrubbing / rendering it shows modifiers then calls `interpolation.process_scene(scene)`. `core/npanel_handlers.on_frame_change` only syncs the easing-curve UI and never runs interpolation.
-- **Invalidation uses two layers:** dirty flag + lightweight keyframe signature.
+- **Invalidation uses two layers:** dirty flag + deferred keyframe signature check.
   - Dirty flag paths, all converge on `cache.mark_dirty()`:
     - Geometry depsgraph update → unconditional `mark_dirty` (no hash).
-    - Non-geometry update → deferred (timer) comparison of the **structural** `get_signature()` only.
+    - Non-geometry update (keyframe move/add/remove) → deferred (timer) comparison of the **lightweight** `get_keyframe_signature()` only.
     - msgbus mode / active-object change → `mark_dirty`.
-  - `get_keyframe_signature()` (layer count + keyframe numbers only, no stroke/point iteration) is compared every frame in `process_object()` to catch moved/added/removed keyframes that the dirty flag might miss (e.g. grace counter suppression).
-- **Dirty flags are consumed at the top of `process_object`** (`interpolation.py`), which calls `build()` only when the object is dirty, has no cache yet, or has a stale keyframe signature.
+  - `get_keyframe_signature()` (layer count + keyframe numbers only, no stroke/point iteration) runs in `_deferred_sig_check()` via timer — never in the per-frame loop. Catches keyframe moves that `is_updated_geometry` doesn't report.
+- **Dirty flags are consumed at the top of `process_object`** (`interpolation.py`), which calls `build()` only when the object is dirty or has no cache yet.
 - **`build()` is per-object and isolated**: it writes only `cache_registry[obj_name]`, never clears or touches siblings.
 - **Feedback-loop suppression, not thread-safety.** The addon's own writes (`*_i` attributes, modifier visibility) fire depsgraph updates that would re-invalidate the cache. `begin_runtime_update` / `end_runtime_update` + the grace counter suppress these self-triggered updates. Blender runs these handlers single-threaded; the concern is re-entrancy, not races.
 - **Two signatures, different scopes.**
-  - `get_signature()` (structural: layer/frame/stroke/point counts + keyframe numbers) — used only in deferred non-geometry sig check in `npanel_handlers.py` and stored at build time. Never computed in the hot path.
-  - `get_keyframe_signature()` (lightweight: layer count + keyframe numbers only) — stored in cache as `_keyframe_signature`, compared every frame in `process_object()`. Cheap because it skips stroke/point iteration.
+  - `get_signature()` (structural: layer/frame/stroke/point counts + keyframe numbers) — used only at build time and in deferred non-geometry sig check. Never computed in the hot path.
+  - `get_keyframe_signature()` (lightweight: layer count + keyframe numbers only) — used in `_deferred_sig_check()` (timer-based, not per-frame). Catches keyframe moves/adds/removes.
 
 ## Work Guidance
 

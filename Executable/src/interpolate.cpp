@@ -236,7 +236,7 @@ make_array(const std::vector<float> &v) {
 class Interpolator {
 private:
   bool is_position_data(const float *data, size_t total) {
-    if (total < 6 || total % 3 != 0)
+    if (total == 0 || total < 6 || total % 3 != 0)
       return false;
     bool all_unit = true;
     float min_v = data[0], max_v = data[0];
@@ -336,6 +336,8 @@ public:
   Interpolator() {}
 
   float apply_easing(float t, FArr curve) {
+    // ndim()==0 means default-constructed FArr (no curve provided).
+    // A real easing curve has ndim()==1 with exactly 64 samples.
     if (curve.ndim() == 0 || curve.shape(0) != 64)
       return t;
 

@@ -168,7 +168,8 @@ def get_keyframe_signature(gp_obj):
     """Lightweight check: only layer count + keyframe numbers.
 
     Catches moved / added / removed keyframes without iterating strokes
-    or points.  Cheap enough to run every frame in the hot path.
+    or points.  Used by the deferred sig check in npanel_handlers.py
+    (timer-scheduled, NOT per-frame).
     """
     if not gp_obj or not gp_obj.data:
         return None

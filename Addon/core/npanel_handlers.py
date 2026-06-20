@@ -162,8 +162,13 @@ def load_curve_for_current_context(context):
 # ---------------------------------------------------------------------------
 
 def _deferred_sig_check():
-    """Run cheap structure signature checks outside the depsgraph callback.
+    """Run lightweight keyframe signature checks outside the depsgraph callback.
+
     Scheduled via bpy.app.timers so we don't stall the depsgraph itself.
+    Uses get_keyframe_signature() (layer count + keyframe numbers only) —
+    never the heavy get_signature() which iterates strokes and points.
+    Geometry changes (stroke/point edits) are already caught by the
+    unconditional mark_dirty path when is_updated_geometry is True.
     """
     from ..core import cache
     pending = list(_pending_sig_check)
@@ -178,9 +183,10 @@ def _deferred_sig_check():
         cached_entry = cache.get_cache(obj_name)
         if not cached_entry:
             continue
-        # Cheap structural signature only — never the per-point hash here
-        current_sig = cache.get_signature(gp_obj)
-        cached_sig = cached_entry.get('signature')
+        # Lightweight keyframe-only signature — catches moved/added/removed
+        # keyframes without iterating strokes or points.
+        current_sig = cache.get_keyframe_signature(gp_obj)
+        cached_sig = cached_entry.get('_keyframe_signature')
         if cached_sig is not None and current_sig is not None and current_sig != cached_sig:
             cache.mark_dirty(obj_name)
     return None  # one-shot
