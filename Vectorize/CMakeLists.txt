@@ -54,6 +54,12 @@ set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" 
 # ============================================================================
 
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
+
+# In OpenCV 5+, pointPolygonTest and other geometry functions were moved to the 'geometry' module
+if(OpenCV_VERSION VERSION_GREATER_EQUAL "5.0.0")
+    find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs geometry)
+endif()
+
 message(STATUS "OpenCV ${OpenCV_VERSION} found")
 message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
 
