@@ -19,7 +19,12 @@ def on_load_post(dummy):
     from .core import cache
     from .core.constants import NODEGROUP_VERSION
     from .core.registry import migrate_legacy_target, get_targets, set_targets
+    from .core import recache_triggers
     from .utils import visibility
+
+    # msgbus subscriptions are wiped on file load -- reinstall.
+    recache_triggers.subscribe_msgbus()
+    recache_triggers._last_mode.clear()
 
     if cache.check_and_update_nodegroup():
         def draw_message(self, context):

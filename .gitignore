@@ -5,6 +5,7 @@ __pycache__/
 *.so
 *.pyd
 *.pyc
+Addon/OLDER
 
 # Build artifacts
 build/

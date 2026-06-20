@@ -5,7 +5,8 @@ Manages keyframe data caching for fast interpolation.
 Architecture (v2 — multi-object):
   cache_registry = {
       obj_name: {
-          'signature': tuple,
+          'signature': tuple,             # full structural signature
+          '_keyframe_signature': tuple,   # lightweight: layer count + keyframe numbers
           'layers': {
                 layer_idx: {
                     'keyframes': { frame_num: [stroke_dicts] },
@@ -26,7 +27,6 @@ Dirty-flag invalidation:
 """
 
 import bpy
-import hashlib
 import numpy as np
 
 
@@ -164,49 +164,19 @@ def get_signature(gp_obj):
             tuple(point_counts), tuple(keyframe_numbers))
 
 
-def _hash_attribute_array(attr, access_type, data_size, dtype=np.float32):
-    """Hash a Blender drawing attribute into a compact stable digest."""
-    if attr is None or len(attr.data) == 0 or data_size <= 0:
+def get_keyframe_signature(gp_obj):
+    """Lightweight check: only layer count + keyframe numbers.
+
+    Catches moved / added / removed keyframes without iterating strokes
+    or points.  Cheap enough to run every frame in the hot path.
+    """
+    if not gp_obj or not gp_obj.data:
         return None
-
-    buffer = np.empty(data_size, dtype=dtype)
-    attr.data.foreach_get(access_type, buffer)
-    return hashlib.blake2b(buffer.tobytes(), digest_size=16).hexdigest()
-
-
-def get_source_signature(gp_obj):
-    """Fingerprint only artist-authored interpolation inputs."""
-    if not gp_obj or gp_obj.type != 'GREASEPENCIL' or not gp_obj.data:
-        return None
-
-    from ..operators.layer_filter import should_interpolate_layer
-
-    layer_signatures = []
+    keyframe_numbers = []
     for layer in gp_obj.data.layers:
-        frame_signatures = []
-        for frame in layer.frames:
-            drawing = frame.drawing
-            strokes = drawing.strokes if drawing else []
-            point_counts = tuple(len(stroke.points) for stroke in strokes)
-            total_points = sum(point_counts)
-            attrs = drawing.attributes if drawing and hasattr(drawing, 'attributes') else {}
-
-            frame_signatures.append((
-                frame.frame_number,
-                point_counts,
-                _hash_attribute_array(attrs.get('position'), 'vector', total_points * 3),
-                _hash_attribute_array(attrs.get('opacity'), 'value', total_points),
-                _hash_attribute_array(attrs.get('radius'), 'value', total_points),
-                _hash_attribute_array(attrs.get('handle_left'), 'vector', total_points * 3),
-                _hash_attribute_array(attrs.get('handle_right'), 'vector', total_points * 3),
-            ))
-
-        layer_signatures.append((
-            should_interpolate_layer(layer),
-            tuple(frame_signatures),
-        ))
-
-    return tuple(layer_signatures)
+        keyframe_numbers.append(
+            tuple(sorted(f.frame_number for f in layer.frames)))
+    return (len(gp_obj.data.layers), tuple(keyframe_numbers))
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +278,7 @@ def build(gp_obj):
 
         new_entry = {
             'signature': get_signature(gp_obj),
-            'source_signature': get_source_signature(gp_obj),
+            '_keyframe_signature': get_keyframe_signature(gp_obj),
             'layers': {},
         }
 

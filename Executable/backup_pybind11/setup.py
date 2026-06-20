@@ -1,10 +1,6 @@
 """
 Setup script for building gp_autointerpolate wheel
 This wraps the CMake-built C++ extension into a proper Python wheel
-
-Environment variables:
-  ENABLE_ABI3=1  — build abi3 wheel (cp312-abi3, covers Python 3.12+)
-  unset           — build standard wheel (cp311-cp311, Python 3.11 only)
 """
 
 from setuptools import setup, Extension
@@ -92,27 +88,14 @@ def get_version():
             return match.group(1)
     return "2.3.0"  # Fallback
 
-
-# ABI3 support: set ENABLE_ABI3=1 env var to build cp312-abi3 wheel
-enable_abi3 = os.environ.get("ENABLE_ABI3", "0") == "1"
-
-setup_kwargs = dict(
+setup(
     name="gp_autointerpolate",
     version=get_version(),
     description="High-performance C++ interpolation module for Blender Grease Pencil",
     author="cosmosmythos",
     url="https://cosmosmythos.gumroad.com/",
-    ext_modules=[CMakeExtension("gp_autointerpolate")],
+    ext_modules=[CMakeExtension("gp_autointerpolate")],  # No version suffix
     cmdclass={"build_ext": CMakeBuild},
     zip_safe=False,
+    python_requires=">=3.11",
 )
-
-if enable_abi3:
-    setup_kwargs["python_requires"] = ">=3.12"
-    setup_kwargs["options"] = {"bdist_wheel": {"py_limited_api": "cp312"}}
-    print("Building abi3 wheel (cp312-abi3, covers Python 3.12+)")
-else:
-    setup_kwargs["python_requires"] = ">=3.11"
-    print("Building standard wheel (Python 3.11+)")
-
-setup(**setup_kwargs)

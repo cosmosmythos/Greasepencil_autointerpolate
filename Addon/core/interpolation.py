@@ -137,29 +137,36 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
 def process_object(gp_obj, current_frame):
     """Process interpolation for a single GP object.
 
-    Uses cache_registry[obj_name].  Rebuilds if dirty flag is set.
+    Cache invalidation uses two layers:
+      1. Dirty flag (set by depsgraph handler on geometry/structural changes)
+      2. Lightweight keyframe-signature check (catches moved/added/removed
+         keyframes that the dirty flag might miss)
     """
     obj_name = gp_obj.name
-
     try:
-        # Dirty-flag invalidation (Phase 0A) — replaces per-frame signature scan
         if cache.is_dirty(obj_name):
             cache.build(gp_obj)
-            # build() calls clear_dirty() internally
-        else:
-            # Safety net: keyframe time moves may not emit geometry updates, so
-            # depsgraph dirty flags can miss them. A cheap structure signature
-            # comparison restores the old “always rebuild on keyframe moves”
-            # behavior without hashing point data.
-            obj_cache = cache.get_cache(obj_name)
-            cached_sig = obj_cache.get('signature') if obj_cache else None
-            current_sig = cache.get_signature(gp_obj)
-            if cached_sig is not None and current_sig is not None and cached_sig != current_sig:
-                cache.build(gp_obj)
+            # build() clears the dirty flag
 
         obj_cache = cache.get_cache(obj_name)
         if not obj_cache or not obj_cache.get('layers'):
-            return
+            # Not built yet (first frame after enable). Build once.
+            cache.build(gp_obj)
+            obj_cache = cache.get_cache(obj_name)
+            if not obj_cache or not obj_cache.get('layers'):
+                return
+
+        # Lightweight staleness check: catch moved / added / removed
+        # keyframes that the dirty flag might have missed (e.g. grace
+        # counter suppression, or depsgraph not firing is_updated_geometry
+        # for certain keyframe-move operations).
+        cached_kf_sig = obj_cache.get('_keyframe_signature')
+        current_kf_sig = cache.get_keyframe_signature(gp_obj)
+        if current_kf_sig is not None and cached_kf_sig != current_kf_sig:
+            cache.build(gp_obj)
+            obj_cache = cache.get_cache(obj_name)
+            if not obj_cache or not obj_cache.get('layers'):
+                return
 
         interpolator = cpp_module.get_interpolator()
 

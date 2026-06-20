@@ -6,6 +6,7 @@ and depsgraph-driven dirty flags for cache invalidation.
 """
 
 import bpy
+import time
 from bpy.app.handlers import persistent
 from ..operators.easing_direct import get_stored_easing_data
 
@@ -14,6 +15,11 @@ _last_curve_hash = None
 _loading_curve = False
 _last_preview_key = None      # (layer_idx, frame_num) or None
 _last_playhead_frame = None
+
+# Debounce state
+_last_sig_check_time = {}        # obj_name -> monotonic timestamp
+_SIG_CHECK_MIN_INTERVAL = 0.15   # seconds — skip dup updates inside this window
+_pending_sig_check = set()       # obj_names queued for deferred validation
 
 
 def _gp_id_types():
@@ -152,28 +158,57 @@ def load_curve_for_current_context(context):
 
 
 # ---------------------------------------------------------------------------
+# Deferred signature check (non-geometry depsgraph updates)
+# ---------------------------------------------------------------------------
+
+def _deferred_sig_check():
+    """Run cheap structure signature checks outside the depsgraph callback.
+    Scheduled via bpy.app.timers so we don't stall the depsgraph itself.
+    """
+    from ..core import cache
+    pending = list(_pending_sig_check)
+    _pending_sig_check.clear()
+    objects = bpy.data.objects
+    for obj_name in pending:
+        gp_obj = objects.get(obj_name)
+        if not gp_obj or gp_obj.type != 'GREASEPENCIL':
+            continue
+        if cache.is_dirty(obj_name) or cache.is_runtime_update_active(obj_name):
+            continue
+        cached_entry = cache.get_cache(obj_name)
+        if not cached_entry:
+            continue
+        # Cheap structural signature only — never the per-point hash here
+        current_sig = cache.get_signature(gp_obj)
+        cached_sig = cached_entry.get('signature')
+        if cached_sig is not None and current_sig is not None and current_sig != cached_sig:
+            cache.mark_dirty(obj_name)
+    return None  # one-shot
+
+
+# ---------------------------------------------------------------------------
 # Frame-change handler (scrub / playback)
 # ---------------------------------------------------------------------------
 
 @persistent
 def on_frame_change(scene, depsgraph=None):
     """Reload the preview curve when the playhead moves.
-
-    This only matters when there is NO dopesheet selection — when there is a
-    selection, resolve_preview_key() ignores the playhead anyway, so the
-    early-out via _last_preview_key in on_depsgraph_update keeps things stable.
+    Skipped entirely during playback/render — UI sync is not needed
+    while frames fly by, and CurveMapping writes here would feedback-
+    loop into the depsgraph handler.
     """
     global _last_playhead_frame, _last_preview_key
-
     try:
         context = bpy.context
-        current_frame = scene.frame_current
+        screen = getattr(context, "screen", None)
+        if screen and screen.is_animation_playing:
+            return  # ← critical: no UI work during playback
 
+        current_frame = scene.frame_current
         if current_frame == _last_playhead_frame:
             return
         _last_playhead_frame = current_frame
 
-        # Recompute preview key so depsgraph handler stays in sync
         new_key = resolve_preview_key(context)
         if new_key != _last_preview_key:
             _last_preview_key = new_key
@@ -188,13 +223,7 @@ def on_frame_change(scene, depsgraph=None):
 
 @persistent
 def on_depsgraph_update(scene, depsgraph):
-    """Single depsgraph handler:
-
-    1. Mark caches dirty for any registered GP object whose geometry changed.
-    2. Reload the preview curve if the resolved preview key changed
-       (layer switch OR dopesheet selection change).
-    3. Auto-save user edits to the currently previewed CUSTOM curve.
-    """
+    """Single depsgraph handler — now playback-safe and debounced."""
     global _last_curve_hash, _loading_curve, _last_preview_key
 
     if _loading_curve:
@@ -214,89 +243,87 @@ def on_depsgraph_update(scene, depsgraph):
     except Exception:
         is_rendering = False
 
-    # --- PHASE 0: Dirty flags for cache invalidation ---
+    # CRITICAL: never run signature scans / curve reloads during playback or render.
+    # Both block the eval thread and cause the spacebar hitch.
+    if is_playing or is_rendering:
+        return
+
+    # --- PHASE 0: Dirty flags for cache invalidation (debounced) ---
     if scene.gp_interpolation_enabled:
         from ..core import cache
         from ..core.registry import get_targets
+
         targets = get_targets(scene)
+        grease_pencil_types = _gp_id_types()
 
-        if not is_playing and not is_rendering:
-            grease_pencil_types = _gp_id_types()
-            if grease_pencil_types and targets:
-                targets_by_gp = _targets_by_gp_data(targets)
-                objects = bpy.data.objects
+        if grease_pencil_types and targets:
+            targets_by_gp = _targets_by_gp_data(targets)
+            now = time.monotonic()
 
-                for update in depsgraph.updates:
-                    update_id = getattr(update, "id", None)
-                    is_geom_update = bool(getattr(update, "is_updated_geometry", False))
-                    if not isinstance(update_id, grease_pencil_types):
+            for update in depsgraph.updates:
+                update_id = getattr(update, "id", None)
+                if not isinstance(update_id, grease_pencil_types):
+                    continue
+                matched_names = targets_by_gp.get(update_id)
+                if not matched_names:
+                    continue
+
+                is_geom_update = bool(getattr(update, "is_updated_geometry", False))
+
+                for target_name in matched_names:
+                    if cache.is_dirty(target_name):
+                        continue
+                    if cache.is_runtime_update_active(target_name):
                         continue
 
-                    matched_names = targets_by_gp.get(update_id)
-                    if not matched_names:
-                        continue
-
-                    for target_name in matched_names:
-                        gp_obj = objects.get(target_name)
-                        if not gp_obj:
-                            continue
-
-                        if cache.is_dirty(target_name):
-                            continue
-
-                        if cache.is_runtime_update_active(target_name):
-                            continue
-
-                        cached_entry = cache.get_cache(target_name)
-                        if is_geom_update:
-                            current_sig = cache.get_source_signature(gp_obj)
-                            cached_sig = cached_entry.get('source_signature')
-                        else:
-                            current_sig = cache.get_signature(gp_obj)
-                            cached_sig = cached_entry.get('signature')
-
-                        if (
-                            cached_sig is not None
-                            and current_sig is not None
-                            and cached_sig == current_sig
-                        ):
+                    # Geometry update from the artist → unconditional dirty.
+                    # No source-signature hash here — it's expensive and we
+                    # already know the user changed something.
+                    if is_geom_update:
+                        if cache.has_runtime_update_grace(target_name):
                             cache.consume_runtime_update_grace(target_name)
                             continue
-
                         cache.clear_runtime_update_grace(target_name)
                         cache.mark_dirty(target_name)
+                        continue
 
-    # The rest is easing-only and concerns the active object only.
+                    # Non-geometry update (selection, keyframe move, etc.).
+                    # Defer the cheap structural signature check via timer
+                    # so we don't stall the depsgraph callback. Debounce
+                    # bursts by timestamp.
+                    last = _last_sig_check_time.get(target_name, 0.0)
+                    if now - last < _SIG_CHECK_MIN_INTERVAL:
+                        continue
+                    _last_sig_check_time[target_name] = now
+                    _pending_sig_check.add(target_name)
+
+            if _pending_sig_check and not bpy.app.timers.is_registered(_deferred_sig_check):
+                bpy.app.timers.register(_deferred_sig_check, first_interval=0.05)
+
+    # --- Easing UI sync (active object only, never during playback) ---
     if not context.active_object or context.active_object.type != 'GREASEPENCIL':
         return
-
     gp_data = context.active_object.data
     active_layer = gp_data.layers.active
     if not active_layer:
         return
 
-    # --- PHASE 1: Detect preview-key changes (layer switch or selection) ---
     current_preview_key = resolve_preview_key(context)
     if current_preview_key != _last_preview_key:
         _last_preview_key = current_preview_key
         load_curve_for_current_context(context)
-        return  # don't auto-save on the same tick we just loaded
+        return
 
-    # --- PHASE 2: Auto-save user curve edits to the PREVIEWED key ---
     current_hash = get_curve_hash()
     if current_hash is None:
         return
-
     if _last_curve_hash is None:
         _last_curve_hash = current_hash
         return
-
     if current_hash == _last_curve_hash:
         return
-
     _last_curve_hash = current_hash
 
-    # Save to whichever key is currently previewed (WYSIWYG editing)
     layer_idx, frame_num = current_preview_key
     if layer_idx is None or frame_num is None:
         return
@@ -307,10 +334,8 @@ def on_depsgraph_update(scene, depsgraph):
 
     gp_obj = context.active_object
     layer = gp_data.layers[layer_idx]
-
     from ..utils import easing
     easing.set_easing_curve_to_frame(gp_data, layer, layer_idx, frame_num, 'CUSTOM')
-
     from . import cache
     cache.clear(gp_obj.name)
     cache.build(gp_obj)

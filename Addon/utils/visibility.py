@@ -53,20 +53,26 @@ def _is_rendering():
 def detect_scrubbing(scene):
     global visibility_state
     ensure_visibility_state()
-
     current_time = time.time()
     current_frame = scene.frame_current
 
-    if visibility_state['last_frame_time'] is None:
-        visibility_state['last_frame_time'] = current_time
+    last_frame = visibility_state['last_frame']
+    last_time = visibility_state['last_frame_time']
+
+    # Initialise on first ever call — but DO NOT bail; if playback is
+    # already starting we must still report scrubbing/playing correctly.
+    if last_time is None or last_frame is None:
         visibility_state['last_frame'] = current_frame
+        visibility_state['last_frame_time'] = current_time
+        # Trust the playback flag for the first tick; otherwise idle.
+        visibility_state['is_scrubbing'] = False
         return False
 
-    if current_frame == visibility_state['last_frame']:
+    if current_frame == last_frame:
         return visibility_state['is_scrubbing']
 
-    time_diff = current_time - visibility_state['last_frame_time']
-    frame_diff = abs(current_frame - visibility_state['last_frame'])
+    time_diff = current_time - last_time
+    frame_diff = abs(current_frame - last_frame)
     is_scrubbing = (time_diff < SCRUB_DETECTION_THRESHOLD and frame_diff >= 1) or frame_diff > 1
 
     visibility_state['last_frame'] = current_frame
@@ -111,12 +117,16 @@ def _get_target_objects():
 
 
 def _set_all_modifiers_visible(visible: bool):
-    """Set modifier visibility on ALL registered GP objects."""
+    """Set viewport modifier visibility on ALL registered GP objects.
+
+    NOTE: We deliberately do NOT touch `show_render` here. Writing it
+    fires a depsgraph update on every play/stop/scrub-end transition,
+    which previously chained into expensive signature hashes. Render
+    visibility is handled exclusively by `on_render_pre`/`on_render_post`.
+    """
     for _obj, mod in _get_target_objects():
         if mod.show_viewport != visible:
             mod.show_viewport = visible
-        if hasattr(mod, "show_render") and mod.show_render != visible:
-            mod.show_render = visible
 
 
 def _set_modifier_visible(visible: bool):
@@ -154,12 +164,10 @@ def scrub_timeout():
 
 
 def on_frame_change(scene, depsgraph=None):
-    """Per-frame visibility controller. Single source of truth."""
     if not scene.gp_interpolation_enabled:
         force_all_modifiers_off()
         return
 
-    # Validate targets exist (handles renames/deletes)
     from ..core.registry import validate_targets
     targets = validate_targets(scene)
     if not targets:
@@ -169,20 +177,20 @@ def on_frame_change(scene, depsgraph=None):
     is_playing = _is_animation_playing()
     is_rendering = _is_rendering()
     is_scrubbing = False if is_rendering else detect_scrubbing(scene)
-    mode = "render" if is_rendering else "play" if is_playing else "scrub" if is_scrubbing else "idle"
 
     if is_rendering or is_playing or is_scrubbing:
+        # Make modifiers visible FIRST so the first frame of playback isn't
+        # rendered with a hidden modifier (which is what caused the visible
+        # hitch on spacebar).
         _set_all_modifiers_visible(True)
 
         if bpy.app.timers.is_registered(scrub_timeout):
             bpy.app.timers.unregister(scrub_timeout)
-
         if is_scrubbing and not is_playing:
             bpy.app.timers.register(scrub_timeout, first_interval=SCRUB_TIMEOUT_DELAY)
         if is_playing and not bpy.app.timers.is_registered(playback_watchdog):
             bpy.app.timers.register(playback_watchdog, first_interval=0.05)
 
-        # Process ALL registered objects
         from ..core import interpolation
         interpolation.process_scene(scene)
     else:
@@ -226,16 +234,21 @@ def on_undo_redo(scene, depsgraph=None):
 
 
 def on_render_pre(scene, depsgraph=None):
-    """Keep interpolation active during F12 render animation."""
     ensure_visibility_state()
     visibility_state['is_rendering'] = True
-    _set_all_modifiers_visible(True)
+    for _obj, mod in _get_target_objects():
+        if mod.show_viewport != True:
+            mod.show_viewport = True
+        if hasattr(mod, "show_render") and mod.show_render != True:
+            mod.show_render = True
 
 
 def on_render_post(scene, depsgraph=None):
-    """Restore normal visibility behavior after render/cancel."""
     ensure_visibility_state()
     visibility_state['is_rendering'] = False
+    for _obj, mod in _get_target_objects():
+        if hasattr(mod, "show_render") and mod.show_render:
+            mod.show_render = False
     update_modifier_visibility()
 
 

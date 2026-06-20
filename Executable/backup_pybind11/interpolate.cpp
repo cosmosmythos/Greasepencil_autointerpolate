@@ -1,20 +1,16 @@
 #include <algorithm>
 #include <cmath>
-#include <nanobind/nanobind.h>
-#include <nanobind/ndarray.h>
-#include <nanobind/stl/string.h>
-#include <nanobind/stl/vector.h>
-#include <nanobind/stl/pair.h>
+#include <pybind11/numpy.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
 #include <vector>
 
 // FTP-SC stroke matching
 #include "stroke_matcher.h"
 #include "stroke.h"
 
-namespace nb = nanobind;
 
-// Shorthand for the 1-D float32 numpy array type used everywhere
-using FArr = nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>>;
+namespace py = pybind11;
 
 const float EPSILON = 1e-6f;
 const float PI = 3.14159265358979323846f;
@@ -217,50 +213,41 @@ Point3D spiral_arc_interpolate_3d(const Point3D &start, const Point3D &end,
 }
 
 // ============================================================================
-// Helper: build a numpy array from a std::vector with capsule ownership
-// ============================================================================
-
-static nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>>
-make_array(const std::vector<float> &v) {
-  float *buf = new float[v.size()];
-  std::copy(v.begin(), v.end(), buf);
-  return nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>>(
-      buf, {(size_t)v.size()},
-      nb::capsule(buf, [](void *p) noexcept { delete[] (float *)p; }));
-}
-
-// ============================================================================
 // Main Interpolator Class
 // ============================================================================
 
 class Interpolator {
 private:
-  bool is_position_data(const float *data, size_t total) {
+  bool is_position_data(py::array_t<float> data) {
+    size_t total = data.shape(0);
     if (total < 6 || total % 3 != 0)
       return false;
+    auto ptr = data.unchecked<1>();
     bool all_unit = true;
-    float min_v = data[0], max_v = data[0];
+    float min_v = ptr(0), max_v = ptr(0);
     for (size_t i = 0; i < total; ++i) {
-      if (data[i] < 0.0f || data[i] > 1.0f)
+      if (ptr(i) < 0.0f || ptr(i) > 1.0f)
         all_unit = false;
-      min_v = std::min(min_v, data[i]);
-      max_v = std::max(max_v, data[i]);
+      min_v = std::min(min_v, ptr(i));
+      max_v = std::max(max_v, ptr(i));
     }
     return !(all_unit && (max_v - min_v) < 0.1f && max_v <= 1.0f);
   }
 
   // Uniform arc-length resampling for position strokes
-  std::vector<float> resample_position_stroke(const float *pos_data,
-                                              size_t pos_size,
+  std::vector<float> resample_position_stroke(py::array_t<float> positions,
                                               int target_count) {
-    size_t orig_count = pos_size / 3;
+    auto pos = positions.unchecked<1>();
+    size_t orig_count = positions.shape(0) / 3;
 
     if (orig_count < 2 || target_count < 2) {
-      return std::vector<float>(pos_data, pos_data + pos_size);
+      return std::vector<float>(positions.data(),
+                                positions.data() + positions.shape(0));
     }
 
     if ((int)orig_count == target_count) {
-      return std::vector<float>(pos_data, pos_data + pos_size);
+      return std::vector<float>(positions.data(),
+                                positions.data() + positions.shape(0));
     }
 
     // Calculate cumulative arc lengths
@@ -268,9 +255,9 @@ private:
     float total = 0.0f;
 
     for (size_t i = 1; i < orig_count; ++i) {
-      float dx = pos_data[i * 3] - pos_data[(i - 1) * 3];
-      float dy = pos_data[i * 3 + 1] - pos_data[(i - 1) * 3 + 1];
-      float dz = pos_data[i * 3 + 2] - pos_data[(i - 1) * 3 + 2];
+      float dx = pos(i * 3) - pos((i - 1) * 3);
+      float dy = pos(i * 3 + 1) - pos((i - 1) * 3 + 1);
+      float dz = pos(i * 3 + 2) - pos((i - 1) * 3 + 2);
       total += std::sqrt(dx * dx + dy * dy + dz * dz);
       cumulative.push_back(total);
     }
@@ -279,9 +266,9 @@ private:
     result.reserve(target_count * 3);
 
     // First point
-    result.push_back(pos_data[0]);
-    result.push_back(pos_data[1]);
-    result.push_back(pos_data[2]);
+    result.push_back(pos(0));
+    result.push_back(pos(1));
+    result.push_back(pos(2));
 
     // Interior points - uniform arc-length sampling
     for (int i = 1; i < target_count - 1; ++i) {
@@ -301,33 +288,34 @@ private:
                           (cumulative[seg + 1] - cumulative[seg])
                     : 0.0f;
 
-      result.push_back(pos_data[seg * 3] * (1 - t) + pos_data[(seg + 1) * 3] * t);
-      result.push_back(pos_data[seg * 3 + 1] * (1 - t) + pos_data[(seg + 1) * 3 + 1] * t);
-      result.push_back(pos_data[seg * 3 + 2] * (1 - t) + pos_data[(seg + 1) * 3 + 2] * t);
+      result.push_back(pos(seg * 3) * (1 - t) + pos((seg + 1) * 3) * t);
+      result.push_back(pos(seg * 3 + 1) * (1 - t) + pos((seg + 1) * 3 + 1) * t);
+      result.push_back(pos(seg * 3 + 2) * (1 - t) + pos((seg + 1) * 3 + 2) * t);
     }
 
     // Last point
-    result.push_back(pos_data[(orig_count - 1) * 3]);
-    result.push_back(pos_data[(orig_count - 1) * 3 + 1]);
-    result.push_back(pos_data[(orig_count - 1) * 3 + 2]);
+    result.push_back(pos((orig_count - 1) * 3));
+    result.push_back(pos((orig_count - 1) * 3 + 1));
+    result.push_back(pos((orig_count - 1) * 3 + 2));
 
     return result;
   }
 
-  std::vector<float> resample_scalar(const float *data, size_t data_size,
+  std::vector<float> resample_scalar(py::array_t<float> data,
                                      int target_count) {
-    size_t orig = data_size;
+    auto d = data.unchecked<1>();
+    size_t orig = data.shape(0);
     if (orig < 2 || target_count < 2)
-      return std::vector<float>(data, data + orig);
+      return std::vector<float>(d.data(0), d.data(0) + orig);
     if ((int)orig == target_count)
-      return std::vector<float>(data, data + orig);
+      return std::vector<float>(d.data(0), d.data(0) + orig);
 
     std::vector<float> result(target_count);
     for (int i = 0; i < target_count; ++i) {
       float t = (float)i / (float)(target_count - 1);
       float idx = t * (orig - 1);
       int i1 = (int)idx, i2 = std::min(i1 + 1, (int)orig - 1);
-      result[i] = data[i1] * (1.0f - (idx - i1)) + data[i2] * (idx - i1);
+      result[i] = d(i1) * (1.0f - (idx - i1)) + d(i2) * (idx - i1);
     }
     return result;
   }
@@ -335,52 +323,47 @@ private:
 public:
   Interpolator() {}
 
-  float apply_easing(float t, FArr curve) {
-    if (curve.ndim() == 0 || curve.shape(0) != 64)
+  float apply_easing(float t, py::array_t<float> curve) {
+    if (!curve || curve.shape(0) != 64)
       return t;
-
+    
     if (t <= 0.0f)
       return 0.0f;
     if (t >= 1.0f)
       return 1.0f;
-
+    
     float idx = t * 63.0f;
     int lo = (int)idx, hi = std::min(lo + 1, 63);
-    const float *c = curve.data();
-    return c[lo] * (1.0f - (idx - lo)) + c[hi] * (idx - lo);
+    auto c = curve.unchecked<1>();
+    return c(lo) * (1.0f - (idx - lo)) + c(hi) * (idx - lo);
   }
 
-  nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>>
-  process_interpolation(int cur, int prev_f, FArr prev_d,
-                        int next_f, FArr next_d, int stroke_idx,
+  py::array_t<float>
+  process_interpolation(int cur, int prev_f, py::array_t<float> prev_d,
+                        int next_f, py::array_t<float> next_d, int stroke_idx,
                         const std::string &dtype = "auto",
-                        FArr easing = FArr()) {
+                        py::array_t<float> easing = py::array_t<float>()) {
     return process_interpolation_advanced(cur, prev_f, prev_d, next_f, next_d,
                                           stroke_idx, dtype, easing, 0.0f, 0.0f,
-                                          0.0f, false, FArr());
+                                          0.0f, false, py::array_t<float>());
   }
 
-  nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>>
-  process_interpolation_advanced(
-      int current_frame, int prev_frame, FArr prev_data,
-      int next_frame, FArr next_data, int stroke_index,
-      const std::string &data_type, FArr easing_curve,
+  py::array_t<float> process_interpolation_advanced(
+      int current_frame, int prev_frame, py::array_t<float> prev_data,
+      int next_frame, py::array_t<float> next_data, int stroke_index,
+      const std::string &data_type, py::array_t<float> easing_curve,
       float arc_amount, float arc_direction, float /*curvature_blend*/,
-      bool use_spiral, FArr stroke_normal) {
-    if (prev_data.ndim() == 0 || prev_data.shape(0) == 0 ||
-        next_data.ndim() == 0 || next_data.shape(0) == 0) {
-      return FArr();
+      bool use_spiral, py::array_t<float> stroke_normal) {
+    if (!prev_data || !next_data || prev_data.ndim() != 1 ||
+        next_data.ndim() != 1 || prev_data.shape(0) == 0 ||
+        next_data.shape(0) == 0) {
+      return py::array_t<float>();
     }
-
-    const float *prev_ptr = prev_data.data();
-    const float *next_ptr = next_data.data();
-    size_t prev_size = prev_data.shape(0);
-    size_t next_size = next_data.shape(0);
 
     bool is_pos = (data_type == "position") ? true
                   : (data_type == "opacity" || data_type == "radius")
                       ? false
-                      : is_position_data(prev_ptr, prev_size);
+                      : is_position_data(prev_data);
 
     float t_linear = (next_frame != prev_frame)
                          ? (float)(current_frame - prev_frame) /
@@ -389,18 +372,18 @@ public:
     float t = apply_easing(t_linear, easing_curve);
 
     if (is_pos) {
-      int target_count = (int)(prev_size / 3);
+      int target_count = (int)(prev_data.shape(0) / 3);
 
       // Uniform arc-length resampling for both strokes
       std::vector<float> resampled_prev =
-          resample_position_stroke(prev_ptr, prev_size, target_count);
+          resample_position_stroke(prev_data, target_count);
       std::vector<float> resampled_next =
-          resample_position_stroke(next_ptr, next_size, target_count);
+          resample_position_stroke(next_data, target_count);
 
       Point3D normal(0, 0, 1);
-      if (stroke_normal.ndim() > 0 && stroke_normal.shape(0) >= 3) {
-        const float *n = stroke_normal.data();
-        normal = Point3D(n[0], n[1], n[2]);
+      if (stroke_normal && stroke_normal.shape(0) >= 3) {
+        auto n = stroke_normal.unchecked<1>();
+        normal = Point3D(n(0), n(1), n(2));
       }
 
       std::vector<float> result;
@@ -421,16 +404,16 @@ public:
         result.push_back(r.y);
         result.push_back(r.z);
       }
-      return make_array(result);
+      return py::array_t<float>(result.size(), result.data());
 
     } else {
-      int target = (int)prev_size;
-      auto rp = resample_scalar(prev_ptr, prev_size, target);
-      auto rn = resample_scalar(next_ptr, next_size, target);
+      int target = (int)prev_data.shape(0);
+      auto rp = resample_scalar(prev_data, target);
+      auto rn = resample_scalar(next_data, target);
       std::vector<float> result(target);
       for (int i = 0; i < target; ++i)
         result[i] = rp[i] * (1 - t) + rn[i] * t;
-      return make_array(result);
+      return py::array_t<float>(result.size(), result.data());
     }
   }
 };
@@ -439,78 +422,82 @@ public:
 // Python Bindings
 // ============================================================================
 
-NB_MODULE(gp_autointerpolate, m) {
+PYBIND11_MODULE(gp_autointerpolate, m) {
   m.doc() = "GP Auto Interpolate - Arc interpolation with FTP-SC stroke correspondence";
-
+  
   // ============================================================================
   // Legacy Interpolator (Linear/Arc)
   // ============================================================================
-  nb::class_<Interpolator>(m, "Interpolator")
-      .def(nb::init<>())
+  py::class_<Interpolator>(m, "Interpolator")
+      .def(py::init<>())
       .def("process_interpolation", &Interpolator::process_interpolation,
-           nb::arg("current_frame"), nb::arg("prev_frame"),
-           nb::arg("prev_data"), nb::arg("next_frame"), nb::arg("next_data"),
-           nb::arg("stroke_index"), nb::arg("data_type") = std::string("auto"),
-           nb::arg("easing_curve") = FArr())
+           py::arg("current_frame"), py::arg("prev_frame"),
+           py::arg("prev_data"), py::arg("next_frame"), py::arg("next_data"),
+           py::arg("stroke_index"), py::arg("data_type") = "auto",
+           py::arg("easing_curve") = py::none())
       .def("process_interpolation_advanced",
            &Interpolator::process_interpolation_advanced,
-           nb::arg("current_frame"), nb::arg("prev_frame"),
-           nb::arg("prev_data"), nb::arg("next_frame"), nb::arg("next_data"),
-           nb::arg("stroke_index"), nb::arg("data_type"),
-           nb::arg("easing_curve"), nb::arg("arc_amount"),
-           nb::arg("arc_direction"), nb::arg("curvature_blend"),
-           nb::arg("use_spiral"), nb::arg("stroke_normal"));
-
+           py::arg("current_frame"), py::arg("prev_frame"),
+           py::arg("prev_data"), py::arg("next_frame"), py::arg("next_data"),
+           py::arg("stroke_index"), py::arg("data_type"),
+           py::arg("easing_curve"), py::arg("arc_amount"),
+           py::arg("arc_direction"), py::arg("curvature_blend"),
+           py::arg("use_spiral"), py::arg("stroke_normal"));
+  
   // ============================================================================
   // FTP-SC Stroke Matching
   // ============================================================================
-
+  
   // Configuration
-  nb::class_<ftpsc::MatcherConfig>(m, "MatcherConfig")
-      .def(nb::init<>())
-      .def_rw("max_alpha", &ftpsc::MatcherConfig::max_alpha)
-      .def_rw("k_neighbors", &ftpsc::MatcherConfig::k_neighbors)
-      .def_rw("angle_threshold", &ftpsc::MatcherConfig::angle_threshold)
-      .def_rw("enable_stage_two", &ftpsc::MatcherConfig::enable_stage_two)
-      .def_rw("coincident_threshold", &ftpsc::MatcherConfig::coincident_threshold)
-      .def_rw("debug", &ftpsc::MatcherConfig::debug);
-
+  py::class_<ftpsc::MatcherConfig>(m, "MatcherConfig")
+      .def(py::init<>())
+      .def_readwrite("max_alpha", &ftpsc::MatcherConfig::max_alpha,
+                     "Max alpha threshold for topology (default: 0.05 for NDC coords)")
+      .def_readwrite("k_neighbors", &ftpsc::MatcherConfig::k_neighbors,
+                     "Number of neighbors for Stage 2 (default: 6)")
+      .def_readwrite("angle_threshold", &ftpsc::MatcherConfig::angle_threshold,
+                     "Angle threshold for Stage 2 in radians (default: pi/4)")
+      .def_readwrite("enable_stage_two", &ftpsc::MatcherConfig::enable_stage_two,
+                     "Enable Stage 2 matching (default: True)")
+      .def_readwrite("coincident_threshold", &ftpsc::MatcherConfig::coincident_threshold,
+                     "Distance for coincident points (default: 0.01)")
+      .def_readwrite("debug", &ftpsc::MatcherConfig::debug,
+                     "Enable debug output (default: False)");
+  
   // Match result
-  nb::class_<ftpsc::MatchingResult>(m, "MatchingResult")
-      .def_ro("num_strokes_initial", &ftpsc::MatchingResult::num_strokes_initial)
-      .def_ro("num_strokes_target", &ftpsc::MatchingResult::num_strokes_target)
-      .def_ro("num_matched", &ftpsc::MatchingResult::num_matched)
-      .def_ro("num_unmatched_initial", &ftpsc::MatchingResult::num_unmatched_initial)
-      .def_ro("num_unmatched_target", &ftpsc::MatchingResult::num_unmatched_target)
-      .def_ro("stage_one_cost", &ftpsc::MatchingResult::stage_one_cost)
-      .def_ro("final_cost", &ftpsc::MatchingResult::final_cost)
-      .def_ro("used_stage_two", &ftpsc::MatchingResult::used_stage_two)
+  py::class_<ftpsc::MatchingResult>(m, "MatchingResult")
+      .def_readonly("num_strokes_initial", &ftpsc::MatchingResult::num_strokes_initial)
+      .def_readonly("num_strokes_target", &ftpsc::MatchingResult::num_strokes_target)
+      .def_readonly("num_matched", &ftpsc::MatchingResult::num_matched)
+      .def_readonly("num_unmatched_initial", &ftpsc::MatchingResult::num_unmatched_initial)
+      .def_readonly("num_unmatched_target", &ftpsc::MatchingResult::num_unmatched_target)
+      .def_readonly("stage_one_cost", &ftpsc::MatchingResult::stage_one_cost)
+      .def_readonly("final_cost", &ftpsc::MatchingResult::final_cost)
+      .def_readonly("used_stage_two", &ftpsc::MatchingResult::used_stage_two)
       .def("get_matches", [](const ftpsc::MatchingResult &result) {
           return result.final_correspondence.matches;
       }, "Get list of (initial_idx, target_idx) match pairs");
-
+  
   // Main matcher class
-  nb::class_<ftpsc::StrokeMatcher>(m, "StrokeMatcher")
-      .def(nb::init<>())
-      .def(nb::init<const ftpsc::MatcherConfig&>(), nb::arg("config"))
+  py::class_<ftpsc::StrokeMatcher>(m, "StrokeMatcher")
+      .def(py::init<>())
+      .def(py::init<const ftpsc::MatcherConfig&>(), py::arg("config"))
       .def("match", [](ftpsc::StrokeMatcher &self,
-                       FArr initial_strokes,
-                       FArr target_strokes) {
+                       py::array_t<float> initial_strokes,
+                       py::array_t<float> target_strokes) {
           // Convert numpy arrays to Stroke vectors
           // Expected format: flat array of [x0,y0, x1,y1, ..., -1, x0,y0, ...]
           // where -1 separates strokes
-
-          const float *init_data = initial_strokes.data();
-          const float *targ_data = target_strokes.data();
-          size_t init_size = initial_strokes.shape(0);
-          size_t targ_size = target_strokes.shape(0);
-
+          
+          auto init_data = initial_strokes.unchecked<1>();
+          auto targ_data = target_strokes.unchecked<1>();
+          
           std::vector<ftpsc::Stroke> init_strokes, targ_strokes;
-
+          
           // Parse initial strokes
           std::vector<ftpsc::Vec2> current_stroke;
-          for (size_t i = 0; i < init_size; i += 2) {
-              float x = init_data[i];
+          for (size_t i = 0; i < initial_strokes.shape(0); i += 2) {
+              float x = init_data(i);
               if (x < -0.5f) { // Separator marker (-1)
                   if (!current_stroke.empty()) {
                       ftpsc::Stroke s;
@@ -518,8 +505,8 @@ NB_MODULE(gp_autointerpolate, m) {
                       init_strokes.push_back(s);
                       current_stroke.clear();
                   }
-              } else if (i + 1 < init_size) {
-                  float y = init_data[i + 1];
+              } else if (i + 1 < initial_strokes.shape(0)) {
+                  float y = init_data(i + 1);
                   current_stroke.emplace_back(x, y);
               }
           }
@@ -528,11 +515,11 @@ NB_MODULE(gp_autointerpolate, m) {
               s.points = current_stroke;
               init_strokes.push_back(s);
           }
-
+          
           // Parse target strokes
           current_stroke.clear();
-          for (size_t i = 0; i < targ_size; i += 2) {
-              float x = targ_data[i];
+          for (size_t i = 0; i < target_strokes.shape(0); i += 2) {
+              float x = targ_data(i);
               if (x < -0.5f) { // Separator marker (-1)
                   if (!current_stroke.empty()) {
                       ftpsc::Stroke s;
@@ -540,8 +527,8 @@ NB_MODULE(gp_autointerpolate, m) {
                       targ_strokes.push_back(s);
                       current_stroke.clear();
                   }
-              } else if (i + 1 < targ_size) {
-                  float y = targ_data[i + 1];
+              } else if (i + 1 < target_strokes.shape(0)) {
+                  float y = targ_data(i + 1);
                   current_stroke.emplace_back(x, y);
               }
           }
@@ -550,29 +537,27 @@ NB_MODULE(gp_autointerpolate, m) {
               s.points = current_stroke;
               targ_strokes.push_back(s);
           }
-
+          
           return self.match(init_strokes, targ_strokes);
-      }, nb::arg("initial_strokes"), nb::arg("target_strokes"),
+      }, py::arg("initial_strokes"), py::arg("target_strokes"),
       "Match strokes between two frames using FTP-SC algorithm")
       .def("match_with_seeds", [](ftpsc::StrokeMatcher &self,
-                       FArr initial_strokes,
-                       FArr target_strokes,
-                       nb::list seeds_list) {
+                       py::array_t<float> initial_strokes,
+                       py::array_t<float> target_strokes,
+                       py::list seeds_list) {
           // Convert numpy arrays to Stroke vectors
           // Expected format: flat array of [x0,y0, x1,y1, ..., -1,-1, x0,y0, ...]
           // where -1,-1 separates strokes
-
-          const float *init_data = initial_strokes.data();
-          const float *targ_data = target_strokes.data();
-          size_t init_size = initial_strokes.shape(0);
-          size_t targ_size = target_strokes.shape(0);
-
+          
+          auto init_data = initial_strokes.unchecked<1>();
+          auto targ_data = target_strokes.unchecked<1>();
+          
           std::vector<ftpsc::Stroke> init_strokes, targ_strokes;
-
+          
           // Parse initial strokes
           std::vector<ftpsc::Vec2> current_stroke;
-          for (size_t i = 0; i < init_size; i += 2) {
-              float x = init_data[i];
+          for (size_t i = 0; i < initial_strokes.shape(0); i += 2) {
+              float x = init_data(i);
               if (x < -0.5f) { // Separator marker (-1)
                   if (!current_stroke.empty()) {
                       ftpsc::Stroke s;
@@ -580,8 +565,8 @@ NB_MODULE(gp_autointerpolate, m) {
                       init_strokes.push_back(s);
                       current_stroke.clear();
                   }
-              } else if (i + 1 < init_size) {
-                  float y = init_data[i + 1];
+              } else if (i + 1 < initial_strokes.shape(0)) {
+                  float y = init_data(i + 1);
                   current_stroke.emplace_back(x, y);
               }
           }
@@ -590,11 +575,11 @@ NB_MODULE(gp_autointerpolate, m) {
               s.points = current_stroke;
               init_strokes.push_back(s);
           }
-
+          
           // Parse target strokes
           current_stroke.clear();
-          for (size_t i = 0; i < targ_size; i += 2) {
-              float x = targ_data[i];
+          for (size_t i = 0; i < target_strokes.shape(0); i += 2) {
+              float x = targ_data(i);
               if (x < -0.5f) { // Separator marker (-1)
                   if (!current_stroke.empty()) {
                       ftpsc::Stroke s;
@@ -602,8 +587,8 @@ NB_MODULE(gp_autointerpolate, m) {
                       targ_strokes.push_back(s);
                       current_stroke.clear();
                   }
-              } else if (i + 1 < targ_size) {
-                  float y = targ_data[i + 1];
+              } else if (i + 1 < target_strokes.shape(0)) {
+                  float y = targ_data(i + 1);
                   current_stroke.emplace_back(x, y);
               }
           }
@@ -612,20 +597,20 @@ NB_MODULE(gp_autointerpolate, m) {
               s.points = current_stroke;
               targ_strokes.push_back(s);
           }
-
+          
           // Parse seeds from Python list of tuples [(i, j), ...]
           std::vector<std::pair<int, int>> seeds;
-          for (size_t i = 0; i < seeds_list.size(); ++i) {
-              nb::tuple tuple = nb::cast<nb::tuple>(seeds_list[i]);
-              int a = nb::cast<int>(tuple[0]);
-              int b = nb::cast<int>(tuple[1]);
-              seeds.emplace_back(a, b);
+          for (auto item : seeds_list) {
+              py::tuple tuple = item.cast<py::tuple>();
+              int i = tuple[0].cast<int>();
+              int j = tuple[1].cast<int>();
+              seeds.emplace_back(i, j);
           }
-
+          
           return self.match_with_seeds(init_strokes, targ_strokes, seeds);
-      }, nb::arg("initial_strokes"), nb::arg("target_strokes"), nb::arg("seeds"),
+      }, py::arg("initial_strokes"), py::arg("target_strokes"), py::arg("seeds"),
       "Match strokes with user-provided seeds for initial correspondence. "
       "Seeds are (initial_idx, target_idx) pairs that guide the matching algorithm.")
       .def("get_config", &ftpsc::StrokeMatcher::get_config)
-      .def("set_config", &ftpsc::StrokeMatcher::set_config, nb::arg("config"));
+      .def("set_config", &ftpsc::StrokeMatcher::set_config, py::arg("config"));
 }

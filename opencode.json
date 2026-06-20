@@ -1,0 +1,17 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", "Addon/AGENTS.md", "Addon/core/AGENTS.md", "Executable/AGENTS.md"],
+  "skills": {
+    "paths": [".opencode/skills"]
+  },
+  "agent": {
+    "build": {
+      "description": "Build agent with DOX framework enforcement. Always reads AGENTS.md chain before editing.",
+      "permission": {
+        "skill": {
+          "*": "allow"
+        }
+      }
+    }
+  }
+}

@@ -3,19 +3,8 @@ project(gp_autointerpolate)
 
 set(CMAKE_CXX_STANDARD 17)
 
-# ============================================================================
-# ABI3 STABLE ABI OPTION
-# ============================================================================
-# Enable with: cmake -DENABLE_ABI3=ON
-# Produces cp312-abi3 wheel (covers Python 3.12+). Requires Python >= 3.12 to build.
-# Disable (default) for cp311 wheel (Python 3.11 only, Blender 4.3).
-option(ENABLE_ABI3 "Build with Python Stable ABI (abi3) for Python 3.12+ compat" OFF)
-
-if(ENABLE_ABI3)
-    message(STATUS "Building GP Auto Interpolate module (abi3 mode - Python 3.12+ compat)")
-else()
-    message(STATUS "Building GP Auto Interpolate module (standard mode - Python 3.11+ compat)")
-endif()
+message(STATUS "Building GP Auto Interpolate module for Blender 4.3+")
+message(STATUS "Universal compatibility with Python 3.11.x")
 
 # ============================================================================
 # CROSS-PLATFORM PYTHON DETECTION
@@ -36,34 +25,30 @@ message(STATUS "Python executable: ${Python3_EXECUTABLE}")
 message(STATUS "Python include dirs: ${Python3_INCLUDE_DIRS}")
 
 # Check Python version compatibility
-if(Python3_VERSION_MAJOR EQUAL 3 AND (Python3_VERSION_MINOR EQUAL 11 OR Python3_VERSION_MINOR EQUAL 12 OR Python3_VERSION_MINOR EQUAL 13 OR Python3_VERSION_MINOR EQUAL 14))
-    message(STATUS "Python ${DETECTED_PYTHON_VERSION} is officially supported.")
+if(Python3_VERSION_MAJOR EQUAL 3 AND (Python3_VERSION_MINOR EQUAL 11 OR Python3_VERSION_MINOR EQUAL 13))
+    message(STATUS "Python ${DETECTED_PYTHON_VERSION} is officially supported (Blender 4.2+ / 4.4+).")
 else()
-    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found. Officially tested versions are 3.11, 3.12, 3.13, 3.14.")
+    message(WARNING "Python ${DETECTED_PYTHON_VERSION} found. Officially tested versions are 3.11 and 3.13.")
 endif()
 
+# Force pybind11 to use our detected Python (your fix!)
+set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
+
 # ============================================================================
-# NANOBIND SETUP
+# PYBIND11 SETUP
 # ============================================================================
 
-# nanobind uses find_package(Python ...) (not Python3) internally.
-# Pre-populate the Python variables so it finds the right installation.
-set(Python_ROOT_DIR "${Python3_ROOT_DIR}")
-set(Python_EXECUTABLE "${Python3_EXECUTABLE}")
-if(ENABLE_ABI3)
-    find_package(Python 3.12 REQUIRED COMPONENTS Interpreter Development.Module Development.SABIModule)
-else()
-    find_package(Python 3.11 REQUIRED COMPONENTS Interpreter Development.Module)
-endif()
-
-# Fetch nanobind
+# Fetch pybind11
 include(FetchContent)
 FetchContent_Declare(
-    nanobind
-    GIT_REPOSITORY https://github.com/wjakob/nanobind.git
-    GIT_TAG v2.9.2
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG v3.0.1
 )
-FetchContent_MakeAvailable(nanobind)
+FetchContent_MakeAvailable(pybind11)
+
+# Force pybind11 to use our detected Python again (your fix - required twice!)
+set(PYBIND11_FINDPYTHON OFF CACHE BOOL "Disable pybind11 auto Python detection" FORCE)
 
 # ============================================================================
 # EIGEN3 DEPENDENCY (for stage_two.cpp)
@@ -107,17 +92,7 @@ set(FTPSC_SOURCES
     src/stage_two.cpp
 )
 
-if(ENABLE_ABI3)
-    nanobind_add_module(gp_autointerpolate STABLE_ABI ${FTPSC_SOURCES})
-    # Fix nanobind v2.9.2 CMake bug: nanobind_build_library() checks TARGET_NAME
-    # for "-abi3" suffix, but the user module target name never has that suffix.
-    # On Windows, this causes the .pyd to link python3XX.dll instead of python3.dll.
-    if(WIN32 AND TARGET Python::SABIModule)
-        target_link_libraries(gp_autointerpolate PUBLIC Python::SABIModule)
-    endif()
-else()
-    nanobind_add_module(gp_autointerpolate ${FTPSC_SOURCES})
-endif()
+pybind11_add_module(gp_autointerpolate ${FTPSC_SOURCES})
 
 # Add compile definitions for optional dependencies
 if(FTPSC_USE_EIGEN)
@@ -205,7 +180,6 @@ message(STATUS "=== Build Configuration ===")
 message(STATUS "Platform: ${CMAKE_SYSTEM_NAME}")
 message(STATUS "Python: ${DETECTED_PYTHON_VERSION}")
 message(STATUS "Python executable: ${Python3_EXECUTABLE}")
-message(STATUS "Stable ABI (abi3): ${ENABLE_ABI3}")
 if(WIN32)
     message(STATUS "Output: gp_autointerpolate.pyd")
 elseif(APPLE)
@@ -214,4 +188,5 @@ else()
     message(STATUS "Output: gp_autointerpolate.so")
 endif()
 message(STATUS "Output directory: ${CMAKE_SOURCE_DIR}/output")
+message(STATUS "Compatible with: Blender 4.3+")
 message(STATUS "============================")
