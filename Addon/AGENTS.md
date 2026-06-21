@@ -23,6 +23,7 @@ Blender addon package for Grease Pencil stroke interpolation. Registers operator
 - Keep operators self-contained with their own `register()`/`unregister()`
 - Utils are shared helpers; avoid circular imports between sub-packages
 - The `.blend` file is a reference asset, not runtime data
+- Clear `__pycache__/` under `Addon/` after local tests to avoid stale bytecode
 
 ## Verification
 

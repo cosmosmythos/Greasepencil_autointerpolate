@@ -15,10 +15,7 @@ from . import cache
 
 
 def calculate_stroke_normal(positions):
-    """
-    Calculate average normal for a stroke.
-    Uses first, middle, and last points to define a plane.
-    """
+    """Calculate average normal for a stroke using first, middle, last points."""
     point_count = len(positions) // 3
     if point_count < 3:
         return np.array([0.0, 0.0, 1.0], dtype=np.float32)  # Default: Z-up
@@ -44,11 +41,7 @@ def calculate_stroke_normal(positions):
 
 def write_interpolated_data_to_frame(gp_obj, target_frame_num,
                                      all_interpolated_data, target_layer_idx):
-    """Writes interpolated data to frame *_i attributes.
-
-    Phase 0B: uses np.concatenate end-to-end — no .tolist() conversions.
-    Populates with original data first, then overwrites with interpolation.
-    """
+    """Write interpolated data to frame *_i attributes."""
     try:
         cache.begin_runtime_update(gp_obj.name)
         obj_cache = cache.get_cache(gp_obj.name)
@@ -91,7 +84,6 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
 
             if has_interpolation:
                 data_list = all_interpolated_data[attr_type]
-                # Phase 0B:
                 flat = np.concatenate(data_list).astype(np.float32)
 
                 if is_vector:
@@ -108,7 +100,6 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
                         original_attr = drawing.attributes[original_attr_name]
                         original_data = np.empty(expected_size, dtype=np.float32)
                         original_attr.data.foreach_get(set_method, original_data)
-                        # Pad with original data
                         original_data[:len(flat)] = flat
                         write_operations.append((attr, set_method, original_data))
                 else:
@@ -135,22 +126,14 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
 
 
 def process_object(gp_obj, current_frame):
-    """Process interpolation for a single GP object.
-
-    Cache invalidation uses two layers:
-      1. Dirty flag (set by depsgraph handler on geometry/structural changes)
-      2. Lightweight keyframe-signature check (catches moved/added/removed
-         keyframes that the dirty flag might miss)
-    """
+    """Process interpolation for a single GP object."""
     obj_name = gp_obj.name
     try:
         if cache.is_dirty(obj_name):
             cache.build(gp_obj)
-            # build() clears the dirty flag
 
         obj_cache = cache.get_cache(obj_name)
         if not obj_cache or not obj_cache.get('layers'):
-            # Not built yet (first frame after enable). Build once.
             cache.build(gp_obj)
             obj_cache = cache.get_cache(obj_name)
             if not obj_cache or not obj_cache.get('layers'):
@@ -158,7 +141,6 @@ def process_object(gp_obj, current_frame):
 
         interpolator = cpp_module.get_interpolator()
 
-        # Find layers that need interpolation
         layers_to_process = []
 
         for layer_idx, layer_cache in obj_cache['layers'].items():
@@ -176,7 +158,6 @@ def process_object(gp_obj, current_frame):
                 layers_to_process.append(
                     (layer_idx, layer_cache, prev_frame, next_frame))
 
-        # Process each layer
         for layer_idx, layer_cache, prev_frame, next_frame in layers_to_process:
             if current_frame == prev_frame or current_frame == next_frame:
                 continue
@@ -184,7 +165,6 @@ def process_object(gp_obj, current_frame):
             prev_strokes = keyframes[prev_frame]
             next_strokes = keyframes[next_frame]
 
-            # Get easing curve
             easing_samples = layer_cache.get('easing_samples', {}).get(prev_frame)
             if easing_samples is None:
                 easing_curve = layer_cache['easing_data'].get(prev_frame, None)
@@ -195,12 +175,10 @@ def process_object(gp_obj, current_frame):
             else:
                 easing_samples = easing_samples.copy()
 
-            # Safety: replace NaN/Inf with safe defaults
             if np.any(np.isnan(easing_samples)) or np.any(np.isinf(easing_samples)):
                 easing_samples = np.nan_to_num(easing_samples, nan=0.0,
                                                 posinf=1.0, neginf=0.0)
 
-            # Get arc parameters
             arc_params = layer_cache['arc_data'].get(
                 prev_frame, (0.0, 0.0, 0.0, True))
             arc_amount = arc_params[0]
@@ -215,21 +193,17 @@ def process_object(gp_obj, current_frame):
                 'handle_right': [],
             }
 
-            # Pair strokes by index
             for stroke_idx, prev_stroke in enumerate(prev_strokes):
                 if stroke_idx >= len(next_strokes):
                     continue
 
                 next_stroke = next_strokes[stroke_idx]
 
-                # Normalised schema (Phase 0C) — no isinstance guards needed
                 prev_positions = prev_stroke['position']
                 next_positions = next_stroke['position']
 
-                # Calculate stroke normal for 3D arc direction
                 stroke_normal = calculate_stroke_normal(prev_positions)
 
-                # Process position
                 if arc_amount > 0.001:
                     interpolated_positions = interpolator.process_interpolation_advanced(
                         current_frame,
@@ -248,7 +222,6 @@ def process_object(gp_obj, current_frame):
                 if interpolated_positions is not None and interpolated_positions.size > 0:
                     all_interpolated_data['position'].append(interpolated_positions)
 
-                    # Process opacity
                     interpolated_opacity = interpolator.process_interpolation(
                         current_frame,
                         prev_frame, prev_stroke['opacity'],
@@ -257,7 +230,6 @@ def process_object(gp_obj, current_frame):
                     if interpolated_opacity is not None and interpolated_opacity.size > 0:
                         all_interpolated_data['opacity'].append(interpolated_opacity)
 
-                    # Process radius
                     interpolated_radius = interpolator.process_interpolation(
                         current_frame,
                         prev_frame, prev_stroke['radius'],
@@ -266,7 +238,6 @@ def process_object(gp_obj, current_frame):
                     if interpolated_radius is not None and interpolated_radius.size > 0:
                         all_interpolated_data['radius'].append(interpolated_radius)
 
-                    # Process handles (only when point counts match)
                     prev_points = len(prev_stroke['handle_left']) // 3
                     next_points = len(next_stroke['handle_left']) // 3
 
@@ -301,11 +272,7 @@ def process_object(gp_obj, current_frame):
 
 
 def process_all(context):
-    """Process all registered GP objects with per-object error isolation.
-
-    Each object is wrapped in try/except so one corrupt object does NOT
-    block the rest of the rig.
-    """
+    """Process all registered GP objects."""
     process_scene(context.scene)
 
 
@@ -326,7 +293,6 @@ def process_scene(scene):
             print(f"[GPAI] Error processing '{obj_name}': {e}")
 
 
-# Backward-compat alias — old code may still call process(context)
 def process(context):
     """Legacy entry point. Delegates to process_all()."""
     process_all(context)

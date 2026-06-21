@@ -85,6 +85,14 @@ Default section order:
 
 When the user requests a durable behavior change, record it here or in the relevant child AGENTS.md
 
+### Live Testing in Blender
+
+- Blender extension directory: `C:\Users\User\AppData\Roaming\Blender Foundation\Blender\5.0\extensions\user_default`
+- When testing code changes live, copy ONLY `.py` files from `Addon/` to the extension directory (matching subdirectory structure)
+- Do NOT copy `.pyd`, `.whl`, wheels, manifest, or `.blend` files — those are already in place
+- Use the blender-mcp MCP server to run code in Blender (connected on localhost:9876)
+- Blender 5.0 is the primary test target
+
 ## Child DOX Index
 
 | Child | Scope |

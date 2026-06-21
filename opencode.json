@@ -4,6 +4,16 @@
   "skills": {
     "paths": [".opencode/skills"]
   },
+  "mcp": {
+    "blender": {
+      "type": "local",
+      "command": ["uvx", "blender-mcp"],
+      "enabled": true,
+      "environment": {
+        "DISABLE_TELEMETRY": "true"
+      }
+    }
+  },
   "agent": {
     "build": {
       "description": "Build agent with DOX framework enforcement. Always reads AGENTS.md chain before editing.",

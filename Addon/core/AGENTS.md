@@ -21,18 +21,19 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 ## Local Contracts
 
 - **Primary per-frame entry point is `utils/visibility.on_frame_change`, not a core handler.** When playing / scrubbing / rendering it shows modifiers then calls `interpolation.process_scene(scene)`. `core/npanel_handlers.on_frame_change` only syncs the easing-curve UI and never runs interpolation.
-- **Invalidation uses two layers:** dirty flag + deferred keyframe signature check.
-  - Dirty flag paths, all converge on `cache.mark_dirty()`:
-    - Geometry depsgraph update → unconditional `mark_dirty` (no hash).
-    - Non-geometry update (keyframe move/add/remove) → deferred (timer) comparison of the **lightweight** `get_keyframe_signature()` only.
-    - msgbus mode / active-object change → `mark_dirty`.
-  - `get_keyframe_signature()` (layer count + keyframe numbers only, no stroke/point iteration) runs in `_deferred_sig_check()` via timer — never in the per-frame loop. Catches keyframe moves that `is_updated_geometry` doesn't report.
+- **Invalidation uses two layers:** geometry-path immediate rebuild + deferred keyframe signature check.
+  - Geometry depsgraph update (`is_updated_geometry=True`) → immediate rebuild via `cache.clear() + cache.build()`. Only runs when the object is not already dirty, not currently building, and has no pending runtime grace.
+  - Non-geometry update (keyframe move/add/remove) → deferred (timer) comparison of the **lightweight** `get_keyframe_signature()`. On mismatch → immediate rebuild (`clear + build`), not just `mark_dirty`.
+  - msgbus mode / active-object change → `mark_dirty` (consumed by `process_object` on next frame).
+  - Modifier toggle, interpolation toggle, layer visibility changes do NOT trigger rebuild (no depsgraph update fires).
+  - `_targets_by_gp_data()` maps `gp_obj.data.name` (string) → target names. Uses datablock name as key, not Python object identity.
+- **`get_keyframe_signature()` runs in `_deferred_sig_check()` via timer** — never in the per-frame loop.
 - **Dirty flags are consumed at the top of `process_object`** (`interpolation.py`), which calls `build()` only when the object is dirty or has no cache yet.
 - **`build()` is per-object and isolated**: it writes only `cache_registry[obj_name]`, never clears or touches siblings.
-- **Feedback-loop suppression, not thread-safety.** The addon's own writes (`*_i` attributes, modifier visibility) fire depsgraph updates that would re-invalidate the cache. `begin_runtime_update` / `end_runtime_update` + the grace counter suppress these self-triggered updates. Blender runs these handlers single-threaded; the concern is re-entrancy, not races.
+- **Feedback-loop suppression via `is_runtime_update_active()` check.** The depsgraph handler skips objects where `is_runtime_update_active()` is True. Grace counter is set to zero (`grace_updates=0`) so user edits are never suppressed.
 - **Two signatures, different scopes.**
-  - `get_signature()` (structural: layer/frame/stroke/point counts + keyframe numbers) — used only at build time and in deferred non-geometry sig check. Never computed in the hot path.
-  - `get_keyframe_signature()` (lightweight: layer count + keyframe numbers only) — used in `_deferred_sig_check()` (timer-based, not per-frame). Catches keyframe moves/adds/removes.
+  - `get_signature()` (structural: layer/frame/stroke/point counts + keyframe numbers) — build-time only.
+  - `get_keyframe_signature()` (lightweight: layer count + keyframe numbers only) — timer-based, not per-frame.
 
 ## Work Guidance
 
@@ -40,6 +41,7 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 - Never call `get_signature()` inside depsgraph handlers or per-frame loops — build-time and deferred-timer only. `get_keyframe_signature()` is the only signature safe for the hot path (no stroke/point iteration).
 - Any new source attribute the engine reads must also be mirrored to a `*_i` attribute by `_ensure_interpolation_attributes`: interpolation writes only to mirrors, and the modifier composes them.
 - Preserve the cached layer schema (`keyframes` / `sorted_frames` / `frame_lookup` / `easing_data` / `easing_samples` / `arc_data`) — `interpolation.py` reads these fields without guards.
+- `rebuild_frame()` is surgical: rebuilds stroke data for ONE frame, updates `sorted_frames` + sig. Does NOT rebuild `easing_data`/`easing_samples`/`arc_data` — use `clear()+build()` for easing changes.
 - Changes to interpolation output must stay backward-compatible with `bake_utils.apply_interpolation_to_frame`, which writes the same data to FINAL attributes for baking.
 
 ## Verification
@@ -47,3 +49,6 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 - `cpp_module.load()` then `get_interpolator()` returns an instance without import error.
 - Toggle a GP object on, scrub between two keys → interpolated `*_i` data appears on in-between frames.
 - Edit geometry on one key → the next frame change rebuilds only that object's cache (dirty flag), not sibling objects'.
+- Add a frame in Dopesheet → cache rebuilds automatically (detected by deferred sig check).
+- Remove a frame in Dopesheet → cache rebuilds automatically.
+- Toggle modifier or interpolation enabled → no unnecessary rebuilds.

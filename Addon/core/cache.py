@@ -40,7 +40,7 @@ cache_registry = {}
 # Dirty flags: object names that need a cache rebuild
 _dirty_objects = set()
 
-# Suppress depsgraph invalidation caused by our own writes/rebuilds.
+# Suppress depsgraph updates from own writes.
 _runtime_update_depth = {}
 _runtime_update_grace = {}
 
@@ -49,9 +49,7 @@ _runtime_update_grace = {}
 # ---------------------------------------------------------------------------
 
 def mark_dirty(obj_name):
-    """Mark an object's cache as needing rebuild.
-    Called from depsgraph_update_post when geometry changes are detected.
-    """
+    """Mark an object's cache as needing rebuild."""
     _dirty_objects.add(obj_name)
 
 
@@ -61,17 +59,17 @@ def is_dirty(obj_name):
 
 
 def clear_dirty(obj_name):
-    """Clear the dirty flag after a successful rebuild."""
+    """Clear the dirty flag."""
     _dirty_objects.discard(obj_name)
 
 
 def begin_runtime_update(obj_name):
-    """Mark an object as being updated internally by the addon."""
+    """Increment the runtime update depth counter."""
     _runtime_update_depth[obj_name] = _runtime_update_depth.get(obj_name, 0) + 1
 
 
-def end_runtime_update(obj_name, grace_updates=2):
-    """End an internal update and ignore the next few depsgraph updates."""
+def end_runtime_update(obj_name, grace_updates=0):
+    """Decrement the runtime update depth counter."""
     depth = _runtime_update_depth.get(obj_name, 0)
     if depth <= 1:
         _runtime_update_depth.pop(obj_name, None)
@@ -84,17 +82,17 @@ def end_runtime_update(obj_name, grace_updates=2):
 
 
 def is_runtime_update_active(obj_name):
-    """Return True while the addon is actively mutating this object."""
+    """Return True while the addon is mutating this object."""
     return _runtime_update_depth.get(obj_name, 0) > 0
 
 
 def has_runtime_update_grace(obj_name):
-    """Return True when post-write depsgraph grace updates are still pending."""
+    """Return True when grace updates are pending."""
     return _runtime_update_grace.get(obj_name, 0) > 0
 
 
 def consume_runtime_update_grace(obj_name):
-    """Consume one pending post-write grace update, if any."""
+    """Consume one grace update."""
     grace = _runtime_update_grace.get(obj_name, 0)
     if grace <= 0:
         return False
@@ -107,7 +105,7 @@ def consume_runtime_update_grace(obj_name):
 
 
 def clear_runtime_update_grace(obj_name):
-    """Clear any pending post-write grace updates."""
+    """Clear pending grace updates."""
     _runtime_update_grace.pop(obj_name, None)
 
 
@@ -116,7 +114,7 @@ def clear_runtime_update_grace(obj_name):
 # ---------------------------------------------------------------------------
 
 def get_cache(obj_name):
-    """Get cache dict for a specific object.  Returns {} if not cached."""
+    """Get cache dict for an object. Returns {} if not cached."""
     return cache_registry.get(obj_name, {})
 
 
@@ -165,12 +163,7 @@ def get_signature(gp_obj):
 
 
 def get_keyframe_signature(gp_obj):
-    """Lightweight check: only layer count + keyframe numbers.
-
-    Catches moved / added / removed keyframes without iterating strokes
-    or points.  Used by the deferred sig check in npanel_handlers.py
-    (timer-scheduled, NOT per-frame).
-    """
+    """Lightweight check: layer count + keyframe numbers only."""
     if not gp_obj or not gp_obj.data:
         return None
     keyframe_numbers = []
@@ -253,11 +246,7 @@ def ensure_modifier(gp_obj):
 # ---------------------------------------------------------------------------
 
 def build(gp_obj):
-    """Scans ONE Grease Pencil object and builds/rebuilds its cache entry.
-
-    This writes to cache_registry[gp_obj.name] ONLY — never clears or
-    touches cache entries for other objects.
-    """
+    """Build/rebuild cache for one GP object. Writes only to cache_registry[obj_name]."""
     global cache_registry
 
     obj_name = gp_obj.name
@@ -409,18 +398,115 @@ def build(gp_obj):
         end_runtime_update(obj_name)
 
 
+def _clear_frame_from_cache(layer_cache, frame_num):
+    """Remove a frame from all per-frame cache maps."""
+    for key in ("keyframes", "frame_lookup", "easing_data", "easing_samples", "arc_data"):
+        layer_cache.get(key, {}).pop(frame_num, None)
+    layer_cache["sorted_frames"] = sorted(layer_cache.get("keyframes", {}).keys())
+
+
+def rebuild_frame(gp_obj, layer_idx, frame_num):
+    """Rebuild cache entry for a single frame."""
+    obj_name = gp_obj.name
+    entry = cache_registry.get(obj_name)
+    if not entry:
+        return False
+
+    layer_cache = entry.get("layers", {}).get(layer_idx)
+    if not layer_cache:
+        return False
+
+    layer = gp_obj.data.layers[layer_idx]
+    target_frame = None
+    for f in layer.frames:
+        if f.frame_number == frame_num:
+            target_frame = f
+            break
+
+    if target_frame is None:
+        _clear_frame_from_cache(layer_cache, frame_num)
+        _update_key_signature(entry)
+        return True
+
+    drawing = target_frame.drawing
+    attrs = getattr(drawing, "attributes", None)
+    if attrs is None or "position" not in attrs:
+        return False
+
+    pos_attr = attrs["position"]
+    stroke_count = len(drawing.strokes)
+    if stroke_count == 0 or len(pos_attr.data) == 0:
+        return False
+
+    all_positions = np.empty(len(pos_attr.data) * 3, dtype=np.float32)
+    pos_attr.data.foreach_get("vector", all_positions)
+
+    attr_data = {}
+    for aname, field, mult in (
+        ("opacity", "value", 1),
+        ("radius", "value", 1),
+        ("handle_left", "vector", 3),
+        ("handle_right", "vector", 3),
+    ):
+        if aname in attrs and len(attrs[aname].data) > 0:
+            buf = np.empty(len(attrs[aname].data) * mult, dtype=np.float32)
+            attrs[aname].data.foreach_get(field, buf)
+            attr_data[aname] = buf
+
+    stroke_data = []
+    pos_idx = 0
+    attr_idx = 0
+
+    default_opacity = np.ones(len(pos_attr.data), dtype=np.float32)
+    default_radius = np.zeros(len(pos_attr.data), dtype=np.float32)
+    default_handles = np.zeros(len(pos_attr.data) * 3, dtype=np.float32)
+
+    for stroke in drawing.strokes:
+        pc = len(stroke.points)
+        stroke_data.append({
+            "position": all_positions[pos_idx:pos_idx + pc * 3],
+            "opacity": attr_data.get("opacity", default_opacity)[attr_idx:attr_idx + pc],
+            "radius": attr_data.get("radius", default_radius)[attr_idx:attr_idx + pc],
+            "handle_left": attr_data.get("handle_left", default_handles)[pos_idx:pos_idx + pc * 3],
+            "handle_right": attr_data.get("handle_right", default_handles)[pos_idx:pos_idx + pc * 3],
+        })
+        pos_idx += pc * 3
+        attr_idx += pc
+
+    layer_cache["keyframes"][frame_num] = stroke_data
+    layer_cache["frame_lookup"][frame_num] = target_frame
+    layer_cache["sorted_frames"] = sorted(layer_cache["keyframes"].keys())
+
+    if "key" in attrs:
+        key_attr = attrs["key"]
+        total_points = sum(len(s.points) for s in drawing.strokes)
+        if total_points > 0 and len(key_attr.data) == total_points:
+            key_values = np.full(total_points, frame_num, dtype=np.int32)
+            existing = np.empty(total_points, dtype=np.int32)
+            key_attr.data.foreach_get("value", existing)
+            if not np.array_equal(existing, key_values):
+                key_attr.data.foreach_set("value", key_values)
+
+    _update_key_signature(entry)
+    return True
+
+
+def _update_key_signature(entry):
+    """Update only the _keyframe_signature after a frame change."""
+    layers_sig = []
+    for layer_idx in sorted(entry.get('layers', {}).keys()):
+        lc = entry['layers'][layer_idx]
+        layers_sig.append(tuple(sorted(lc.get('keyframes', {}).keys())))
+    layer_count = len(entry.get('layers', {}))
+    entry['_keyframe_signature'] = (layer_count, tuple(layers_sig))
+
+
 # ---------------------------------------------------------------------------
-# Internal: ensure _i attributes exist on every frame  (Phase 0D)
+# Internal: ensure _i attributes exist on every frame
 # ---------------------------------------------------------------------------
 
 def _ensure_interpolation_attributes(gp_obj):
-    """Create *_i mirror attributes on every frame of *gp_obj*.
-
-    Phase 0D optimisation: only copy source → _i when the attribute is
-    first created.  If it already exists (and has the right size) we skip
-    the expensive foreach_get/foreach_set round-trip because the
-    interpolation engine will overwrite it during processing anyway.
-    """
+    """Create *_i mirror attributes on every frame. Copies source data on first creation."""
     attr_defs = [
         ("position_i", 'FLOAT_VECTOR', 'POINT', "position", 'vector', 3),
         ("opacity_i",  'FLOAT',        'POINT', "opacity",  'value',  1),
@@ -444,7 +530,7 @@ def _ensure_interpolation_attributes(gp_obj):
                     attrs.new(attr_name, attr_type, domain)
                     newly_created = True
 
-                # Only copy source data into _i on first creation
+                # Copy source data into _i on first creation
                 if newly_created and source_name in attrs:
                     source_attr = attrs[source_name]
                     target_attr = attrs[attr_name]
