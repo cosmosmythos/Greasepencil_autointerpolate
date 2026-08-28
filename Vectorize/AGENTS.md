@@ -27,7 +27,7 @@ Native C++ module (`gp_linevector`) implementing the PolyVector algorithm (Bessm
 ## Work Guidance
 
 - CMake finds dependencies via `find_package()`; ensure CI images have them installed
-- **OpenCV 5.x required** — 4.11.0 rejects VS2026 (MSVC 1951). CI downloads pre-built 5.0.0 Windows binaries; macOS/Linux use brew/apt.
+- **OpenCV 5.x required** — 4.11.0 rejects VS2026 (MSVC 1951). CI downloads pre-built 5.0.0 Windows binaries; macOS Homebrew auto-detects opencv5/opencv4 cmake layout; Linux apt provides it.
 - PolyVector algorithm is research-grade; changes may affect output quality
 - Test with representative line art inputs before merging topology changes
 
