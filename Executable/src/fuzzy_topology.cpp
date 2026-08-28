@@ -163,9 +163,9 @@ make_topologies_compatible(const Stroke &first_stroke, const Stroke &second_stro
                            const std::vector<Stroke> &initial_strokes,
                            const std::vector<Stroke> &target_strokes,
                            int first_index, int second_index, double max_connection_dist) {
-   double step = max_connection_dist / 5.0;
+   double step = max_connection_dist / 10.0; // finer: 0.5 -> 0.05
    if (step <= 0.0) {
-      step = 1.0;
+      step = 0.05;
    }
    for (double connection_dist = max_connection_dist; connection_dist >= 0.0; connection_dist -= step) {
       AlphaTopology topology_first = compute_alpha_topology(first_stroke, initial_strokes, first_index, connection_dist);

@@ -119,9 +119,13 @@ public:
 
   /**
    * @brief Run only Stage 1 (fuzzy topology preservation)
+   *
+   * When manual_seeds is non-empty, they are used as the initial seeds
+   * for the greedy matching heap, bypassing auto-seed selection (SI).
    */
   Correspondence run_stage_one(const std::vector<Stroke> &initial_strokes,
-                               const std::vector<Stroke> &target_strokes);
+                               const std::vector<Stroke> &target_strokes,
+                               const std::vector<std::pair<int, int>> &manual_seeds = {});
 
   /**
    * @brief Run only Stage 2 (neighborhood competition)

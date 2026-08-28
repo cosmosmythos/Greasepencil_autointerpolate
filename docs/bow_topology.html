@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Bow — Fuzzy Topology at a Glance (0–10, dist 0.5)</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a22;--line:#23293d;--text:#e6e8ef;--muted:#95a0b8;--blue:#6ea8fe;--green:#3fb950;--amber:#f2cc60;--grid:#1a1f2e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 ui-sans-system,system-ui,Segoe UI,Roboto}
+  header{max-width:980px;margin:0 auto;padding:28px 20px 10px}
+  header h1{margin:0;font-size:22px}
+  header p{margin:6px 0 0;color:var(--muted)}
+  .wrap{max-width:980px;margin:0 auto;padding:12px 20px 32px;display:grid;gap:16px}
+  .glance{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .glance-head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .badge{font-size:11px;letter-spacing:0.5px;text-transform:uppercase;background:var(--text);color:#0f1115;padding:4px 8px;border-radius:999px;font-weight:800}
+  .glance-head h2{margin:0;font-size:14px}
+  .glance-head p{margin:0;color:var(--muted);font-size:12px}
+  .body{padding:14px 16px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:700px){.kpis{grid-template-columns:1fr 1fr}}
+  .kpi{background:#0b0e14;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .kpi span{font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);display:block}
+  .kpi strong{font-size:22px}
+  .kpi em{font-style:normal;color:var(--muted);font-size:12px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.two{grid-template-columns:1fr}}
+  .stroke-row{background:#0b0e14;border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:8px}
+  .stroke-row.hub{border-color:rgba(110,168,254,0.5);box-shadow:0 0 0 1px rgba(110,168,254,0.2) inset}
+  .row-head{display:flex;align-items:center;gap:8px;font-size:13px}
+  .row-head b{font-size:15px}
+  .count{margin-left:auto;background:#1c2235;color:var(--text);padding:2px 8px;border-radius:999px;font-size:11px;border:1px solid var(--line)}
+  .count.hub{background:var(--blue);color:#0b1220;border-color:var(--blue);font-weight:700}
+  .track{position:relative;height:28px;background:#0f1320;border:1px solid #26304a;border-radius:999px;overflow:hidden}
+  .track::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg, transparent 49.5%, #26304a 49.5%, #26304a 50.5%, transparent 50.5%);opacity:0.35}
+  .dot{position:absolute;top:50%;transform:translate(-50%,-50%);width:22px;height:22px;border-radius:999px;background:var(--card);border:2px solid var(--blue);display:grid;place-items:center;font-size:10px;font-weight:800;color:var(--blue);box-shadow:0 1px 4px rgba(0,0,0,0.4)}
+  .dot.far{border-color:var(--muted);color:var(--muted);opacity:0.9}
+  .dot .lbl{position:absolute;top:-18px;left:50%;transform:translateX(-50%);font-size:10px;white-space:nowrap;background:#0b0e14;border:1px solid var(--line);padding:1px 5px;border-radius:999px;color:var(--muted);font-weight:600}
+  .bar{position:absolute;bottom:2px;left:2px;height:4px;background:var(--blue);border-radius:999px;opacity:0.25}
+  .compat{width:100%;border-collapse:collapse;font-size:13px}
+  .compat th{font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .compat td{padding:7px 8px;border-bottom:1px solid #1e2436}
+  .ok{color:var(--green);font-weight:800}
+  .mini{color:var(--muted);font-family:ui-monospace,Consolas,monospace;font-size:11px}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:11px;color:var(--muted)}
+  .legend i{width:9px;height:9px;border-radius:999px;display:inline-block;margin-right:6px;vertical-align:middle}
+</style>
+</head>
+<body>
+<header>
+  <h1>Bow — Fuzzy Topology <span style="color:var(--muted);font-weight:400">0–10, connection_dist 0.5</span></h1>
+  <p>7 strokes. Read in 3 glances. No <span class="mono" style="color:var(--muted)">[4@0.0000 d0.019]</span> jargon.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- GLANCE 1 -->
+  <section class="glance">
+    <div class="glance-head"><span class="badge">Glance 1</span><h2>Big picture</h2><p> — is it messy?</p></div>
+    <div class="body">
+      <div class="kpis">
+        <div class="kpi"><span>Strokes</span><strong>7 ↔ 7</strong><em>frame 1 → frame 14</em></div>
+        <div class="kpi"><span>Avg neighbours</span><strong>2.7</strong><em>per stroke at 0.5</em></div>
+        <div class="kpi"><span>Hub</span><strong>stroke 4</strong><em>6 neighbours both frames</em></div>
+        <div class="kpi"><span>All pairs compatible</span><strong class="ok">7 / 7 ✔</strong><em>no α shrink needed</em></div>
+      </div>
+      <div class="legend" style="margin-top:12px"><span><i style="background:var(--blue)"></i> neighbour</span><span><i style="background:var(--muted)"></i> far (>0.5) not in topo</span><span><i style="background:var(--green)"></i> hub stroke 4</span></div>
+    </div>
+  </section>
+
+  <!-- GLANCE 2 -->
+  <section class="glance">
+    <div class="glance-head"><span class="badge">Glance 2</span><h2>Who touches who — along the stroke</h2><p>dot = neighbour, left=start 0% right=end 100%, bar = distance (short = close)</p></div>
+    <div class="body">
+      <div class="two">
+        <!-- INITIAL -->
+        <div style="display:grid;gap:10px">
+          <div style="font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);font-weight:700">Frame 1 — initial</div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 0</b> <span style="color:var(--muted)">34 pts</span><span class="count">3 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:3.8%"></div><div class="dot" style="left:0%"><span class="lbl">4 ·0.02</span>4</div><div class="dot" style="left:0.47%"><span class="lbl" style="top:22px">2 ·0.09</span>2</div><div class="dot far" style="left:100%"><span class="lbl">5 ·0.49</span>5</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 1</b> <span style="color:var(--muted)">35 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:66%"></div><div class="dot" style="left:0%"><span class="lbl">4 ·0.39</span>4</div><div class="dot" style="left:33%"><span class="lbl" style="top:22px">3 ·0.03</span>3</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 2</b> <span style="color:var(--muted)">33 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:0%"></div><div class="dot" style="left:100%"><span class="lbl">0 ·0.11</span>0</div><div class="dot" style="left:100%"><span class="lbl" style="top:22px">4 ·0.09</span>4</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 3</b> <span style="color:var(--muted)">30 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:1%"></div><div class="dot" style="left:0%"><span class="lbl">1 ·0.21</span>1</div><div class="dot" style="left:0%"><span class="lbl" style="top:22px">4 ·0.21</span>4</div></div></div>
+
+          <div class="stroke-row hub"><div class="row-head"><b>stroke 4</b> <span style="color:var(--muted)">26 pts</span><span class="count hub">6 neighbours — hub</span></div>
+            <div class="track"><div class="bar" style="width:78%"></div>
+              <div class="dot" style="left:8%"><span class="lbl">1 ·0.00</span>1</div><div class="dot" style="left:8.3%"><span class="lbl" style="top:22px">3 ·0.21</span>3</div><div class="dot" style="left:19.6%"><span class="lbl">6 ·0.07</span>6</div><div class="dot" style="left:72%"><span class="lbl" style="top:22px">5 ·0.07</span>5</div><div class="dot" style="left:85%"><span class="lbl">0 ·0.01</span>0</div><div class="dot" style="left:86%"><span class="lbl" style="top:22px">2 ·0.09</span>2</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 5</b> <span style="color:var(--muted)">19 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:1.5%"></div><div class="dot" style="left:0%"><span class="lbl">4 ·0.07</span>4</div><div class="dot" style="left:1.5%"><span class="lbl" style="top:22px">0 ·0.49</span>0</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 6</b> <span style="color:var(--muted)">15 pts</span><span class="count">1 neighbour</span></div>
+            <div class="track"><div class="bar" style="width:0%"></div><div class="dot" style="left:0%">4</div></div><div style="color:var(--muted);font-size:11px">4 at start, dist 0.07</div></div>
+        </div>
+
+        <!-- TARGET -->
+        <div style="display:grid;gap:10px">
+          <div style="font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);font-weight:700">Frame 14 — target</div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 0</b> <span style="color:var(--muted)">34 pts</span><span class="count">3 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:22%"></div><div class="dot" style="left:0%">4</div><div class="dot" style="left:29.6%">2</div><div class="dot far" style="left:100%">5</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 1</b> <span style="color:var(--muted)">35 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:1%"></div><div class="dot" style="left:0%">4</div><div class="dot" style="left:1.1%">3</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 2</b> <span style="color:var(--muted)">33 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:0%"></div><div class="dot" style="left:100%">0</div><div class="dot" style="left:100%">4</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 3</b> <span style="color:var(--muted)">30 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:0%"></div><div class="dot" style="left:0%">1</div><div class="dot" style="left:0%">4</div></div></div>
+
+          <div class="stroke-row hub"><div class="row-head"><b>stroke 4</b> <span style="color:var(--muted)">35 pts</span><span class="count hub">6 neighbours — hub</span></div>
+            <div class="track"><div class="bar" style="width:85%"></div>
+              <div class="dot" style="left:14.4%"><span class="lbl">6</span>6</div><div class="dot" style="left:63.7%"><span class="lbl">5</span>5</div><div class="dot" style="left:79%"><span class="lbl" style="top:22px">2</span>2</div><div class="dot" style="left:80.5%">0</div><div class="dot" style="left:99%">3</div><div class="dot" style="left:99.7%"><span class="lbl" style="top:22px">1</span>1</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 5</b> <span style="color:var(--muted)">22 pts</span><span class="count">2 neighbours</span></div>
+            <div class="track"><div class="bar" style="width:7.8%"></div><div class="dot" style="left:0%">4</div><div class="dot" style="left:7.8%">0</div></div></div>
+
+          <div class="stroke-row"><div class="row-head"><b>stroke 6</b> <span style="color:var(--muted)">15 pts</span><span class="count">1 neighbour</span></div>
+            <div class="track"><div class="bar" style="width:0%"></div><div class="dot" style="left:0%">4</div></div></div>
+        </div>
+      </div>
+      <div style="margin-top:10px;color:var(--muted);font-size:12px">How to read: bar = stroke from 0% (start) to 100% (end). Dot at <span class="mono">pos</span> (e.g. 0.09 = 9% down the stroke). Label <span class="mono">4 ·0.02</span> means neighbour 4, distance 0.02. Short bar = tight. All initial/target side-by-side — hub 4 stays 6 both frames.</div>
+    </div>
+  </section>
+
+  <!-- GLANCE 3 -->
+  <section class="glance">
+    <div class="glance-head"><span class="badge">Glance 3</span><h2>Compatible?</h2><p>can Stage 1 use it?</p></div>
+    <div class="body">
+      <table class="compat">
+        <tr><th>pair</th><th>initial neighbours</th><th>target neighbours</th><th>same count?</th></tr>
+        <tr><td><b>0 → 0</b></td><td>3 <span class="mini">[4,2,5]</span></td><td>3 <span class="mini">[4,2,5]</span></td><td class="ok">✔ 3/3</td></tr>
+        <tr><td><b>1 → 1</b></td><td>2 <span class="mini">[4,3]</span></td><td>2 <span class="mini">[4,3]</span></td><td class="ok">✔ 2/2</td></tr>
+        <tr><td><b>2 → 2</b></td><td>2 <span class="mini">[0,4]</span></td><td>2 <span class="mini">[0,4]</span></td><td class="ok">✔ 2/2</td></tr>
+        <tr><td><b>3 → 3</b></td><td>2 <span class="mini">[1,4]</span></td><td>2 <span class="mini">[1,4]</span></td><td class="ok">✔ 2/2</td></tr>
+        <tr><td><b>4 → 4</b></td><td>6 <span class="mini">1,3,6,5,0,2</span></td><td>6 <span class="mini">6,5,2,0,3,1</span></td><td class="ok">✔ 6/6 hub</td></tr>
+        <tr><td><b>5 → 5</b></td><td>2 <span class="mini">[4,0]</span></td><td>2 <span class="mini">[4,0]</span></td><td class="ok">✔ 2/2</td></tr>
+        <tr><td><b>6 → 6</b></td><td>1 <span class="mini">[4]</span></td><td>1 <span class="mini">[4]</span></td><td class="ok">✔ 1/1</td></tr>
+      </table>
+      <div style="margin-top:10px;color:var(--muted);font-size:12px"><span class="ok">✔</span> means <span class="mono">make_topologies_compatible</span> found same size at 0.5, no shrink needed. That's why <span class="mono">bow</span> is easy — every stroke keeps its neighbour count frame-to-frame. Order drifts (e.g. 2 sits at 0% vs 29%) but count matches, so Stage 1 can seed.</div>
+    </div>
+  </section>
+
+  <div style="color:var(--muted);font-size:12px;text-align:center">Current C++ <span class="mono">fuzzy_topology.cpp</span> (detail::distance_point_to_stroke) on 0–10 normalized <span class="mono">viewport_view</span> — file: <span class="mono">Executable/tests/bow_fuzzy_test.exe</span></div>
+</div>
+</body>
+</html>

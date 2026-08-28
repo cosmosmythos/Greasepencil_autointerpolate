@@ -11,7 +11,7 @@ Native C++ module (`gp_autointerpolate`) implementing the FTP-SC stroke interpol
 | Binding entry point | `src/interpolate.cpp` (nanobind module + `Interpolator` class + `ftpsc::StrokeMatcher` bindings) |
 | Per-frame interpolator | `src/interpolate.cpp` — `Interpolator::process_interpolation[_advanced]`, arc/spiral math, resampling |
 | FTP-SC pipeline | `src/stage_one.cpp`, `src/stage_two.cpp`, `src/stroke_matcher.cpp/.h` |
-| FTP-SC components | `src/fuzzy_topology.*`, `src/greedy_matcher.*`, `src/similarity_transform.*`, `src/salient_point_matcher.*` |
+| FTP-SC components | `src/fuzzy_topology.*`, `src/greedy_matcher.*`, `src/salient_point_matcher.*` (topology-only, no `similarity_transform`) |
 | Core data | `src/stroke.h` (`ftpsc::Vec2`, `ftpsc::Stroke`) |
 | Build | `CMakeLists.txt` (nanobind v2.9.2, `-DENABLE_ABI3=ON` for cp312-abi3, default OFF for cp311) |
 | Fast build | `build_fast.bat` — incremental build that skips `cmake` configure when `build/` already exists (avoids re-downloading nanobind/nanoflann) |

@@ -13,6 +13,8 @@ dist/
 *.egg-info/
 Executable/build/
 Executable/output/
+*.obj
+*.exe
 
 # Blender
 *.blend1

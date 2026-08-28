@@ -5,7 +5,6 @@
 
 #define _USE_MATH_DEFINES
 #include "fuzzy_topology.h"
-#include "similarity_transform.h"
 #include "stroke_matcher.h"
 #include <algorithm>
 #include <cmath>
@@ -214,28 +213,23 @@ Vec2 to_local_coords(const Vec2 &global_point, const LocalCoordinateSystem &lcs)
 }
 #endif
 
-// Helper: Stage 2 cost using PCA local coordinates (paper 3.4)
+// Helper: Stage 2 cost — no shape, only position + angle (topology-driven)
 double compute_stage_two_cost(const Stroke &seed_initial_stroke, const Stroke &candidate_initial_stroke,
                               const Stroke &seed_target_stroke, const Stroke &candidate_target_stroke,
                               double angle_threshold) {
 
-   // 1. Shape cost between the candidate strokes
-   double shape_cost = compute_matching_degree(candidate_initial_stroke, candidate_target_stroke);
-
 #ifdef FTPSC_USE_EIGEN
-   // 2. PCA-based structural cost
-
    LocalCoordinateSystem local_seed_initial = compute_local_coords(seed_initial_stroke);
    LocalCoordinateSystem local_seed_target = compute_local_coords(seed_target_stroke);
 
    if (!local_seed_initial.valid || !local_seed_target.valid) {
-     Vec2 center_candidate_initial = candidate_initial_stroke.get_centroid();
-     Vec2 center_candidate_target = candidate_target_stroke.get_centroid();
-     Vec2 center_seed_initial = seed_initial_stroke.get_centroid();
-     Vec2 center_seed_target = seed_target_stroke.get_centroid();
+      Vec2 center_candidate_initial = candidate_initial_stroke.get_centroid();
+      Vec2 center_candidate_target = candidate_target_stroke.get_centroid();
+      Vec2 center_seed_initial = seed_initial_stroke.get_centroid();
+      Vec2 center_seed_target = seed_target_stroke.get_centroid();
 
-     double dist_difference = std::abs((center_candidate_initial - center_seed_initial).length() - (center_candidate_target - center_seed_target).length());
-     return shape_cost + dist_difference * 0.5;
+      double dist_difference = std::abs((center_candidate_initial - center_seed_initial).length() - (center_candidate_target - center_seed_target).length());
+      return dist_difference * 0.5;
    }
 
    Vec2 center_candidate_initial = candidate_initial_stroke.get_centroid();
@@ -262,37 +256,36 @@ double compute_stage_two_cost(const Stroke &seed_initial_stroke, const Stroke &c
     }
   }
 
-  double weight_shape = 1.0;
-  double weight_position = 0.3;
-  double weight_angle = 0.2;
+   double weight_position = 1.0;
+   double weight_angle = 0.5;
 
-  return weight_shape * shape_cost + weight_position * position_distance + weight_angle * angle_difference;
+   return weight_position * position_distance + weight_angle * angle_difference;
 
 #else
-  Vec2 center_seed_initial = seed_initial_stroke.get_centroid();
-  Vec2 center_candidate_initial = candidate_initial_stroke.get_centroid();
-  Vec2 center_seed_target = seed_target_stroke.get_centroid();
-  Vec2 center_candidate_target = candidate_target_stroke.get_centroid();
+   Vec2 center_seed_initial = seed_initial_stroke.get_centroid();
+   Vec2 center_candidate_initial = candidate_initial_stroke.get_centroid();
+   Vec2 center_seed_target = seed_target_stroke.get_centroid();
+   Vec2 center_candidate_target = candidate_target_stroke.get_centroid();
 
-  Vec2 vector_seed_to_candidate_initial = center_candidate_initial - center_seed_initial;
-  Vec2 vector_seed_to_candidate_target = center_candidate_target - center_seed_target;
+   Vec2 vector_seed_to_candidate_initial = center_candidate_initial - center_seed_initial;
+   Vec2 vector_seed_to_candidate_target = center_candidate_target - center_seed_target;
 
-  double angle_difference = 0.0;
-  if (vector_seed_to_candidate_initial.length_squared() > 1e-6 && vector_seed_to_candidate_target.length_squared() > 1e-6) {
-    double angle_initial = std::atan2(vector_seed_to_candidate_initial.y, vector_seed_to_candidate_initial.x);
-    double angle_target = std::atan2(vector_seed_to_candidate_target.y, vector_seed_to_candidate_target.x);
-    angle_difference = std::abs(angle_initial - angle_target);
-    while (angle_difference > M_PI)
-      angle_difference -= 2 * M_PI;
-    angle_difference = std::abs(angle_difference);
+   double angle_difference = 0.0;
+   if (vector_seed_to_candidate_initial.length_squared() > 1e-6 && vector_seed_to_candidate_target.length_squared() > 1e-6) {
+     double angle_initial = std::atan2(vector_seed_to_candidate_initial.y, vector_seed_to_candidate_initial.x);
+     double angle_target = std::atan2(vector_seed_to_candidate_target.y, vector_seed_to_candidate_target.x);
+     angle_difference = std::abs(angle_initial - angle_target);
+     while (angle_difference > M_PI)
+       angle_difference -= 2 * M_PI;
+     angle_difference = std::abs(angle_difference);
 
-    if (angle_difference > angle_threshold) {
-      return 1e6;
-    }
-  }
+     if (angle_difference > angle_threshold) {
+       return 1e6;
+     }
+   }
 
-  double dist_difference = std::abs(vector_seed_to_candidate_initial.length() - vector_seed_to_candidate_target.length());
-  return shape_cost + dist_difference * 0.5 + angle_difference * 0.5;
+   double dist_difference = std::abs(vector_seed_to_candidate_initial.length() - vector_seed_to_candidate_target.length());
+   return dist_difference * 0.5 + angle_difference * 0.5;
 #endif
 }
 

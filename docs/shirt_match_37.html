@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Shirt — Auto Match 37/40 (0–10, no shape)</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a22;--line:#23293d;--text:#e6e8ef;--muted:#95a0b8;--green:#3fb950;--amber:#f2cc60;--red:#f87171;--blue:#6ea8fe}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 ui-sans-system,system-ui,Segoe UI}
+  header{max-width:1020px;margin:0 auto;padding:26px 20px 8px}
+  header h1{margin:0;font-size:22px}
+  header p{margin:6px 0 0;color:var(--muted)}
+  .wrap{max-width:1020px;margin:0 auto;padding:12px 20px 32px;display:grid;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .head{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+  .badge{font-size:11px;letter-spacing:0.5px;text-transform:uppercase;background:var(--text);color:#0f1115;padding:4px 8px;border-radius:999px;font-weight:800}
+  .head h2{margin:0;font-size:14px}
+  .head p{margin:0;color:var(--muted);font-size:12px}
+  .body{padding:14px 16px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:700px){.kpis{grid-template-columns:1fr 1fr}}
+  .kpi{background:#0b0e14;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .kpi span{font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);display:block}
+  .kpi strong{font-size:20px}
+  .grid40{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+  @media(max-width:900px){.grid40{grid-template-columns:repeat(5,1fr)}}
+  .cell{border-radius:10px;padding:8px 6px;text-align:center;border:1px solid var(--line);background:#0b0e14;position:relative}
+  .cell.perfect{border-color:var(--green);background:rgba(63,185,80,0.12)}
+  .cell.mis{border-color:var(--amber);background:rgba(242,204,96,0.10)}
+  .cell.missing{border-color:var(--red);background:rgba(248,113,113,0.12);opacity:0.95}
+  .cell b{font-size:12px;display:block}
+  .cell span{font-size:10px;color:var(--muted)}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:6px 8px;border-bottom:1px solid #1e2436}
+  .ok{color:var(--green);font-weight:800}
+  .warn{color:var(--amber);font-weight:700}
+  .bad{color:var(--red);font-weight:700}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Shirt Auto — <span style="color:var(--amber)">37/40</span> <span style="color:var(--muted);font-weight:400">topology-only (0–10, no shape) — 6 perfect, 31 drifted, 3 missing</span></h1>
+  <p>True auto <code>SI = centroid+tie</code> seeded <code>3→3</code> (size 2, tie 0.017) not <code>0→0</code>. Heap now uses <code>tie</code> only. File: <span class="mono">Executable/tests/shirt_fuzzy_test.exe</span> → <span class="mono">gp_autointerpolate.pyd</span> (output/Release) on 40 perfect-order strokes.</p>
+</header>
+<div class="wrap">
+
+  <section class="card">
+    <div class="head"><span class="badge">Glance 1</span><h2>37 / 40 matched</h2><p> — not 40/40. This is auto, not manual 0→0.</p></div>
+    <div class="body">
+      <div class="kpis">
+        <div class="kpi"><span>Matched</span><strong>37</strong><em>40 → 40, 7.5% left</em></div>
+        <div class="kpi"><span>Perfect a==b</span><strong class="ok">6</strong><em>0→0,1→1,4→4,23→23,31→31, etc</em></div>
+        <div class="kpi"><span>Mismatched</span><strong class="warn">31</strong><em>e.g. 2→10, 12→13, 14→29</em></div>
+        <div class="kpi"><span>Missing</span><strong class="bad">3 / 3</strong><em>init 21,25,36 ↔ targ 2,3,7</em></div>
+      </div>
+      <div style="margin-top:10px;color:var(--muted);font-size:12px">Your earlier table <code>make_topologies_compatible 40/40 ✔</code> was <b>topology says "could match"</b>. Auto <code>SI</code> must <b>pick one seed</b> first — it picked <code>3→3</code> (tiny but perfectly aligned tie 0.017 + centroid 0.07) over hub <code>31→13</code> (size 9 but tie 0.19 + centroid 3.1). From that seed it grew to 37, not 40.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><span class="badge">Glance 2</span><h2>40 strokes — green perfect, amber drifted, red missing</h2><p>hover not needed, just scan</p></div>
+    <div class="body">
+      <div class="grid40">
+        <div class="cell perfect"><b>0 →0</b><span>✔</span></div>
+        <div class="cell perfect"><b>1 →1</b><span>✔</span></div>
+        <div class="cell mis"><b>2 →10</b><span>2→2 would be 0.09</span></div>
+        <div class="cell mis"><b>3 →12</b><span>3→3 is 0.03</span></div>
+        <div class="cell perfect"><b>4 →4</b><span>✔ hub</span></div>
+        <div class="cell mis"><b>5 →26</b><span>isolated 0→26</span></div>
+        <div class="cell mis"><b>6 →25</b><span>isolated</span></div>
+        <div class="cell mis"><b>7 →14</b><span>7→7 would be 0.10</span></div>
+        <div class="cell perfect"><b>8 →8</b><span>✔</span></div>
+        <div class="cell mis"><b>9 →37</b><span>9→9 is 0.03</span></div>
+        <div class="cell mis"><b>10 →38</b><span>10→10 is 0.03</span></div>
+        <div class="cell mis"><b>11 →9</b><span>11→11 is 10</span></div>
+        <div class="cell mis"><b>12 →13</b><span>12→12 is 9</span></div>
+        <div class="cell mis"><b>13 →18</b><span>13→13 is 8</span></div>
+        <div class="cell mis"><b>14 →29</b><span>14→14 is 7</span></div>
+        <div class="cell mis"><b>15 →32</b><span>15→15 is 9</span></div>
+        <div class="cell mis"><b>16 →33</b><span>16→16 is 6</span></div>
+        <div class="cell mis"><b>17 →30</b><span>17→17 is 2</span></div>
+        <div class="cell mis"><b>18 →15</b><span>18→18 is 7</span></div>
+        <div class="cell mis"><b>19 →39</b><span>19→19 is 8</span></div>
+        <div class="cell mis"><b>20 →19</b><span>20→20 is 9</span></div>
+        <div class="cell missing"><b>21 → —</b><span>init 21 missing</span></div>
+        <div class="cell mis"><b>22 →21</b><span>22→22 is 5</span></div>
+        <div class="cell perfect"><b>23 →23</b><span>✔</span></div>
+        <div class="cell mis"><b>24 →28</b><span>24→24 is 5</span></div>
+        <div class="cell missing"><b>25 → —</b><span>init 25 missing</span></div>
+        <div class="cell mis"><b>26 →27</b><span>26→26 is 8</span></div>
+        <div class="cell mis"><b>27 →22</b><span>27→27 is 1</span></div>
+        <div class="cell mis"><b>28 →24</b><span>28→28 is 5</span></div>
+        <div class="cell mis"><b>29 →20</b><span>29→29 is 5</span></div>
+        <div class="cell mis"><b>30 →11</b><span>30→30 is 7</span></div>
+        <div class="cell perfect"><b>31 →31</b><span>✔</span></div>
+        <div class="cell mis"><b>32 →6</b><span>32→32 is 4</span></div>
+        <div class="cell mis"><b>33 →35</b><span>33→33 is 4</span></div>
+        <div class="cell mis"><b>34 →16</b><span>34→34 is 4</span></div>
+        <div class="cell mis"><b>35 →34</b><span>35→35 is 4</span></div>
+        <div class="cell missing"><b>36 → —</b><span>init 36 missing</span></div>
+        <div class="cell mis"><b>37 →17</b><span>37→37 is 11</span></div>
+        <div class="cell mis"><b>38 →5</b><span>38→38 is 5</span></div>
+        <div class="cell mis"><b>39 →36</b><span>39→39 is 4</span></div>
+      </div>
+      <div class="legend"><span><i style="background:var(--green);width:9px;height:9px;border-radius:999px;display:inline-block;margin-right:6px"></i> perfect a==b (6)</span><span><i style="background:var(--amber);width:9px;height:9px;border-radius:999px;display:inline-block;margin-right:6px"></i> drifted 31</span><span><i style="background:var(--red);width:9px;height:9px;border-radius:999px;display:inline-block;margin-right:6px"></i> missing 3+3</span></div>
+      <div style="margin-top:10px;color:var(--muted);font-size:12px">Your perfect order would be <span class="mono">0→0 … 39→39</span> green. Auto seeded <code>3→3</code> (tiny size 2) and grew, but because <code>0→0</code> and <code>31→13</code> etc both looked "compatible", it drifted. Manual <code>0→0</code> seed would have kept <code>0→0 ✔</code> and grown to more perfects.</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="head"><span class="badge">Glance 3</span><h2>What 37/40 means</h2><p>plain</p></div>
+    <div class="body">
+      <table>
+        <tr><th>What</th><th>Number</th><th>Plain</th></tr>
+        <tr><td>Matched</td><td><b>37</b> /40</td><td>37 pairs found, 3 strokes on each side left alone (no partner) — will need you to click or Stage 2 to fill.</td></tr>
+        <tr><td>Perfect</td><td><b>6</b></td><td>Only 6 where `a==b` (e.g. `0→0` lucky). Rest 31 are off-by — e.g. `2` went to `10` instead of `2`, `12` went to `13` instead of `12`. Visually they'd be swapped strokes.</td></tr>
+        <tr><td>Missing initial</td><td class="mono">21, 25, 36</td><td>These 3 initial strokes never got a partner — their true targets `2,3,7` were taken by `2→10,3→12,7→14` drift.</td></tr>
+        <tr><td>Missing target</td><td class="mono">2, 3, 7</td><td>Same 3 the other way — they are free but auto didn't see them.</td></tr>
+        <tr><td>Why not 40?</td><td><span class="warn">seed choice</span></td><td>Auto picked `3→3` (size 2, tie 0.017) as *best* because of `centroid+tie` score. A different seed `0→0` (size 5, tie 0.09) would have grown more perfects. "Biggest topology" would have picked `31→13` size 9 and been even worse.</td></tr>
+      </table>
+      <div style="margin-top:10px;background:#0b0e14;border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--muted);font-size:12px"><b style="color:var(--text)">Takeaway:</b> `40/40 ✔` was <b>topology says "could"</b>. `37/40` is <b>greedy auto says "did"</b> from one seed. With your perfect order, **manual `0→0` seed → ~40/40**, **auto `3→3` seed → 37/40**. That's the gap you asked about auto vs manual.</div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

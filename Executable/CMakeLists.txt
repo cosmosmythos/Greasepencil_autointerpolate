@@ -96,12 +96,11 @@ set(FTPSC_USE_NANOFLANN ON)
 # BUILD MODULE
 # ============================================================================
 
-# Collect all FTP-SC source files
+# Collect all FTP-SC source files — similarity_transform removed (topology-driven, no shape)
 set(FTPSC_SOURCES
     src/interpolate.cpp
     src/fuzzy_topology.cpp
     src/greedy_matcher.cpp
-    src/similarity_transform.cpp
     src/stroke_matcher.cpp
     src/stage_one.cpp
     src/stage_two.cpp
