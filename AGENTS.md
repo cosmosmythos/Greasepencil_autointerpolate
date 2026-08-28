@@ -87,11 +87,17 @@ When the user requests a durable behavior change, record it here or in the relev
 
 ### Live Testing in Blender
 
-- Blender extension directory: `C:\Users\User\AppData\Roaming\Blender Foundation\Blender\5.0\extensions\user_default`
+- Blender extension directories: `C:\Users\User\AppData\Roaming\Blender Foundation\Blender\5.2\extensions\user_default\gp_auto_interpolate` (current) and `...\Blender\5.0\...` (legacy)
 - When testing code changes live, copy ONLY `.py` files from `Addon/` to the extension directory (matching subdirectory structure)
-- Do NOT copy `.pyd`, `.whl`, wheels, manifest, or `.blend` files — those are already in place
+- Do NOT copy `.pyd`, `.whl`, `wheels/`, `blender_manifest.toml`, or `Auto-Interpolate (c).blend` — those are already in place
 - Use the blender-mcp MCP server to run code in Blender (connected on localhost:9876)
-- Blender 5.0 is the primary test target
+- Blender 5.2 is the primary test target (5.0 legacy)
+
+### Extension Sync + Hygiene
+
+- "Synced" means every `.py` file under `Addon/` (dev copy `Greasepencil_autointerpolate/Addon`) has matching content copied to the installed extension at `%APPDATA%\Blender Foundation\Blender\5.2\extensions\user_default\gp_auto_interpolate`, preserving subdirectories, excluding `__pycache__/`, `*.pyc`, `wheels/`, `*.blend`, `blender_manifest.toml`, `.git/`.
+- Always delete `__pycache__` in both dev and installed copies after verification/testing.
+- Docstrings/comments convey only non-obvious "why" in one line or less; no verbose enum descriptions.
 
 ## Child DOX Index
 
@@ -104,3 +110,4 @@ When the user requests a durable behavior change, record it here or in the relev
 | `Addon/utils/AGENTS.md` | Shared utilities: easing curves, arc data, visibility, vectorization wrapper, DLL loader |
 | `Executable/AGENTS.md` | C++ module `gp_autointerpolate`: FTP-SC stroke interpolation algorithm |
 | `Vectorize/AGENTS.md` | C++ module `gp_linevector`: PolyVector line art vectorization algorithm |
+| `docs/AGENTS.md` | Project documentation: private paper reading copies (gitignored verbatim), implementation guides |

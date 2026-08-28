@@ -93,41 +93,40 @@ std::vector<CandidatePair> StrokeMatcher::stage_one_cd_component(
   std::vector<CandidatePair> candidates;
 
   // Seed strokes
-  const Stroke &S = initial_strokes[seed.initial_index];
-  const Stroke &T = target_strokes[seed.target_index];
+  const Stroke &seed_initial_stroke = initial_strokes[seed.initial_index];
+  const Stroke &seed_target_stroke = target_strokes[seed.target_index];
 
-  // Compute compatible alpha-topologies
-  // "We adaptively decrease alpha from 5 to 0"
-  auto [top_S, top_T] = make_topologies_compatible(
-      S, T, initial_strokes, target_strokes, seed.initial_index,
+  // Compute compatible topologies shrinking connection distance from maximum to 0
+  auto [topology_initial, topology_target] = make_topologies_compatible(
+      seed_initial_stroke, seed_target_stroke, initial_strokes, target_strokes, seed.initial_index,
       seed.target_index, config_.max_alpha);
 
   if (config_.debug && config_.debug_level >= 2) {
     std::cerr << "[ftpsc] stage1 cd: seed (" << seed.initial_index << "->"
               << seed.target_index << ")"
-              << " alpha_used=" << top_S.alpha_threshold
-              << " top_size=" << top_S.size() << "\n";
+              << " alpha_used=" << topology_initial.alpha_threshold
+              << " top_size=" << topology_initial.size() << "\n";
   }
 
   // If compatible (same size), derive candidates
-  if (top_S.size() == top_T.size()) {
-    for (size_t k = 0; k < top_S.size(); ++k) {
-      int S_k_idx = top_S.points[k].stroke_index;
-      int T_k_idx = top_T.points[k].stroke_index;
+  if (topology_initial.size() == topology_target.size()) {
+    for (size_t k = 0; k < topology_initial.size(); ++k) {
+      int candidate_initial_index = topology_initial.points[k].stroke_index;
+      int candidate_target_index = topology_target.points[k].stroke_index;
 
       // Check if already matched
-      if (current_correspondence.is_matched_initial(S_k_idx) ||
-          current_correspondence.is_matched_target(T_k_idx)) {
+      if (current_correspondence.is_matched_initial(candidate_initial_index) ||
+          current_correspondence.is_matched_target(candidate_target_index)) {
         continue;
       }
 
       // Compute matching degree for this candidate pair
-      const Stroke &S_k = initial_strokes[S_k_idx];
-      const Stroke &T_k = target_strokes[T_k_idx];
+      const Stroke &candidate_initial_stroke = initial_strokes[candidate_initial_index];
+      const Stroke &candidate_target_stroke = target_strokes[candidate_target_index];
 
-      double cost = compute_matching_degree(S_k, T_k);
+      double cost = compute_matching_degree(candidate_initial_stroke, candidate_target_stroke);
 
-      candidates.emplace_back(S_k_idx, T_k_idx, -cost);
+      candidates.emplace_back(candidate_initial_index, candidate_target_index, -cost);
     }
   }
 

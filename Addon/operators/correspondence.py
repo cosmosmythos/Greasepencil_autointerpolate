@@ -377,23 +377,23 @@ class GPCORR_OT_match(Operator):
         default=24
     )
     
-    # Matching parameters
+    # Matching parameters (0-10 coords: 0.5 ~ 0.05*10)
     max_alpha: FloatProperty(
         name="Max Alpha",
         description="Topology connectivity distance (higher = more permissive matching)",
-        default=0.05,
-        min=0.01,
-        max=0.2,
-        step=1,  # 0.01 increments
+        default=0.5,
+        min=0.1,
+        max=2.0,
+        step=1,
     )
-    
+
     threshold: FloatProperty(
         name="Threshold",
         description="Distance threshold for matching strokes",
-        default=0.05,
-        min=0.01,
-        max=0.2,
-        step=1,  # 0.01 increments
+        default=0.5,
+        min=0.1,
+        max=2.0,
+        step=1,
     )
     
     def draw(self, context):
@@ -699,8 +699,8 @@ class GPCORR_OT_link_selected(Operator):
             
             # Run matching with default config - seeds will be extracted from link_constraints
             config = {
-                'max_alpha': 0.05,
-                'coincident_threshold': 0.05,
+                'max_alpha': 0.5,
+                'coincident_threshold': 0.5,
             }
             success, _ = start_match_job(obj, layer1, pairs, config)
             if success:
@@ -835,8 +835,8 @@ class GPCORR_OT_unlink_selected(Operator):
             
             # Run matching with default config - no seeds since constraint was removed
             config = {
-                'max_alpha': 0.05,
-                'coincident_threshold': 0.05,
+                'max_alpha': 0.5,
+                'coincident_threshold': 0.5,
             }
             success, _ = start_match_job(obj, layer1, pairs, config)
             if success:

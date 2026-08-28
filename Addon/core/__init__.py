@@ -1,5 +1,5 @@
 """
-Core functionality for GP Auto Interpolate
+Core functionality
 """
 
 from . import cpp_module

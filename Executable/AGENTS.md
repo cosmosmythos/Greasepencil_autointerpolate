@@ -35,6 +35,7 @@ Native C++ module (`gp_autointerpolate`) implementing the FTP-SC stroke interpol
 
 ## Work Guidance
 
+- **Code style (user preference):** indent 3 spaces, no verbose `@brief/@param/@return` Doxygen boilerplate, no comments stating the obvious — keep comments short and readable. Applies to `src/fuzzy_topology.*` + `src/stroke.h` (scope of cleanup 2026-08-27); extend to other `src/*.cpp/.h` only when touched.
 - **Use `build_fast.bat` for incremental builds.** It skips `cmake` configure when `build/CMakeCache.txt` exists, avoiding re-downloads of nanobind (~250MB git clone) and nanoflann on every build. Only delete `build/` when changing cmake flags, Python version, or dependency versions.
 - **Full clean build** (`build_autointerpolate.ps1` or manual `Remove-Item -Recurse build/`) is only needed for: first-time setup, changing Python version, changing nanobind version, or debugging cmake issues.
 - Keep all nanobind binding in `src/interpolate.cpp`; algorithmic code stays framework-agnostic C++.

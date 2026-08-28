@@ -1,275 +1,193 @@
-/**
- * @file fuzzy_topology.cpp
- * @brief Implementation of α-Topology computation
- */
-
 #include "fuzzy_topology.h"
 #include <cmath>
 #include <limits>
-#include <tuple>
-
 
 namespace ftpsc {
 
-namespace {
+namespace detail {
 
-/**
- * @brief Project point p onto line segment ab
- * @return Tuple of (closest_point, t, dist_sq) where t is in [0,1]
- */
-std::tuple<Vec2, double, double>
-project_on_segment(const Vec2 &p, const Vec2 &a, const Vec2 &b) {
+// internal, testable but not public
+struct SegmentClosest {
+   Vec2 closest_point;         // closest on segment
+   double position_on_segment; // 0 at segment_start, 1 at segment_end
+   double distance;            // Euclidean
+};
 
-  Vec2 ab = b - a;
-  double len_sq = ab.length_squared();
+struct StrokeClosest {
+   Vec2 closest_point;          // closest on stroke
+   double position_along_stroke; // 0 at stroke start, 1 at stroke end
+   double distance;             // Euclidean
+};
 
-  if (len_sq < 1e-10) {
-    // Segment is a point
-    return {a, 0.0, p.distance_to(a) * p.distance_to(a)};
-  }
-
-  Vec2 ap = p - a;
-  double t = ap.dot(ab) / len_sq;
-  t = std::max(0.0, std::min(1.0, t));
-
-  Vec2 closest = a + ab * t;
-  double dist_sq = p.distance_to(closest) * p.distance_to(closest);
-
-  return {closest, t, dist_sq};
+SegmentClosest project_on_segment(const Vec2 &endpoint, const Vec2 &segment_start, const Vec2 &segment_end) {
+   Vec2 segment_vector = segment_end - segment_start;
+   double segment_length_squared = segment_vector.length_squared();
+   if (segment_length_squared < 1e-10) {
+      return {segment_start, 0.0, endpoint.distance_to(segment_start)};
+   }
+   Vec2 vector_to_endpoint = endpoint - segment_start;
+   double position_on_segment = vector_to_endpoint.dot(segment_vector) / segment_length_squared;
+   position_on_segment = std::max(0.0, std::min(1.0, position_on_segment));
+   Vec2 closest_point_on_segment = segment_start + segment_vector * position_on_segment;
+   return {closest_point_on_segment, position_on_segment, endpoint.distance_to(closest_point_on_segment)};
 }
 
-/**
- * @brief Find closest point on stroke S to point p
- * @return Tuple of (closest_point, arc_parameter, dist)
- */
-std::tuple<Vec2, double, double> distance_point_to_stroke(const Vec2 &p,
-                                                          const Stroke &S) {
-
-  if (S.points.empty()) {
-    return {Vec2(0, 0), 0.0, std::numeric_limits<double>::max()};
-  }
-
-  const auto &params = S.get_arc_parameters();
-
-  double min_dist_sq = std::numeric_limits<double>::max();
-  Vec2 best_point = S.points[0];
-  double best_param = 0.0;
-
-  // Check all segments
-  for (size_t i = 1; i < S.points.size(); ++i) {
-    auto [closest, t, dist_sq] =
-        project_on_segment(p, S.points[i - 1], S.points[i]);
-
-    if (dist_sq < min_dist_sq) {
-      min_dist_sq = dist_sq;
-      best_point = closest;
-
-      // Interpolate global arc parameter
-      double p0 = params[i - 1];
-      double p1 = params[i];
-      best_param = p0 + t * (p1 - p0);
-    }
-  }
-
-  return {best_point, best_param, std::sqrt(min_dist_sq)};
+StrokeClosest distance_point_to_stroke(const Vec2 &endpoint, const Stroke &stroke) {
+   if (stroke.points.empty()) {
+      return {Vec2(0, 0), 0.0, std::numeric_limits<double>::max()};
+   }
+   const auto &position_along_stroke_values = stroke.get_position_along_stroke();
+   double best_distance = std::numeric_limits<double>::max();
+   Vec2 best_point = stroke.points[0];
+   double best_position = 0.0;
+   for (size_t i = 1; i < stroke.points.size(); ++i) {
+      SegmentClosest segment_result = project_on_segment(endpoint, stroke.points[i - 1], stroke.points[i]);
+      if (segment_result.distance < best_distance) {
+         best_distance = segment_result.distance;
+         best_point = segment_result.closest_point;
+         double start_position = position_along_stroke_values[i - 1];
+         double end_position = position_along_stroke_values[i];
+         best_position = start_position + segment_result.position_on_segment * (end_position - start_position);
+      }
+   }
+   return {best_point, best_position, best_distance};
 }
 
-} // anonymous namespace
+} // namespace detail
 
-// =============================================================================
-// Public API Implementation
-// =============================================================================
-
-double compute_connectivity_grade(const Stroke &S, const Stroke &Si) {
-  if (!S.is_valid() || !Si.is_valid()) {
-    return std::numeric_limits<double>::infinity();
-  }
-
-  // μ_S(S_i) = min distance from S_i's endpoints to S
-  Vec2 start = Si.get_start();
-  Vec2 end = Si.get_end();
-
-  auto [p1, t1, d1] = distance_point_to_stroke(start, S);
-  auto [p2, t2, d2] = distance_point_to_stroke(end, S);
-
-  return std::min(d1, d2);
+double compute_distance_to_stroke(const Stroke &reference_stroke, const Stroke &neighbor_stroke) {
+   if (!reference_stroke.is_valid() || !neighbor_stroke.is_valid()) {
+      return std::numeric_limits<double>::infinity();
+   }
+   detail::StrokeClosest to_start = detail::distance_point_to_stroke(neighbor_stroke.get_start_point(), reference_stroke);
+   detail::StrokeClosest to_end = detail::distance_point_to_stroke(neighbor_stroke.get_end_point(), reference_stroke);
+   return std::min(to_start.distance, to_end.distance);
 }
 
-bool has_alpha_connectivity(const Stroke &S, const Stroke &Si, double alpha) {
-  double mu_S_Si = compute_connectivity_grade(S, Si);
-  if (mu_S_Si <= alpha)
-    return true;
+// deprecated wrappers — keep paper term // mu in comment for cross-ref
+double compute_connectivity_grade(const Stroke &reference_stroke, const Stroke &neighbor_stroke) {
+   return compute_distance_to_stroke(reference_stroke, neighbor_stroke); // mu
+}
 
-  double mu_Si_S = compute_connectivity_grade(Si, S);
-  if (mu_Si_S <= alpha)
-    return true;
+bool are_strokes_connected(const Stroke &first_stroke, const Stroke &second_stroke, double connection_dist) {
+   double distance_first_to_second = compute_distance_to_stroke(first_stroke, second_stroke);
+   if (distance_first_to_second <= connection_dist) {
+      return true;
+   }
+   double distance_second_to_first = compute_distance_to_stroke(second_stroke, first_stroke);
+   return distance_second_to_first <= connection_dist;
+}
 
-  return false;
+bool has_alpha_connectivity(const Stroke &first_stroke, const Stroke &second_stroke, double connection_dist) {
+   return are_strokes_connected(first_stroke, second_stroke, connection_dist); // alpha
 }
 
 AlphaTopology compute_alpha_topology(const Stroke &reference_stroke,
                                      const std::vector<Stroke> &all_strokes,
-                                     int reference_index, double alpha) {
-
-  AlphaTopology topology(alpha);
-
-  // Check all other strokes for connectivity
-  for (size_t i = 0; i < all_strokes.size(); ++i) {
-    if (i == static_cast<size_t>(reference_index))
-      continue;
-
-    const Stroke &Si = all_strokes[i];
-
-    // Compute strict connectivity grade to find WHERE it connects
-    // Determining the connection point: "point on S closest to an endpoint of
-    // Si"
-
-    Vec2 start = Si.get_start();
-    Vec2 end = Si.get_end();
-
-    auto [p1, t1, d1] = distance_point_to_stroke(start, reference_stroke);
-    auto [p2, t2, d2] = distance_point_to_stroke(end, reference_stroke);
-
-    // We consider it connected if min(d1, d2) <= alpha OR inverted check
-    // passes. Paper Definition 2 says: "sequence of α-connected strokes...
-    // ordered by their connection points on S"
-
-    // If connected via S->Si check (Si endpoints close to S)
-    bool connected_direct = (std::min(d1, d2) <= alpha);
-
-    // If connected via Si->S check (S endpoints close to Si), we need to find
-    // point on S In that case, an endpoint of S is close to Si. So the
-    // connection point on S is that endpoint of S (param 0.0 or 1.0).
-    bool connected_inverse = false;
-    double dist_inv = std::numeric_limits<double>::infinity();
-    double param_inv = 0.0;
-    Vec2 pos_inv;
-
-    if (!connected_direct) {
-      // Check inverse
-      Vec2 s_start = reference_stroke.get_start();
-      Vec2 s_end = reference_stroke.get_end();
-
-      auto [q1, u1, di1] = distance_point_to_stroke(s_start, Si);
-      auto [q2, u2, di2] = distance_point_to_stroke(s_end, Si);
-
-      if (di1 <= alpha || di2 <= alpha) {
-        connected_inverse = true;
-        if (di1 < di2) {
-          dist_inv = di1;
-          param_inv = 0.0; // Start of S
-          pos_inv = s_start;
-        } else {
-          dist_inv = di2;
-          param_inv = 1.0; // End of S
-          pos_inv = s_end;
-        }
+                                     int reference_index, double connection_dist) {
+   AlphaTopology topology(connection_dist);
+   for (size_t i = 0; i < all_strokes.size(); ++i) {
+      if (i == static_cast<size_t>(reference_index)) {
+         continue;
       }
-    }
-
-    if (connected_direct || connected_inverse) {
-      // Determine best connection point
-      double grade;
-      double param;
-      Vec2 pos;
-
-      if (connected_direct && connected_inverse) {
-        // Both valid, pick strongest (closest)
-        double min_direct = std::min(d1, d2);
-        if (min_direct < dist_inv) {
-          grade = min_direct;
-          if (d1 < d2) {
-            param = t1;
-            pos = p1;
-          } else {
-            param = t2;
-            pos = p2;
-          }
-        } else {
-          grade = dist_inv;
-          param = param_inv;
-          pos = pos_inv;
-        }
-      } else if (connected_direct) {
-        grade = std::min(d1, d2);
-        if (d1 < d2) {
-          param = t1;
-          pos = p1;
-        } else {
-          param = t2;
-          pos = p2;
-        }
-      } else {
-        grade = dist_inv;
-        param = param_inv;
-        pos = pos_inv;
+      const Stroke &neighbor_stroke = all_strokes[i];
+      detail::StrokeClosest start_hit = detail::distance_point_to_stroke(neighbor_stroke.get_start_point(), reference_stroke);
+      detail::StrokeClosest end_hit = detail::distance_point_to_stroke(neighbor_stroke.get_end_point(), reference_stroke);
+      bool connected_direct = (std::min(start_hit.distance, end_hit.distance) <= connection_dist);
+      bool connected_inverse = false;
+      double fallback_dist = std::numeric_limits<double>::infinity();
+      double fallback_position = 0.0;
+      Vec2 fallback_point;
+      if (!connected_direct) {
+         detail::StrokeClosest inverse_start = detail::distance_point_to_stroke(reference_stroke.get_start_point(), neighbor_stroke);
+         detail::StrokeClosest inverse_end = detail::distance_point_to_stroke(reference_stroke.get_end_point(), neighbor_stroke);
+         if (inverse_start.distance <= connection_dist || inverse_end.distance <= connection_dist) {
+            connected_inverse = true;
+            if (inverse_start.distance < inverse_end.distance) {
+               fallback_dist = inverse_start.distance;
+               fallback_position = 0.0;
+               fallback_point = reference_stroke.get_start_point();
+            } else {
+               fallback_dist = inverse_end.distance;
+               fallback_position = 1.0;
+               fallback_point = reference_stroke.get_end_point();
+            }
+         }
       }
-
-      topology.points.emplace_back(static_cast<int>(i), pos, param, grade);
-    }
-  }
-
-  // Sort by arc parameter to establish topological order
-  std::sort(topology.points.begin(), topology.points.end(),
-            [](const AlphaTopologyPoint &a, const AlphaTopologyPoint &b) {
-              return a.arc_parameter < b.arc_parameter;
-            });
-
-  return topology;
+      if (connected_direct || connected_inverse) {
+         double distance_to_neighbor;
+         double position_along_reference;
+         Vec2 connection_point;
+         if (connected_direct && connected_inverse) {
+            double best_direct_distance = std::min(start_hit.distance, end_hit.distance);
+            if (best_direct_distance < fallback_dist) {
+               distance_to_neighbor = best_direct_distance;
+               if (start_hit.distance < end_hit.distance) {
+                  position_along_reference = start_hit.position_along_stroke;
+                  connection_point = start_hit.closest_point;
+               } else {
+                  position_along_reference = end_hit.position_along_stroke;
+                  connection_point = end_hit.closest_point;
+               }
+            } else {
+               distance_to_neighbor = fallback_dist;
+               position_along_reference = fallback_position;
+               connection_point = fallback_point;
+            }
+         } else if (connected_direct) {
+            distance_to_neighbor = std::min(start_hit.distance, end_hit.distance);
+            if (start_hit.distance < end_hit.distance) {
+               position_along_reference = start_hit.position_along_stroke;
+               connection_point = start_hit.closest_point;
+            } else {
+               position_along_reference = end_hit.position_along_stroke;
+               connection_point = end_hit.closest_point;
+            }
+         } else {
+            distance_to_neighbor = fallback_dist;
+            position_along_reference = fallback_position;
+            connection_point = fallback_point;
+         }
+         topology.points.emplace_back(static_cast<int>(i), connection_point, position_along_reference, distance_to_neighbor);
+      }
+   }
+   std::sort(topology.points.begin(), topology.points.end(),
+             [](const AlphaTopologyPoint &a, const AlphaTopologyPoint &b) {
+                return a.position_along_stroke < b.position_along_stroke;
+             });
+   return topology;
 }
 
 std::pair<AlphaTopology, AlphaTopology>
-make_topologies_compatible(const Stroke &stroke_i, const Stroke &stroke_j,
+make_topologies_compatible(const Stroke &first_stroke, const Stroke &second_stroke,
                            const std::vector<Stroke> &initial_strokes,
                            const std::vector<Stroke> &target_strokes,
-                           int index_i, int index_j, double max_alpha) {
-
-  // Paper uses integer α in [5..0]. For continuous coordinate systems (e.g. NDC),
-  // we decrease α in fixed steps.
-  double step = max_alpha / 5.0;
-  if (step <= 0.0)
-    step = 1.0;
-
-  for (double alpha = max_alpha; alpha >= 0.0; alpha -= step) {
-    AlphaTopology top_i =
-        compute_alpha_topology(stroke_i, initial_strokes, index_i, alpha);
-    AlphaTopology top_j =
-        compute_alpha_topology(stroke_j, target_strokes, index_j, alpha);
-
-    if (top_i.is_compatible_with(top_j)) {
-      // Resolve coincident points to ensure stable matching
-      if (!top_i.empty()) {
-        resolve_coincident_points(top_i, top_j, initial_strokes,
-                                  target_strokes);
+                           int first_index, int second_index, double max_connection_dist) {
+   double step = max_connection_dist / 5.0;
+   if (step <= 0.0) {
+      step = 1.0;
+   }
+   for (double connection_dist = max_connection_dist; connection_dist >= 0.0; connection_dist -= step) {
+      AlphaTopology topology_first = compute_alpha_topology(first_stroke, initial_strokes, first_index, connection_dist);
+      AlphaTopology topology_second = compute_alpha_topology(second_stroke, target_strokes, second_index, connection_dist);
+      if (topology_first.is_compatible_with(topology_second)) {
+         if (!topology_first.empty()) {
+            resolve_coincident_points(topology_first, topology_second, initial_strokes, target_strokes);
+         }
+         return {topology_first, topology_second};
       }
-      return {top_i, top_j};
-    }
-  }
-
-  // Fallback: return empty topologies (incompatible)
-  return {AlphaTopology(0.0), AlphaTopology(0.0)};
+   }
+   return {AlphaTopology(0.0), AlphaTopology(0.0)};
 }
 
-void resolve_coincident_points(AlphaTopology &top_i, AlphaTopology &top_j,
+void resolve_coincident_points(AlphaTopology &first_topology, AlphaTopology &second_topology,
                                const std::vector<Stroke> &initial_strokes,
                                const std::vector<Stroke> &target_strokes) {
-  // This function handles edge cases where multiple strokes connect at
-  // effectively the same point (e.g., crossing point).
-  // The paper (Section 3.3, Fig 5) suggests reordering based on best match
-  // if positions are coincident.
-
-  // Assuming 1-to-1 correspondence (compatibility checked)
-  if (top_i.size() != top_j.size())
-    return;
-
-  // Simple heuristic: if parameters are identical, stable sort by original
-  // index A fully rigorous implementation would try to minimize total matching
-  // cost between the sequence of connected strokes. For now, we rely on the
-  // primary sort by parameter.
-
-  // Advanced coincident point resolution (for future enhancement)
-  // cases. Current implementation relies on stable sort of
-  // compute_alpha_topology.
+   if (first_topology.size() != second_topology.size()) {
+      return;
+   }
+   // Paper Fig.5: coincident points currently rely on stable sort by position_along_stroke.
+   // Full fix would reorder by matching cost when positions are identical.
 }
 
 } // namespace ftpsc

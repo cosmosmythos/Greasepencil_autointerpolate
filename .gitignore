@@ -31,3 +31,9 @@ desktop.ini
 
 # Wheels are built by CI - don't commit them to repo
 Addon/wheels/*.whl
+
+# Private research papers - personal reading copies, do not publish (copyrighted)
+docs/Yang18-SCA.md
+docs/Yang18-SCA.bak.md
+docs/*.private.md
+Yang18-SCA*.md

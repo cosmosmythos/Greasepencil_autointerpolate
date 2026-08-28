@@ -27,22 +27,20 @@ namespace ftpsc {
  * @brief Configuration options for stroke matching
  */
 struct MatcherConfig {
-  // Stage 1: Fuzzy Topology
-  // NOTE on units:
-  // `max_alpha` is in the same units as stroke coordinates. If you feed
-  // camera-normalized coordinates (NDC, 0..1), a sensible default is ~0.05.
-  // If you feed pixels, a sensible default is ~5.
-  double max_alpha = 0.05; // Default tuned for NDC coords
+   // Stage 1: Fuzzy Topology
+   // NOTE on units: coords are normalized to 0-10 (joint bbox, see correspondence_utils.py).
+   // For 0-1 NDC, sensible is ~0.05; for 0-10, use ~0.5. Pixels ~5.
+   double max_alpha = 0.5; // Default tuned for 0-10 coords
 
-  // Stage 2: Neighborhood Competition
-  int k_neighbors = 6; // Number of neighbors (paper uses 6)
-  double angle_threshold =
-      3.14159265358979323846 / 4.0; // θ threshold (paper uses π/4)
+   // Stage 2: Neighborhood Competition
+   int k_neighbors = 6; // Number of neighbors (paper uses 6)
+   double angle_threshold =
+       3.14159265358979323846 / 4.0; // θ threshold (paper uses π/4)
 
-  // General
-  bool enable_stage_two = true; // Run Stage 2 after Stage 1
-  // Distance to consider points coincident (same units as coordinates)
-  double coincident_threshold = 0.01; // Default tuned for NDC coords
+   // General
+   bool enable_stage_two = true; // Run Stage 2 after Stage 1
+   // Distance to consider points coincident (same units as coordinates)
+   double coincident_threshold = 0.1; // Default tuned for 0-10 coords
 
   // Debug
   bool debug = false;

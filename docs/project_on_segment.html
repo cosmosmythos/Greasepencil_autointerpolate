@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>distance to a STROKE — mockup 0,1,2  +  t slider</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a22;--line:#23293d;--text:#e6e8ef;--muted:#95a0b8;--blue:#6ea8fe;--yellow:#f2cc60;--green:#3fb950;--grid:#1a1f2e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 ui-sans-system,system-ui,Segoe UI,Roboto}
+  header{max-width:860px;margin:0 auto;padding:28px 20px 6px}
+  header h1{margin:0;font-size:22px;line-height:1.25}
+  header h1 em{color:var(--blue);font-style:normal}
+  header p{margin:8px 0 0;color:var(--muted)}
+  .wrap{max-width:860px;margin:0 auto;padding:10px 20px 32px;display:grid;gap:18px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .head{padding:13px 18px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center}
+  .num{width:26px;height:26px;border-radius:999px;background:var(--blue);color:#0b1220;display:grid;place-items:center;font-weight:800;font-size:13px;flex:0 0 auto}
+  .head h2{margin:0;font-size:15px}
+  .head p{margin:0;color:var(--muted);font-size:13px}
+  .body{padding:14px 18px}
+  .svgbox{background:#0b0e14;border:1px solid var(--line);border-radius:12px;padding:10px}
+  svg{width:100%;height:auto;display:block;border-radius:8px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+  @media(max-width:700px){.cols{grid-template-columns:1fr}}
+  .box{background:#0f1320;border:1px solid #26304a;border-radius:10px;padding:10px 12px}
+  .box span{font-size:11px;letter-spacing:0.4px;text-transform:uppercase;color:var(--muted);display:block}
+  .box strong{font-family:ui-monospace,Consolas,monospace;font-size:13px}
+  .mono{font-family:ui-monospace,Consolas,monospace}
+  .controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+  .btn{appearance:none;border:1px solid #2b334d;background:#1c2235;color:var(--text);padding:6px 12px;border-radius:999px;font-size:12px;cursor:pointer}
+  .btn.active{background:var(--text);color:#0f1115;border-color:var(--text);font-weight:700}
+  input[type=range]{accent-color:var(--blue);width:210px}
+  .note{margin-top:12px;background:rgba(110,168,254,0.08);border:1px solid rgba(110,168,254,0.22);border-radius:10px;padding:10px 12px;color:var(--muted);font-size:13px}
+  .note b{color:var(--text)}
+  .legend{margin-top:10px;display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted)}
+  .legend i{width:10px;height:10px;border-radius:999px;display:inline-block;vertical-align:middle;margin-right:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mockup: only 3 strokes — <em>stroke 0, 1, 2</em></h1>
+  <p>Real Shirt has 40 strokes & 17-segment lines — that's why it looked cramped. This mockup uses 3 clean strokes with 2–3 segments each, spaced apart, so you can <b>see</b> what <span class="mono">distance(0.end → stroke 1)</span> actually measures.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- 1 — 3 STROKES OVERVIEW -->
+  <section class="card">
+    <div class="head"><div class="num">1</div><div><h2>What "stroke 1" is</h2><p>not one point — it's a polyline</p></div></div>
+    <div class="body">
+      <div class="svgbox">
+        <svg viewBox="0 0 760 260" role="img">
+          <rect width="760" height="260" fill="#0b0e14"/>
+          <!-- grid -->
+          <g opacity="0.35"><path d="M0 52 H760 M0 130 H760 M0 208 H760" stroke="#1e2436" stroke-width="1" stroke-dasharray="6 8"/></g>
+          <!-- stroke 0 top -->
+          <path d="M 140 52 L 340 52 L 540 52" fill="none" stroke="#6ea8fe" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="140" cy="52" r="7" fill="#6ea8fe" stroke="#0b0e14" stroke-width="2"/><circle cx="540" cy="52" r="7" fill="#6ea8fe" stroke="#0b0e14" stroke-width="2"/><circle cx="340" cy="52" r="4" fill="white" opacity="0.9"/>
+          <text x="340" y="32" text-anchor="middle" fill="#6ea8fe" font-size="13" font-weight="800">stroke 0  — 3 points, 2 segments</text>
+          <text x="140" y="74" text-anchor="middle" fill="#95a0b8" font-size="11" class="mono">0.start</text><text x="540" y="74" text-anchor="middle" fill="#95a0b8" font-size="11" class="mono">0.end</text>
+          <!-- stroke 1 middle vertical with kink -->
+          <path d="M 340 130 L 340 170 L 345 208" fill="none" stroke="#a78bfa" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="340" cy="130" r="7" fill="#a78bfa" stroke="#0b0e14" stroke-width="2"/><circle cx="345" cy="208" r="7" fill="#a78bfa" stroke="#0b0e14" stroke-width="2"/><circle cx="340" cy="170" r="4" fill="white" opacity="0.9"/>
+          <text x="380" y="168" fill="#a78bfa" font-size="13" font-weight="800">stroke 1 (our S)</text><text x="380" y="186" fill="#64748b" font-size="11">3 points → 2 segments — This is the "stroke 1" you asked about</text>
+          <!-- stroke 2 bottom -->
+          <path d="M 140 234 L 340 234 L 540 234" fill="none" stroke="#6ea8fe" stroke-width="4" stroke-linecap="round"/>
+          <circle cx="140" cy="234" r="7" fill="#6ea8fe" stroke="#0b0e14" stroke-width="2"/><circle cx="540" cy="234" r="7" fill="#6ea8fe" stroke="#0b0e14" stroke-width="2"/><circle cx="340" cy="234" r="4" fill="white" opacity="0.9"/>
+          <text x="340" y="254" text-anchor="middle" fill="#6ea8fe" font-size="13" font-weight="800">stroke 2  — 3 points, 2 segments</text>
+          <!-- gap labels -->
+          <text x="600" y="96" fill="#64748b" font-size="11">gap ≠ 0, still neighbours</text><text x="600" y="220" fill="#64748b" font-size="11">gap ≠ 0</text>
+        </svg>
+      </div>
+      <div class="note"><b>Reading it:</b> Each stroke is a line with a middle joint (white dot). <span class="mono">stroke 1</span> — This means: the whole purple polyline from <span class="mono">a(top) → mid → b(bottom)</span>, not a single coordinate. When we say <span class="mono">distance(0.end → stroke 1)</span> we mean to <em>anywhere</em> on that purple line.</div>
+    </div>
+  </section>
+
+  <!-- 2 — DISTANCE TO STROKE = BEST OF SEGMENTS -->
+  <section class="card">
+    <div class="head"><div class="num">2</div><div><h2><span class="mono">distance(0.end → stroke 1)</span> = best of its 2 segments</h2><p>green wins, gray loses — whole-stroke, not just dots</p></div></div>
+    <div class="body">
+      <div class="svgbox">
+        <svg viewBox="0 0 760 300" role="img">
+          <rect width="760" height="300" fill="#0b0e14"/>
+          <!-- stroke 1 vertical -->
+          <line x1="340" y1="60" x2="340" y2="170" stroke="#2a344d" stroke-width="10" stroke-linecap="round"/>
+          <line x1="340" y1="170" x2="348" y2="250" stroke="#2a344d" stroke-width="10" stroke-linecap="round"/>
+          <line x1="340" y1="60" x2="340" y2="170" stroke="#a78bfa" stroke-width="3"/><line x1="340" y1="170" x2="348" y2="250" stroke="#a78bfa" stroke-width="3"/>
+          <circle cx="340" cy="60" r="6" fill="#a78bfa" stroke="#0b0e14" stroke-width="2"/><circle cx="340" cy="170" r="4" fill="white"/><circle cx="348" cy="250" r="6" fill="#a78bfa" stroke="#0b0e14" stroke-width="2"/>
+          <text x="368" y="62" fill="#a78bfa" font-size="12" font-weight="700">a top</text><text x="368" y="255" fill="#a78bfa" font-size="12" font-weight="700">b bottom</text>
+          <!-- p = 0.end -->
+          <circle cx="540" cy="52" r="8" fill="#f2cc60" stroke="#0b0e14" stroke-width="2"/>
+          <text x="540" y="30" text-anchor="middle" fill="#f2cc60" font-size="12" font-weight="800">p = 0.end [540,52]</text>
+          <!-- candidate 1: to upper segment -->
+          <line x1="540" y1="52" x2="340" y2="52" stroke="#3a4158" stroke-width="1.6" stroke-dasharray="7 7" opacity="0.9"/>
+          <circle cx="340" cy="52" r="5" fill="#3a4158" stroke="white" stroke-width="1.2"/>
+          <text x="430" y="44" fill="#64748b" font-size="11" class="mono">dist 200 → clamped to a (before)</text>
+          <!-- candidate 2: to lower segment interior — best -->
+          <line x1="540" y1="52" x2="342" y2="92" stroke="#3fb950" stroke-width="2.2"/>
+          <circle cx="342" cy="92" r="7" fill="#3fb950" stroke="#0b0e14" stroke-width="2"/>
+          <text x="430" y="80" fill="#3fb950" font-size="11" font-weight="700" class="mono">dist 202 → best (inside, t=0.28)</text>
+          <!-- labels -->
+          <text x="340" y="285" text-anchor="middle" fill="#95a0b8" font-size="11">stroke 1 is BOTH segments. The closest is NOT a dot, it's mid-line on the upper segment.</text>
+        </svg>
+      </div>
+      <div class="cols">
+        <div class="box"><span>to points only</span><strong>dist to a=200, to b≈260 → pick 200</strong><div style="color:#94a3b8;font-size:12px;margin-top:4px">Would snap to <span class="mono">a</span> and miss the true 1-unit gap mid-line in the horizontal example.</div></div>
+        <div class="box" style="border-color:#3fb950"><span>to polyline (code does this)</span><strong>check seg1 → 200 (clamped), seg2 → 202, best=200</strong><div style="color:#94a3b8;font-size:12px;margin-top:4px">Here both are similar, but for a middle hit the difference is huge — that's why we need lines, not dots.</div></div>
+      </div>
+      <div class="legend"><span><i style="background:#a78bfa"></i> stroke 1 (2 segments)</span><span><i style="background:#f2cc60"></i> p</span><span><i style="background:#3fb950"></i> best drop</span><span><i style="background:#3a4158"></i> loser</span></div>
+      <div class="note">Code loop: <span class="mono">for each segment a→b of stroke 1: project_on_segment(p,a,b) → keep smallest dist</span>. That's <span class="mono">detail::distance_point_to_stroke(p, stroke1)</span>.</div>
+    </div>
+  </section>
+
+  <!-- 3 — ONE SEGMENT SLIDER, NO JARGON -->
+  <section class="card">
+    <div class="head"><div class="num">3</div><div><h2>One segment: the slider <span class="mono">t</span></h2><p>just a knob 0→1. Before / inside / past.</p></div></div>
+    <div class="body">
+      <div class="svgbox">
+        <svg viewBox="0 0 760 210" role="img">
+          <rect width="760" height="210" fill="#0b0e14"/>
+          <!-- infinite line dashed -->
+          <line x1="30" y1="105" x2="730" y2="105" stroke="#1e2740" stroke-width="1" stroke-dasharray="8 10"/>
+          <!-- segment -->
+          <line x1="150" y1="105" x2="610" y2="105" stroke="#334155" stroke-width="10" stroke-linecap="round" opacity="0.9"/>
+          <line id="core" x1="150" y1="105" x2="610" y2="105" stroke="#6ea8fe" stroke-width="4" stroke-linecap="round"/>
+          <circle id="dotA" cx="150" cy="105" r="8" fill="#6ea8fe" stroke="#0b0e14" stroke-width="2"/><circle id="dotB" cx="610" cy="105" r="8" fill="#6ea8fe" stroke="#0b0e14" stroke-width="2"/>
+          <text x="150" y="135" text-anchor="middle" fill="#6ea8fe" font-size="12" font-weight="700">a 0</text><text x="610" y="135" text-anchor="middle" fill="#6ea8fe" font-size="12" font-weight="700">b 1</text><text x="380" y="135" text-anchor="middle" fill="#475569" font-size="11">0.5 middle</text>
+          <!-- ap -->
+          <line id="ap" x1="150" y1="105" x2="380" y2="42" stroke="#f2cc60" stroke-width="2"/>
+          <line id="drop" x1="380" y1="42" x2="380" y2="105" stroke="#3fb950" stroke-width="2" stroke-dasharray="7 7"/>
+          <circle id="pDot" cx="380" cy="42" r="7" fill="#f2cc60" stroke="#0b0e14" stroke-width="2"/>
+          <circle id="cDot" cx="380" cy="105" r="8" fill="#3fb950" stroke="#0b0e14" stroke-width="2"/>
+          <text id="pLbl" x="380" y="26" text-anchor="middle" fill="#f2cc60" font-size="12" font-weight="700">p</text>
+          <text id="cLbl" x="380" y="188" text-anchor="middle" fill="#3fb950" font-size="12" font-weight="700">closest = a + ab·t</text>
+          <!-- before/past zones -->
+          <text x="90" y="98" fill="#475569" font-size="11">← before a</text><text x="640" y="98" fill="#475569" font-size="11">past b →</text>
+        </svg>
+      </div>
+      <div class="controls"><label>slide t <input id="rng" type="range" min="-0.5" max="1.5" step="0.01" value="0.5"></label><span class="mono" id="tInfo" style="min-width:140px">t 0.50 → clamped 0.50</span><button class="btn active" data-t="0.50">inside 0.5</button><button class="btn" data-t="-0.30">before a -0.30</button><button class="btn" data-t="1.35">past b 1.35</button></div>
+      <div class="cols">
+        <div class="box"><span>what <span class="mono">t = ap·ab / len²</span> means</span><strong>shadow of ap onto ab</strong><div style="color:#94a3b8;font-size:12px;margin-top:4px">No math magic: <span class="mono">ap</span> is arrow a→p, <span class="mono">ab</span> is a→b. Dot tells how much ap points the same way as ab (its shadow length) ÷ ab's length. That's the knob.</div></div>
+        <div class="box"><span>why clamp</span><strong>[0,1] keeps you on the segment</strong><div style="color:#94a3b8;font-size:12px;margin-top:4px"><span class="mono">-0.3 → 0</span> snaps to <span class="mono">a</span>. <span class="mono">1.35 → 1</span> snaps to <span class="mono">b</span>. Without it you'd land off the stroke, floating in air.</div></div>
+      </div>
+      <div class="note"><b>Plain:</b> <span class="mono">a= start of segment, b= end, p= your point, closest = slide t along a→b, drop straight down to p.</span> Paper calls this <em>"projection point"</em> (<span class="mono">docs/Yang18-SCA.md:66</span>) — This means: same slider, paper just says it in words.</div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+const aPix={x:150,y:105}, bPix={x:610,y:105};
+const pDot=document.getElementById('pDot'), cDot=document.getElementById('cDot'), ap=document.getElementById('ap'), drop=document.getElementById('drop'), tInfo=document.getElementById('tInfo'), pLbl=document.getElementById('pLbl'), cLbl=document.getElementById('cLbl'), core=document.getElementById('core');
+function upd(raw){
+  const tc=Math.max(0,Math.min(1,raw));
+  const cx=aPix.x+(bPix.x-aPix.x)*tc;
+  const px=aPix.x+(bPix.x-aPix.x)*raw;
+  const pDraw=Math.max(24,Math.min(736,px));
+  pDot.setAttribute('cx', pDraw); pLbl.setAttribute('x', pDraw);
+  cDot.setAttribute('cx', cx); cLbl.setAttribute('x', cx);
+  ap.setAttribute('x1', aPix.x); ap.setAttribute('y1', aPix.y); ap.setAttribute('x2', pDraw); ap.setAttribute('y2', 42);
+  drop.setAttribute('x1', pDraw); drop.setAttribute('y1', 42); drop.setAttribute('x2', cx); drop.setAttribute('y2', 105);
+  tInfo.textContent=`t ${raw.toFixed(2)} → clamped ${tc.toFixed(2)}${raw!==tc?'  snaps to '+(raw<0?'a':'b'):''}`;
+  core.setAttribute('opacity', raw===tc?'1':'0.55');
+}
+document.getElementById('rng').addEventListener('input', e=> upd(parseFloat(e.target.value)));
+document.querySelectorAll('[data-t]').forEach(b=> b.addEventListener('click', ()=>{
+  const v=parseFloat(b.dataset.t); document.getElementById('rng').value=v; upd(v);
+  document.querySelectorAll('[data-t]').forEach(x=> x.classList.remove('active')); b.classList.add('active');
+}));
+upd(0.5);
+</script>
+</body>
+</html>

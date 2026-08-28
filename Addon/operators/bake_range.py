@@ -118,18 +118,14 @@ class GP_OT_BakeSelectedRange(Operator):
                     if not exists:
                         work_list.append((layer_idx, frame_num, start_frame, end_frame))
         
-        print(f"[BAKE] Frames to create: {len(work_list)}")
-        
         if not work_list:
             self.report({'WARNING'}, "No frames to create")
             return {'CANCELLED'}
         
         # STEP 2: Deselect everything to avoid crashes
-        print("[BAKE] Deselecting all frames...")
         deselect_all_frames(gp_obj)
         
-        # STEP 3: Batch frame creation (optimized)
-        print("[BAKE] Creating frames in batch...")
+        # STEP 3: Batch frame creation
         created_frames = []
         
         # Temporarily disable interpolation to prevent cache rebuilds
@@ -360,8 +356,6 @@ class GP_OT_BakeSelectedRange(Operator):
             gp_obj.data.layers.active = original_active_layer
         
         if interpolated_count > 0:
-            layers_processed = len(all_ranges)
-            self.report({'INFO'}, f"Baked {interpolated_count} frame(s) across {layers_processed} layer(s)")
             return {'FINISHED'}
         else:
             self.report({'WARNING'}, "No frames were interpolated")
