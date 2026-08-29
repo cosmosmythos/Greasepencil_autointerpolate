@@ -11,7 +11,6 @@ Private and public documentation for the GP Auto Interpolate project. Holds rese
 | `Yang18-SCA.md` | Private readable markdown of Yang et al. SCA 2018 FTP-SC paper — personal study copy, **gitignored**, do not publish (copyrighted) |
 | `Yang18-SCA.bak.md` | Backup of raw conversion before formatting — gitignored |
 | `*.private.md` | Any future private paper copies — gitignored |
-| `decisive_plan_findings.md` | Public summary of relational matching research findings and decisive matching plan |
 
 Public docs (commit-safe) should use distinct names without the `Yang18-SCA` prefix or be summarized in own words.
 
