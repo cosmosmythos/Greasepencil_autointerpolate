@@ -9,7 +9,7 @@ Blender addon package for Grease Pencil stroke interpolation. Registers operator
 - Root package: `Addon/__init__.py`
 - Manifest: `blender_manifest.toml`
 - Blend file: `Auto-Interpolate (c).blend` (reference/template asset)
-- Entry scripts: `gp_correspondence.py` (header UI + `_debug_verbose` / `_linking_history` / JSONL at `~/gp_linking_history.jsonl`), `stroke_guide.py`
+- Entry scripts: `gp_correspondence.py`, `stroke_guide.py`
 
 ## Local Contracts
 
