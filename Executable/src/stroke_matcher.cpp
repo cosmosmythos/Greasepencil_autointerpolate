@@ -36,37 +36,54 @@ MatchingResult StrokeMatcher::match(const std::vector<Stroke> &initial_strokes,
   result.stage_one_correspondence =
       run_stage_one(initial_strokes, target_strokes);
   result.stage_one_cost = result.stage_one_correspondence.average_cost();
-  if (config_.debug) {
-    std::cerr << "[ftpsc] stage1: matches="
-              << result.stage_one_correspondence.num_matches()
-              << " avg_cost=" << result.stage_one_cost << "\n";
-  }
+   if (config_.debug) {
+     std::cerr << "[ftpsc] stage1: matches="
+               << result.stage_one_correspondence.num_matches()
+               << " avg_cost=" << result.stage_one_cost << "\n";
+     if (config_.debug_level >= 2) {
+        std::cerr << "[ftpsc] stage1 matches:";
+        for (auto &pr : result.stage_one_correspondence.matches) std::cerr << " (" << pr.first << "->" << pr.second << ")";
+        std::cerr << "\n";
+     }
+   }
 
-  // Initialize final results with Stage 1
-  result.final_correspondence = result.stage_one_correspondence;
-  result.final_cost = result.stage_one_cost;
-  result.used_stage_two = false;
+   // Initialize final results with Stage 1
+   result.final_correspondence = result.stage_one_correspondence;
+   result.final_cost = result.stage_one_cost;
+   result.used_stage_two = false;
 
-  // Stage 2 (Optional)
-  if (config_.enable_stage_two) {
-    result.final_correspondence = run_stage_two(
-        initial_strokes, target_strokes, result.stage_one_correspondence);
-    result.final_cost = result.final_correspondence.average_cost();
-    result.used_stage_two = true;
-    if (config_.debug) {
-      std::cerr << "[ftpsc] stage2: matches="
-                << result.final_correspondence.num_matches()
-                << " avg_cost=" << result.final_cost << "\n";
-    }
-  }
+   // Stage 2 (Optional)
+   if (config_.enable_stage_two) {
+     result.final_correspondence = run_stage_two(
+         initial_strokes, target_strokes, result.stage_one_correspondence);
+     result.final_cost = result.final_correspondence.average_cost();
+     result.used_stage_two = true;
+     if (config_.debug) {
+       std::cerr << "[ftpsc] stage2: matches="
+                 << result.final_correspondence.num_matches()
+                 << " avg_cost=" << result.final_cost << "\n";
+       if (config_.debug_level >= 2) {
+          std::cerr << "[ftpsc] final matches:";
+          for (auto &pr : result.final_correspondence.matches) std::cerr << " (" << pr.first << "->" << pr.second << ")";
+          std::cerr << "\n";
+          int ident=0;
+          for (auto &pr : result.final_correspondence.matches) if (pr.first==pr.second) ident++;
+          std::cerr << "[ftpsc] identity " << ident << "/" << result.num_matched << " perfect=" << (ident==static_cast<int>(result.final_correspondence.num_matches())?"yes":"no") << "\n";
+       }
+     }
+   } else if (config_.debug && config_.debug_level >= 2) {
+      std::cerr << "[ftpsc] final matches:";
+      for (auto &pr : result.final_correspondence.matches) std::cerr << " (" << pr.first << "->" << pr.second << ")";
+      std::cerr << "\n";
+   }
 
-  result.num_matched =
-      static_cast<int>(result.final_correspondence.num_matches());
-  result.num_unmatched_initial = result.num_strokes_initial - result.num_matched;
-  result.num_unmatched_target = result.num_strokes_target - result.num_matched;
+   result.num_matched =
+       static_cast<int>(result.final_correspondence.num_matches());
+   result.num_unmatched_initial = result.num_strokes_initial - result.num_matched;
+   result.num_unmatched_target = result.num_strokes_target - result.num_matched;
 
-  last_result_ = result;
-  return result;
+   last_result_ = result;
+   return result;
 }
 
 MatchingResult StrokeMatcher::match_with_seeds(
@@ -74,11 +91,16 @@ MatchingResult StrokeMatcher::match_with_seeds(
     const std::vector<Stroke> &target_strokes,
     const std::vector<std::pair<int, int>> &manual_seeds) {
 
-  if (config_.debug) {
-    std::cerr << "[ftpsc] match_with_seeds(): initial=" << initial_strokes.size()
-              << " target=" << target_strokes.size()
-              << " seeds=" << manual_seeds.size() << "\n";
-  }
+   if (config_.debug) {
+     std::cerr << "[ftpsc] match_with_seeds(): initial=" << initial_strokes.size()
+               << " target=" << target_strokes.size()
+               << " seeds=" << manual_seeds.size() << "\n";
+     if (config_.debug_level >= 2 && !manual_seeds.empty()) {
+        std::cerr << "[ftpsc] seeds list:";
+        for (auto &p : manual_seeds) std::cerr << " (" << p.first << "->" << p.second << ")";
+        std::cerr << "\n";
+     }
+   }
 
   MatchingResult result;
   result.num_strokes_initial = static_cast<int>(initial_strokes.size());
@@ -89,11 +111,16 @@ MatchingResult StrokeMatcher::match_with_seeds(
       run_stage_one(initial_strokes, target_strokes, manual_seeds);
   result.stage_one_cost = result.stage_one_correspondence.average_cost();
 
-  if (config_.debug) {
-    std::cerr << "[ftpsc] stage1 (seeded): matches="
-              << result.stage_one_correspondence.num_matches()
-              << " avg_cost=" << result.stage_one_cost << "\n";
-  }
+   if (config_.debug) {
+     std::cerr << "[ftpsc] stage1 (seeded): matches="
+               << result.stage_one_correspondence.num_matches()
+               << " avg_cost=" << result.stage_one_cost << "\n";
+     if (config_.debug_level >= 2) {
+        std::cerr << "[ftpsc] stage1 matches:";
+        for (auto &pr : result.stage_one_correspondence.matches) std::cerr << " (" << pr.first << "->" << pr.second << ")";
+        std::cerr << "\n";
+     }
+   }
 
   // Initialize final results with Stage 1
   result.final_correspondence = result.stage_one_correspondence;
@@ -113,10 +140,20 @@ MatchingResult StrokeMatcher::match_with_seeds(
   result.num_unmatched_initial = result.num_strokes_initial - result.num_matched;
   result.num_unmatched_target = result.num_strokes_target - result.num_matched;
 
-  if (config_.debug) {
-    std::cerr << "[ftpsc] match_with_seeds(): final_matches="
-              << result.num_matched << "\n";
-  }
+   if (config_.debug) {
+     std::cerr << "[ftpsc] match_with_seeds(): final_matches="
+               << result.num_matched << " final_cost=" << result.final_cost
+               << " s2=" << (result.used_stage_two?"on":"off") << "\n";
+     if (config_.debug_level >= 2) {
+        std::cerr << "[ftpsc] final matches:";
+        for (auto &pr : result.final_correspondence.matches) std::cerr << " (" << pr.first << "->" << pr.second << ")";
+        std::cerr << "\n";
+        // also show identity vs drift
+        int ident=0;
+        for (auto &pr : result.final_correspondence.matches) if (pr.first==pr.second) ident++;
+        std::cerr << "[ftpsc] identity " << ident << "/" << result.num_matched << " perfect=" << (ident==result.num_matched?"yes":"no") << "\n";
+     }
+   }
 
   last_result_ = result;
   return result;

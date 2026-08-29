@@ -475,7 +475,8 @@ NB_MODULE(gp_autointerpolate, m) {
       .def_rw("angle_threshold", &ftpsc::MatcherConfig::angle_threshold)
       .def_rw("enable_stage_two", &ftpsc::MatcherConfig::enable_stage_two)
       .def_rw("coincident_threshold", &ftpsc::MatcherConfig::coincident_threshold)
-      .def_rw("debug", &ftpsc::MatcherConfig::debug);
+      .def_rw("debug", &ftpsc::MatcherConfig::debug)
+      .def_rw("debug_level", &ftpsc::MatcherConfig::debug_level);
 
   // Match result
   nb::class_<ftpsc::MatchingResult>(m, "MatchingResult")

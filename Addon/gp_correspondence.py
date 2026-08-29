@@ -9,6 +9,9 @@ Refactored structure:
 """
 
 import bpy
+import time
+import json
+import os
 
 # Global State (Shared across modules via this file)
 _match_job_running = False
@@ -18,6 +21,28 @@ _link_constraints = []  # [(layer_idx, frame1, stroke1_idx, frame2, stroke2_idx)
 _viewport_context = {}  # Store viewport info (region, rv3d) for timer callbacks
 _show_linked_overlay = False  # Toggle for showing orange overlay on linked strokes
 _stable_stroke_ids = {}  # {(layer_idx, frame_num): {current_idx: stable_id, ...}}
+_debug_verbose = True  # Print detailed linking/matching diagnostics to System Console
+_linking_history = []  # [{ts, layer, frames, seeds, matches, reorder, metrics}, ...]
+_debug_log_path = ""  # optional JSONL file written on each match if set
+
+
+def is_debug_verbose():
+    return _debug_verbose
+
+
+def _history_append(entry):
+    # keep in-memory history capped to 200 entries
+    global _linking_history
+    _linking_history.append(entry)
+    if len(_linking_history) > 200:
+        _linking_history = _linking_history[-200:]
+    # also append to JSONL file if path set or default temp file
+    try:
+        path = _debug_log_path or os.path.join(os.path.expanduser("~"), "gp_linking_history.jsonl")
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except Exception:
+        pass
 
 
 def _operator_exists(idname):
@@ -39,13 +64,10 @@ def draw_gpcorr_header(self, context):
         return
     
     # Defensive check: ensure core operators are registered before drawing
-    if not _operator_exists("gpcorr.match") or not _operator_exists("gpcorr.link_mode"):
+    if not _operator_exists("gpcorr.link_mode"):
         return
     
     row = layout.row(align=True)
-    
-    # Match button
-    row.operator("gpcorr.match", text="Auto-Link", icon='COLLECTION_COLOR_06')
     
     # Link mode toggle
     row.operator("gpcorr.link_mode", 
@@ -64,6 +86,19 @@ def draw_gpcorr_header(self, context):
         row.operator("gpcorr.toggle_linked_overlay", text="", 
                      icon='HIDE_OFF' if _show_linked_overlay else 'HIDE_ON',
                      depress=_show_linked_overlay)
+
+    # Debug verbose toggle (console icon)
+    if _operator_exists("gpcorr.toggle_debug"):
+        row.operator("gpcorr.toggle_debug", text="",
+                     icon='CONSOLE' if _debug_verbose else 'INFO',
+                     depress=_debug_verbose)
+
+    # Dump history (only show if operators exist)
+    if _operator_exists("gpcorr.dump_history"):
+        row.operator("gpcorr.dump_history", text="", icon='FILE_TICK')
+
+    if _debug_verbose and _linking_history:
+        row.label(text=f"[{len(_linking_history)}]")
     
     # Show progress if job running
     if _match_job_running:

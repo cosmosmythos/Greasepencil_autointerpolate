@@ -31,6 +31,7 @@ Native C++ module (`gp_autointerpolate`) implementing the FTP-SC stroke interpol
 - **Optional native deps:** Eigen3 (Stage 2 PCA, `FTPSC_USE_EIGEN`), nanoflann v1.5.5 (k-NN, header-only, fetched), OpenMP (optional parallelism). Eigen absent → fallback PCA path.
 - **Cross-platform flags:** Windows `.pyd` (MSVC via Ninja); macOS universal `x86_64;arm64` (deployment target 10.15); Linux `.so` with `-static-libgcc -static-libstdc++` + `$ORIGIN` rpath + optional static OpenMP for cross-distro.
 - **Python side loads via `Addon/core/cpp_module.py`** (sole import site) and `Addon/utils/dll_loader.py` (Windows `<pkg>.libs` DLL path fixup for delvewheel-repaired wheels).
+- **Debug:** `MatcherConfig.debug` + `debug_level` (1=summary, 2=seeds+matches+identity, 3=CD candidates). Exposed via nanobind; set from `Addon/operators/correspondence.py` when `gp_correspondence._debug_verbose` is True → prints to stderr (Blender System Console).
 - **CMake Python discovery.** nanobind uses `find_package(Python ...)` (not `Python3`). Before FetchContent_MakeAvailable(nanobind), set `Python_ROOT_DIR` and `Python_EXECUTABLE` to the Python3 variables, then call `find_package(Python 3.11 REQUIRED COMPONENTS Interpreter Development.Module Development.SABIModule)` to pre-populate `Python::Module` and `Python::SABIModule` targets. The `Development.SABIModule` component is required for stable ABI builds.
 
 ## Work Guidance
