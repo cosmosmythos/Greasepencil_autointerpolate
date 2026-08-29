@@ -39,15 +39,12 @@ def draw_gpcorr_header(self, context):
         return
     
     # Defensive check: ensure core operators are registered before drawing
-    if not _operator_exists("gpcorr.match") or not _operator_exists("gpcorr.link_mode"):
+    if not _operator_exists("gpcorr.link_mode"):
         return
     
     row = layout.row(align=True)
     
-    # Match button
-    row.operator("gpcorr.match", text="Auto-Link", icon='COLLECTION_COLOR_06')
-    
-    # Link mode toggle
+    # Link mode toggle (Manual only — Auto-Link removed per user request)
     row.operator("gpcorr.link_mode", 
                  text="Manual" if not _link_mode_active else "Done", 
                  icon='RESTRICT_INSTANCED_OFF' if not _link_mode_active else 'SOLO_ON',

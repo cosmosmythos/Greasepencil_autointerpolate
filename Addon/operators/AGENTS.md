@@ -15,7 +15,7 @@ Blender operator modules for GP Auto Interpolate. Each file defines one operator
 | `easing_popup.py` | Easing curve popup UI |
 | `easing_direct.py` | Direct easing application |
 | `arc_popup.py` | Arc selection popup |
-| `correspondence.py` | Stroke correspondence editing |
+| `correspondence.py` | Manual stroke correspondence (link / unlink, seeded matching) — Auto-Link (`gpcorr.match`) removed |
 | `layer_filter.py` | Layer visibility filtering |
 | `import_lineart.py` | Import Line Art strokes |
 

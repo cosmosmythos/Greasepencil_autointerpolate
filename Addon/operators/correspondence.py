@@ -5,11 +5,9 @@ Handles matching, linking, and unlinking operations for GP stroke correspondence
 
 import bpy
 from bpy.types import Operator
-from bpy.props import IntProperty, FloatProperty, BoolProperty, EnumProperty
 
 from ..utils.correspondence_utils import (
     detect_keyframe_range,
-    find_keyframe_pairs,
     collect_strokes_2d,
     to_cpp_strokes
 )
@@ -313,204 +311,6 @@ def start_match_job(gp_obj, layer_idx, pairs, config):
     bpy.app.timers.register(run_match_job_step)
     
     return (True, camera_info)
-# Helper function to get layer items for EnumProperty
-def get_layer_items(self, context):
-    """Generate layer items for dropdown"""
-    items = []
-    obj = context.active_object
-    if obj and obj.type == 'GREASEPENCIL':
-        for idx, layer in enumerate(obj.data.layers):
-            # EnumProperty items: (identifier, name, description, icon, number)
-            items.append((str(idx), layer.name, f"Layer: {layer.name}", 'OUTLINER_DATA_GP_LAYER', idx))
-    
-    if not items:
-        items.append(('0', "No Layers", "No GP layers available", 'ERROR', 0))
-    
-    return items
-
-
-def update_active_layer(self, context):
-    """Update callback - set the active layer when dropdown changes"""
-    obj = context.active_object
-    if obj and obj.type == 'GREASEPENCIL':
-        layer_idx = int(self.layer_enum) if self.layer_enum.isdigit() else 0
-        if layer_idx < len(obj.data.layers):
-            obj.data.layers.active = obj.data.layers[layer_idx]
-            # Force viewport redraw
-            for area in context.screen.areas:
-                if area.type == 'VIEW_3D':
-                    area.tag_redraw()
-
-
-# Operator: GP Match (Main Matching Operator)
-class GPCORR_OT_match(Operator):
-    bl_idname = "gpcorr.match"
-    bl_label = "Auto-Link Strokes"
-    bl_description = "Automatically pair strokes between keyframes"
-    bl_options = {'REGISTER', 'UNDO'}
-    
-    # Layer selection dropdown with names
-    layer_enum: EnumProperty(
-        name="Layer",
-        description="Layer to match",
-        items=get_layer_items,
-        update=update_active_layer
-    )
-    
-    # Use custom range toggle
-    use_custom_range: BoolProperty(
-        name="Custom Range",
-        description="Override auto-detected range with custom start/end frames",
-        default=False
-    )
-    
-    # Frame range (only used when use_custom_range is True)
-    frame_start: IntProperty(
-        name="Start Frame",
-        description="First frame of range",
-        default=1
-    )
-    
-    frame_end: IntProperty(
-        name="End Frame",
-        description="Last frame of range",
-        default=24
-    )
-    
-    # Matching parameters (0-10 coords: 0.5 ~ 0.05*10)
-    max_alpha: FloatProperty(
-        name="Max Alpha",
-        description="Topology connectivity distance (higher = more permissive matching)",
-        default=0.5,
-        min=0.1,
-        max=2.0,
-        step=1,
-    )
-
-    threshold: FloatProperty(
-        name="Threshold",
-        description="Distance threshold for matching strokes",
-        default=0.5,
-        min=0.1,
-        max=2.0,
-        step=1,
-    )
-    
-    def draw(self, context):
-        """Custom draw for the popup dialog"""
-        layout = self.layout
-        
-        # Layer dropdown
-        layout.prop(self, "layer_enum", text="Layer")
-        
-        layout.separator()
-        
-        # Custom range toggle
-        layout.prop(self, "use_custom_range")
-        
-        # Show frame range inputs only when custom range is enabled
-        if self.use_custom_range:
-            row = layout.row(align=True)
-            row.prop(self, "frame_start", text="Start")
-            row.prop(self, "frame_end", text="End")
-        else:
-            # Show auto-detected range as info
-            obj = context.active_object
-            if obj and obj.type == 'GREASEPENCIL':
-                layer_idx = int(self.layer_enum) if self.layer_enum.isdigit() else 0
-                if layer_idx < len(obj.data.layers):
-                    layer = obj.data.layers[layer_idx]
-                    start, end = detect_keyframe_range(context.scene, layer)
-                    layout.label(text=f"Auto-detected: frames {start} → {end}", icon='INFO')
-        
-        layout.separator()
-        
-        # Advanced settings
-        box = layout.box()
-        box.label(text="Advanced", icon='PREFERENCES')
-        box.prop(self, "max_alpha")
-        box.prop(self, "threshold")
-    
-    def execute(self, context):
-        obj = context.active_object
-        if obj is None or obj.type != 'GREASEPENCIL':
-            self.report({'ERROR'}, "Select a Grease Pencil object")
-            return {'CANCELLED'}
-        
-        # Get layer index from enum
-        layer_index = int(self.layer_enum) if self.layer_enum.isdigit() else 0
-        
-        # Validate layer
-        if layer_index >= len(obj.data.layers):
-            self.report({'ERROR'}, f"Layer index {layer_index} out of range")
-            return {'CANCELLED'}
-        
-        layer = obj.data.layers[layer_index]
-        
-        # Determine frame range
-        if self.use_custom_range:
-            frame_start = self.frame_start
-            frame_end = self.frame_end
-        else:
-            # Auto-detect frame range
-            frame_start, frame_end = detect_keyframe_range(context.scene, layer)
-        
-        # Find keyframe pairs
-        pairs = find_keyframe_pairs(layer, frame_start, frame_end)
-        
-        if not pairs:
-            self.report({'WARNING'}, f"No keyframe pairs found in range {frame_start}-{frame_end}")
-            return {'CANCELLED'}
-        
-        # Save viewport context for timer callbacks (region/rv3d are lost in timer context)
-        viewport_ctx = {}
-        for area in context.screen.areas:
-            if area.type == 'VIEW_3D':
-                for region in area.regions:
-                    if region.type == 'WINDOW':
-                        viewport_ctx['region'] = region
-                        viewport_ctx['region_data'] = area.spaces.active.region_3d
-                        break
-                break
-        set_state(viewport_context=viewport_ctx)
-        
-        # Prepare config
-        config = {
-            'max_alpha': self.max_alpha,
-            'coincident_threshold': self.threshold,
-        }
-        
-        # Start matching job
-        success, camera_info = start_match_job(obj, layer_index, pairs, config)
-        
-        if success:
-            # Show camera info/warning
-            if camera_info:
-                self.report({camera_info['type']}, camera_info['message'])
-            self.report({'INFO'}, f"Started matching job: {len(pairs)} frame pairs")
-            return {'FINISHED'}
-        else:
-            self.report({'ERROR'}, "Failed to start matching job (job already running?)")
-            return {'CANCELLED'}
-    
-    def invoke(self, context, event):
-        obj = context.active_object
-        if obj and obj.type == 'GREASEPENCIL':
-            # Set default layer to active layer
-            active_layer = obj.data.layers.active
-            if active_layer:
-                for idx, layer in enumerate(obj.data.layers):
-                    if layer == active_layer:
-                        self.layer_enum = str(idx)
-                        break
-            
-            # Auto-detect and set frame range defaults
-            layer_idx = int(self.layer_enum) if self.layer_enum.isdigit() else 0
-            if layer_idx < len(obj.data.layers):
-                layer = obj.data.layers[layer_idx]
-                self.frame_start, self.frame_end = detect_keyframe_range(context.scene, layer)
-        
-        return context.window_manager.invoke_props_dialog(self, width=300)
 # Operator: Link Mode Toggle
 class GPCORR_OT_link_mode_toggle(Operator):
     bl_idname = "gpcorr.link_mode"
@@ -845,9 +645,8 @@ class GPCORR_OT_unlink_selected(Operator):
             self.report({'INFO'}, "Selected pair was not linked")
 
         return {'FINISHED'}
-# Registration
+# Registration (Manual only — Auto-Link removed per user request)
 classes = (
-    GPCORR_OT_match,
     GPCORR_OT_link_mode_toggle,
     GPCORR_OT_link_selected,
     GPCORR_OT_clear_all_links,
