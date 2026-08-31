@@ -75,7 +75,6 @@ def register():
     """Register correspondence UI."""
     try:
         bpy.types.VIEW3D_HT_tool_header.prepend(draw_gpcorr_header)
-        print("[GPCORR] Header UI registered successfully")
     except Exception as e:
         print(f"[GPCORR] ERROR: Failed to register header UI: {e}")
 
@@ -84,6 +83,5 @@ def unregister():
     """Unregister correspondence UI."""
     try:
         bpy.types.VIEW3D_HT_tool_header.remove(draw_gpcorr_header)
-        print("[GPCORR] Header UI unregistered")
     except Exception as e:
         print(f"[GPCORR] ERROR: Failed to unregister header UI: {e}")

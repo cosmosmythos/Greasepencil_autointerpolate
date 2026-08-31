@@ -99,6 +99,7 @@ set(FTPSC_USE_NANOFLANN ON)
 # Collect all FTP-SC source files — similarity_transform removed (topology-driven, no shape)
 set(FTPSC_SOURCES
     src/interpolate.cpp
+    src/bezier_fit.cpp
     src/fuzzy_topology.cpp
     src/greedy_matcher.cpp
     src/stroke_matcher.cpp

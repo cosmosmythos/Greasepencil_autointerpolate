@@ -17,9 +17,11 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 | `recache_triggers.py` | msgbus triggers (mode change, active-object change) → `mark_dirty` |
 | `bake_utils.py` | Bake-only helpers (stroke normal, arc params, apply to FINAL attributes) |
 | `constants.py` | Shared names + version strings |
+| `draw_sensor.py` | Draw-finish sensor: depsgraph `is_updated_geometry` burst (PAINT-only) + 0.45s silence + total stroke/point counts gate → modal watcher `gp.draw_sensor_watcher` `self.report({'INFO'})` “finished drawing” — suppresses mode-switch / file-new / undo-erase false positives without time grace |
 
 ## Local Contracts
 
+- **Draw-finish sensor `draw_sensor.py` is PAINT-only and counts-gated, not time-graced.** `on_depsgraph_update` ARMs only on `is_updated_geometry` for `GreasePencil`/`Object:GreasePencil` while `active_object.mode` is `PAINT_GPENCIL`/`PAINT_GREASE_PENCIL`. `on_load_post` re-baselines `(strokes, points)` — no grace delay. `_idle_check` (0.45s) fires only if total strokes/points increased since last stable; mode-switch / file-new / undo-erase with no increase are silently suppressed. Report via persistent modal `gp.draw_sensor_watcher` → `self.report({'INFO'})` “finished drawing” (bottom Status Bar), because `self.report` from handlers/timers is suppressed by Blender.
 - **Primary per-frame entry point is `utils/visibility.on_frame_change`, not a core handler.** When playing / scrubbing / rendering it shows modifiers then calls `interpolation.process_scene(scene)`. `core/npanel_handlers.on_frame_change` only syncs the easing-curve UI and never runs interpolation.
 - **Invalidation uses two layers:** geometry-path immediate rebuild + deferred keyframe signature check.
   - Geometry depsgraph update (`is_updated_geometry=True`) → immediate rebuild via `cache.clear() + cache.build()`. Only runs when the object is not already dirty, not currently building, and has no pending runtime grace.

@@ -10,6 +10,8 @@ Private and public documentation for the GP Auto Interpolate project. Holds rese
 |------|------|
 | `Yang18-SCA.md` | Private readable markdown of Yang et al. SCA 2018 FTP-SC paper — personal study copy, **gitignored**, do not publish (copyrighted) |
 | `Yang18-SCA.bak.md` | Backup of raw conversion before formatting — gitignored |
+| `schneider_bezier_explained.html` | Public visual guide to Schneider 1990 polyline → Bezier fitting (faithful to `Executable/src/bezier_fit.cpp`, interactive canvas, 3D BU) |
+| `bezier-fit-curve-master/` | Vendored JS reference `soswow/fit-curve` (MIT) — upstream for comparison only, not runtime |
 | `*.private.md` | Any future private paper copies — gitignored |
 
 Public docs (commit-safe) should use distinct names without the `Yang18-SCA` prefix or be summarized in own words.
@@ -20,6 +22,7 @@ Public docs (commit-safe) should use distinct names without the `Yang18-SCA` pre
 - **Source of truth for FTP-SC reference is `C:/Users/User/Downloads/Yang18-SCA.pdf`.** `docs/Yang18-SCA.md` is a derived, formatted reading copy for convenience.
 - **Formatting is derived, not authoritative.** Do not edit the PDF via markdown — treat markdown as read-only view. Algorithm changes belong in `Executable/src/` and `Addon/core/`.
 - **No AGENTS.md chain violation:** Docs do not shadow code contracts. Engine docs reference `Executable/AGENTS.md` and `Addon/core/AGENTS.md` for implementation details.
+- **Units contract:** All docs/examples for stroke fitting use **Blender Units (meters, 3D cartesian)**. Never document tolerances in px for Grease Pencil strokes.
 
 ## Work Guidance
 
@@ -38,4 +41,4 @@ Public docs (commit-safe) should use distinct names without the `Yang18-SCA` pre
 
 | Child | Scope |
 |-------|-------|
-| — | No child docs yet |
+| `vendor/schneider/` | Vendored Schneider 1990 polyline → Bezier reference (MIT, 3D BU) |

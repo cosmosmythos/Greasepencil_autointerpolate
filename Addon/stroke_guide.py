@@ -406,7 +406,7 @@ def on_stroke_guide_undo_redo(scene):
 class GP_TogglePrevGuide(bpy.types.Operator):
     bl_idname = "gp.toggle_prev_guide"
     bl_label = "Prev"
-    bl_description = "Show/hide previous keyframe stroke guide"
+    bl_description = "Show the previous keyframe guide"
     
     def execute(self, context):
         guide_state['show_prev'] = not guide_state['show_prev']
@@ -439,7 +439,7 @@ class GP_TogglePrevGuide(bpy.types.Operator):
 class GP_ToggleNextGuide(bpy.types.Operator):
     bl_idname = "gp.toggle_next_guide"
     bl_label = "Next"
-    bl_description = "Show/hide next keyframe stroke guide"
+    bl_description = "Show the next keyframe guide"
     
     def execute(self, context):
         guide_state['show_next'] = not guide_state['show_next']
@@ -472,7 +472,7 @@ class GP_ToggleNextGuide(bpy.types.Operator):
 class GP_ToggleAutoMode(bpy.types.Operator):
     bl_idname = "gp.toggle_auto_mode"
     bl_label = "Auto"
-    bl_description = "Toggle automatic stroke index advancement"
+    bl_description = "Stroke index"
     
     def execute(self, context):
         guide_state['auto_mode'] = not guide_state['auto_mode']
@@ -489,6 +489,7 @@ class GP_ToggleAutoMode(bpy.types.Operator):
 class GP_NextStroke(bpy.types.Operator):
     bl_idname = "gp.next_stroke"
     bl_label = "Next Stroke"
+    bl_description = "Next stroke ID"
     
     def execute(self, context):
         guide_state['auto_mode'] = False  # Switch to manual
@@ -500,6 +501,7 @@ class GP_NextStroke(bpy.types.Operator):
 class GP_PrevStroke(bpy.types.Operator):
     bl_idname = "gp.prev_stroke"
     bl_label = "Prev Stroke"
+    bl_description = "Previous stroke ID"
     
     def execute(self, context):
         guide_state['auto_mode'] = False  # Switch to manual
@@ -511,7 +513,6 @@ class GP_PrevStroke(bpy.types.Operator):
 
 # Header UI function
 def draw_header(self, context):
-    """Draw stroke guide controls in 3D View header"""
     gp_obj = context.active_object
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return
@@ -519,33 +520,21 @@ def draw_header(self, context):
     layout = self.layout
     layout.separator_spacer()
     
-    # Compact button layout
     row = layout.row(align=True)
     row.operator("gp.toggle_prev_guide", depress=guide_state['show_prev'], text="", icon="PLAY_REVERSE")
     row.operator("gp.toggle_next_guide", depress=guide_state['show_next'], text="", icon="PLAY")
 
-    # Always show the Auto/Manual toggle.
-    # When no guide is active, keep it visible but disabled to avoid confusing "no-op" behavior.
+    # Always show the Auto/Manual toggle. When no guide is active, keep it visible but disabled to avoid confusing "no-op" behavior.
     guide_active = guide_state['show_prev'] or guide_state['show_next']
 
     mode_row = row.row(align=True)
     mode_row.enabled = guide_active
-    mode_row.operator(
-        "gp.toggle_auto_mode",
-        text="Auto" if guide_state['auto_mode'] else "Manual",
-        depress=guide_state['auto_mode'],
-    )
-
+    mode_row.operator("gp.toggle_auto_mode", depress=guide_state['auto_mode'], text=f"[{guide_state['stroke_index']}]", icon="MOD_INSTANCE")
     if guide_active:
-        # Manual controls (only when needed)
+        # Manual
         if not guide_state['auto_mode']:
-            row.operator("gp.prev_stroke", text="", icon="ZOOM_OUT")
-            row.operator("gp.next_stroke", text="", icon="ZOOM_IN")
-
-    # Stroke index display (always visible)
-    index_row = row.row(align=True)
-    index_row.enabled = guide_active
-    index_row.label(text=f"S[{guide_state['stroke_index']}]")
+            row.operator("gp.prev_stroke", text="", icon="TRIA_LEFT")
+            row.operator("gp.next_stroke", text="", icon="TRIA_RIGHT")
 
 
 # Registration classes

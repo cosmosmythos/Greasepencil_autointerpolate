@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schneider Bezier Fit — Visual Guide for Artists</title>
+<style>
+  :root{--bg:#0f1115;--panel:#1a1e26;--panel2:#1f2430;--text:#e6e9ee;--muted:#a8b0c0;--accent:#7cc4ff;--accent2:#ffb86b;--accent3:#7cffc4;--line:#2a3140;--warn:#ff6b7a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,sans-serif;line-height:1.65}
+  a{color:var(--accent)}
+  header{position:sticky;top:0;z-index:5;background:rgba(15,17,21,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  header .wrap{max-width:1100px;margin:0 auto;padding:14px 20px;display:flex;gap:12px;align-items:center;justify-content:space-between}
+  header h1{font-size:18px;margin:0;font-weight:700;letter-spacing:.2px}
+  header .badge{font-size:11px;background:#2a3655;color:#8ec0ff;padding:4px 8px;border-radius:999px;border:1px solid #3a4a6b}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+  .hero{padding:28px 0 10px}
+  .hero h2{font-size:38px;line-height:1.1;margin:6px 0}
+  .hero p{color:var(--muted);max-width:760px;font-size:15px}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:.12em;font-size:11px;text-transform:uppercase}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .card h3{margin:4px 0 8px;font-size:16px}
+  .muted{color:var(--muted);font-size:13px}
+  .pill{display:inline-block;font-size:11px;padding:3px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);margin-right:6px}
+  section{padding:22px 0;border-top:1px solid #1b2130;margin-top:14px}
+  section h2{font-size:24px;margin:4px 0 6px}
+  section h3{font-size:16px;margin:16px 0 6px;color:var(--accent)}
+  section h4{font-size:13px;margin:14px 0 6px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .diagram{background:#0c0e12;border:1px solid var(--line);border-radius:12px;padding:12px;overflow:auto}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:8px}
+  .dot{width:9px;height:9px;border-radius:99px;display:inline-block}
+  .toc{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .toc a{font-size:12px;padding:6px 10px;background:var(--panel);border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--text)}
+  .kbd{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#0b0e13;border:1px solid var(--line);padding:2px 6px;border-radius:6px}
+  .code{font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:#0b0e13;border:1px solid var(--line);border-radius:10px;padding:10px;overflow:auto;line-height:1.5}
+  .callout{display:flex;gap:12px;background:#121826;border:1px solid #25314a;border-left:4px solid var(--accent);border-radius:10px;padding:12px}
+  .callout.warn{border-left-color:var(--warn)}
+  .step-num{width:28px;height:28px;border-radius:99px;background:var(--accent);color:#001933;display:grid;place-items:center;font-weight:800;font-size:13px;flex:0 0 28px}
+  .flow{display:flex;flex-direction:column;gap:10px}
+  .flow .node{display:flex;gap:10px;align-items:flex-start}
+  .flow .box{flex:1}
+  .flow .diamond{transform:rotate(45deg);width:14px;height:14px;background:var(--accent2);margin:7px 7px 0 7px}
+  canvas{width:100%;height:100%;display:block;background:#080a0e;border-radius:10px}
+  .canvas-wrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#080a0e}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0}
+  .controls input[type=range]{width:220px}
+  button{background:#1e2a44;color:var(--text);border:1px solid #2e3a56;padding:7px 10px;border-radius:10px;font-size:12px;cursor:pointer}
+  button:hover{background:#243452}
+  button.primary{background:var(--accent);color:#002040;border-color:#5ab0ff;font-weight:700}
+  .two{columns:2}
+  @media(max-width:700px){.two{columns:1}}
+  .defs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:800px){.defs{grid-template-columns:1fr}}
+  .defs div{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px}
+  .defs dt{font-weight:700;font-size:12px;color:var(--accent)}
+  .defs dd{margin:4px 0 0;font-size:12.5px;color:var(--muted)}
+  .file{font-family:ui-monospace,monospace;font-size:11px;color:#8eb7ff}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>✏️ Schneider Bezier Fit — Visual Guide</h1>
+    <span class="badge">Graphics Gems · 1990 · 3D for Grease Pencil</span>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <div class="kicker">For junior 3D artists who love Blender, no math degree needed</div>
+  <h2>Turn a messy hand-drawn line into a few clean handles.</h2>
+  <p><b>Plain goal:</b> You sketch a stroke. Blender stores it as <b>50 little dots joined by straight lines</b>. This algorithm — <b>Schneider’s “Automatically Fitting Digitized Curves”</b> — looks at those dots and says: <i>“I can make the same shape with just 2–3 smooth Bezier curves.”</i> That means fewer points, smoother in-betweens, and <b>handles you can grab and tweak</b> — huge for Grease Pencil.</p>
+  <div class="toc">
+    <a href="#what">What &amp; Why</a>
+    <a href="#bezier101">Bezier 101</a>
+    <a href="#inputs">Inputs</a>
+    <a href="#overview">Big Picture</a>
+    <a href="#step1">Step 1 — Tangents</a>
+    <a href="#step2">Step 2 — Chord Length</a>
+    <a href="#step3">Step 3 — Least Squares</a>
+    <a href="#step4">Step 4 — Error &amp; Split</a>
+    <a href="#step5">Step 5 — Newton</a>
+    <a href="#play">Playground</a>
+    <a href="#code">Code Map</a>
+  </div>
+</div>
+
+<div class="wrap">
+  <!-- WHAT / WHY -->
+  <section id="what">
+    <h2>What &amp; Why</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>🎨 Your view in Blender</h3>
+        <p class="muted">You draw a Grease Pencil stroke. Under the hood: <span class="kbd">drawing.strokes[0].points</span> = an array of positions <span class="kbd">[x,y,z]</span> in <b>Blender Units</b> (meters). A wiggly stroke can be 200 points.</p>
+        <div class="diagram">
+          <!-- SVG: dense polyline -->
+          <svg viewBox="0 0 420 120" width="100%" height="120" style="background:#080a0e;border-radius:8px">
+            <path d="M20 80 C 60 20, 90 20, 130 60 S 200 110, 240 60 S 320 10, 400 50" fill="none" stroke="#3a445e" stroke-width="1.2" stroke-dasharray="4 4"/>
+            <!-- dots -->
+            <g fill="#7cc4ff" stroke="#0b0e13" stroke-width="1">
+              <circle cx="20" cy="80" r="3"/><circle cx="48" cy="55" r="3"/><circle cx="72" cy="28" r="3"/><circle cx="98" cy="24" r="3"/><circle cx="130" cy="60" r="3"/><circle cx="165" cy="92" r="3"/><circle cx="205" cy="98" r="3"/><circle cx="240" cy="60" r="3"/><circle cx="285" cy="28" r="3"/><circle cx="320" cy="14" r="3"/><circle cx="360" cy="22" r="3"/><circle cx="400" cy="50" r="3"/>
+            </g>
+            <text x="10" y="115" fill="#a8b0c0" font-size="9">50 dots — hard to edit</text>
+          </svg>
+          <div class="legend"><span><span class="dot" style="background:#7cc4ff"></span> digitized point</span><span><span class="dot" style="background:#3a445e"></span> straight segments</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>✨ What the algorithm does</h3>
+        <p class="muted">It replaces that chain with <b>1–3 Bezier curves</b>. Each curve is only <b>4 points</b>: start, two handles, end. Same look, 10× fewer points, handles you can sculpt.</p>
+        <div class="diagram">
+          <svg viewBox="0 0 420 120" width="100%" height="120" style="background:#080a0e;border-radius:8px">
+            <path d="M20 80 C 70 15, 90 15, 130 60" fill="none" stroke="#7cffc4" stroke-width="2.5"/>
+            <path d="M130 60 C 170 108, 210 108, 240 60" fill="none" stroke="#7cffc4" stroke-width="2.5"/>
+            <path d="M240 60 C 280 12, 330 8, 400 50" fill="none" stroke="#7cffc4" stroke-width="2.5"/>
+            <g fill="#ffb86b" stroke="#0b0e13" stroke-width="1"><circle cx="20" cy="80" r="4"/><circle cx="70" cy="15" r="3"/><circle cx="90" cy="15" r="3"/><circle cx="130" cy="60" r="4"/><circle cx="170" cy="108" r="3"/><circle cx="210" cy="108" r="3"/><circle cx="240" cy="60" r="4"/><circle cx="280" cy="12" r="3"/><circle cx="330" cy="8" r="3"/><circle cx="400" cy="50" r="4"/></g>
+            <g stroke="#ffb86b" stroke-width="0.9" stroke-dasharray="3 3" opacity="0.7"><line x1="20" y1="80" x2="70" y2="15"/><line x1="130" y1="60" x2="90" y2="15"/><line x1="130" y1="60" x2="170" y2="108"/><line x1="240" y1="60" x2="210" y2="108"/><line x1="240" y1="60" x2="280" y2="12"/><line x1="400" y1="50" x2="330" y2="8"/></g>
+            <text x="10" y="115" fill="#a8b0c0" font-size="9">3 Beziers = 12 points total — easy to edit</text>
+          </svg>
+          <div class="legend"><span><span class="dot" style="background:#7cffc4"></span> smooth Bezier</span><span><span class="dot" style="background:#ffb86b"></span> handle</span><span><span class="dot" style="background:#555"></span> dashed = handle line</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="callout" style="margin-top:14px">
+      <div class="step-num">!</div>
+      <div><b>Translation table for this page</b>
+        <div class="defs" style="margin-top:8px">
+          <div><dt>Digitized points</dt><dd>Just “your dots” — every place the tablet sampled the pen.</dd></div>
+          <div><dt>Bezier curve</dt><dd>A smooth line defined by 4 knobs: start, handle1, handle2, end. Blender draws the curve that hugs them.</dd></div>
+          <div><dt>Tangent</dt><dd>An arrow showing which direction the line is going at a dot.</dd></div>
+          <div><dt>Error</dt><dd>How far the smooth curve is from your real dots, in meters squared.</dd></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="bezier101">
+    <h2>Bezier 101 — the 4 knobs</h2>
+    <p class="muted">Think of a strip of rubber. You pin the ends ( <b>p0</b> and <b>p1</b> ). The two middle knobs (<b>c1, c2</b>) are magnets pulling the rubber. Move them, the curve bends — but never leaves the cage.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>One cubic Bezier</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 420 150" width="100%" height="150" style="background:#080a0e;border-radius:8px" id="bezier101svg">
+            <line x1="60" y1="110" x2="130" y2="20" stroke="#ffb86b" stroke-dasharray="4 4" stroke-width="1"/><line x1="360" y1="110" x2="290" y2="20" stroke="#ffb86b" stroke-dasharray="4 4" stroke-width="1"/>
+            <path id="bez101curve" d="M60 110 C130 20, 290 20, 360 110" fill="none" stroke="#7cc4ff" stroke-width="3"/>
+            <g fill="#e6e9ee" stroke="#0b0e13" stroke-width="1"><circle cx="60" cy="110" r="6"/><circle cx="360" cy="110" r="6"/></g>
+            <g fill="#ffb86b" stroke="#0b0e13" stroke-width="1"><circle id="b101c1" cx="130" cy="20" r="5"/><circle id="b101c2" cx="290" cy="20" r="5"/></g>
+            <text x="50" y="130" fill="#a8b0c0" font-size="10">p0 (start)</text><text x="320" y="130" fill="#a8b0c0" font-size="10">p1 (end)</text><text x="125" y="15" fill="#ffb86b" font-size="10">c1</text><text x="285" y="15" fill="#ffb86b" font-size="10">c2</text>
+          </svg>
+        </div>
+        <p class="muted">Drag the orange handles in your head: closer to the ends = gentler bulge. Far = strong pull. This is how Grease Pencil stores <span class="kbd">handle_left / handle_right</span>.</p>
+      </div>
+      <div class="card">
+        <h3>Why 4 knobs are enough</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 420 150" width="100%" height="150" style="background:#080a0e;border-radius:8px">
+            <path d="M20 100 C60 40, 110 40, 150 100 S 250 160, 300 100 S 360 20, 400 80" fill="none" stroke="#333b52" stroke-width="1" stroke-dasharray="3 3"/>
+            <path d="M20 100 C70 45, 110 45, 150 100" fill="none" stroke="#7cffc4" stroke-width="3"/>
+            <path d="M150 100 C190 145, 250 145, 300 100" fill="none" stroke="#7cc4ff" stroke-width="3"/>
+            <path d="M300 100 C330 40, 370 30, 400 80" fill="none" stroke="#ffb86b" stroke-width="3"/>
+            <g fill="#e6e9ee"><circle cx="20" cy="100" r="3"/><circle cx="150" cy="100" r="3"/><circle cx="300" cy="100" r="3"/><circle cx="400" cy="80" r="3"/></g>
+            <text x="12" y="18" fill="#a8b0c0" font-size="9">One long curve tries to do everything → wiggly.</text>
+            <text x="12" y="32" fill="#7cffc4" font-size="9">Three short Beziers → each does one bend, glued at the dots.</text>
+          </svg>
+        </div>
+        <p class="muted"><b>Splitting is a feature:</b> If one Bezier can’t hug all dots within your allowed wobble (<span class="kbd">error</span>), the algorithm cuts the line at the worst dot and tries again on each half. Recursion!</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="inputs">
+    <h2>Inputs → Outputs</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>What you feed it</h3>
+        <ul class="muted" style="margin:6px 0 0 16px">
+          <li><b>points</b> — This means: an ordered list of your pen positions, each with x, y, z in meters. Example: <span class="kbd">[[0,0,0], [0.02,0.01,0], [0.05,0.03,0], …]</span></li>
+          <li><b>max_error</b> — This means: how much slop you allow, as <i>squared distance</i>. Smaller = tighter hug, more Beziers. Example: <span class="kbd">0.0004</span> (= 0.02 m = 2 cm max gap, squared). This code uses <span class="kbd">File: Executable/src/bezier_fit.cpp:250</span> <span class="kbd">fit_curve(points, max_error)</span>.</li>
+        </ul>
+        <div class="diagram" style="margin-top:10px">
+          <svg viewBox="0 0 420 90" width="100%" height="90" style="background:#080a0e;border-radius:8px">
+            <rect x="10" y="15" width="90" height="60" rx="8" fill="#1a2236" stroke="#2e3a56"/><text x="55" y="35" text-anchor="middle" fill="#7cc4ff" font-size="9">flat float32</text><text x="55" y="50" text-anchor="middle" fill="#a8b0c0" font-size="8">[x0,y0,z0, x1,y1,z1, …]</text><text x="55" y="65" text-anchor="middle" fill="#a8b0c0" font-size="8">count % 3 == 0</text>
+            <text x="108" y="48" fill="#a8b0c0" font-size="14">→</text>
+            <rect x="125" y="15" width="80" height="60" rx="8" fill="#1a2236" stroke="#2e3a56"/><text x="165" y="35" text-anchor="middle" fill="#ffb86b" font-size="9">max_error</text><text x="165" y="50" text-anchor="middle" fill="#a8b0c0" font-size="8">e.g. 0.0004</text><text x="165" y="65" text-anchor="middle" fill="#a8b0c0" font-size="7">squared BU</text>
+            <text x="212" y="48" fill="#a8b0c0" font-size="14">→</text>
+            <rect x="228" y="15" width="180" height="60" rx="8" fill="#1a2236" stroke="#7cffc4"/><text x="318" y="35" text-anchor="middle" fill="#7cffc4" font-size="9">BezierCurve[]</text><text x="318" y="50" text-anchor="middle" fill="#a8b0c0" font-size="8">{p0,c1,c2,p1} × N</text><text x="318" y="65" text-anchor="middle" fill="#a8b0c0" font-size="7">N = 1 … many</text>
+          </svg>
+        </div>
+      </div>
+      <div class="card">
+        <h3>What you get back</h3>
+        <ul class="muted" style="margin:6px 0 0 16px">
+          <li><b>BezierCurve</b> — This means: a small bag with 4 points. In Python it comes as a flat 12-float array <span class="kbd">[p0x,p0y,p0z, c1x,…, p1z]</span> per curve. See <span class="file">Executable/src/bezier_fit.h:10</span> <span class="kbd">struct BezierCurve { Vec3 p0,c1,c2,p1; }</span>. This means: one Bezier is four 3-D positions.</li>
+          <li>The Grease Pencil glue: in <span class="file">Addon/core</span> we’ll later turn these into a stroke where <span class="kbd">position = p0…p1</span> and <span class="kbd">handle_left = c1, handle_right = c2</span>.</li>
+        </ul>
+        <div class="callout" style="margin-top:10px">
+          <div class="step-num">BU</div>
+          <div class="muted" style="font-size:12.5px"><b>Blender Units matter.</b> This code uses meters (BU), never pixels. If you set <span class="kbd">max_error=0.01</span> you’re allowing ~10 cm of wiggle. For clean line art use ~<span class="kbd">0.0001–0.001</span> (1–3 cm squared = 1–3 mm actual gap).</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="overview">
+    <h2>Big Picture — 5 steps on a loop</h2>
+    <p class="muted">Leo’s sketch → photocopier. The copier tries to trace the sketch with a smooth stencil, checks how far off it is, re-aims, and if still off, cuts the paper in half and traces each half separately.</p>
+    <div class="diagram flow" style="padding:16px">
+      <div class="node"><div class="step-num">1</div><div class="box card" style="margin:0"><b>Measure direction at ends</b> — <span class="kbd">ComputeLeftTangent / RightTangent</span> <span class="file">bezier_fit.cpp:69</span> — This means: draw a tiny arrow from the first dot to the second (and last-to-second-last) and make it length 1.</div></div>
+      <div class="node"><div class="diamond"></div><div class="box card" style="margin:0"><b>Guess how far along the line each dot is</b> — <span class="kbd">ChordLengthParameterize</span> <span class="file">:88</span> — This means: walk the polyline, add up segment lengths, squish total to 0…1. Each dot gets a “how far along” number <span class="kbd">u</span>.</div></div>
+      <div class="node"><div class="step-num">3</div><div class="box card" style="margin:0"><b>Slide handles along those arrows until the curve hugs the dots best</b> — <span class="kbd">GenerateBezier</span> <span class="file">:98</span> — This means: solve a 2×2 system <span class="kbd">C·alpha = X</span> for distances <span class="kbd">alpha_l / alpha_r</span>. That’s least-squares: “overall squarest distance as small as possible”.</div></div>
+      <div class="node"><div class="diamond"></div><div class="box card" style="margin:0"><b>How bad is the worst dot?</b> — <span class="kbd">ComputeMaxError</span> <span class="file">:181</span> — This means: for every dot, find the closest point on the curve at the same <span class="kbd">u</span>, measure squared distance. Remember the biggest gap and which dot it is (<span class="kbd">splitPoint</span>).</div></div>
+      <div class="node"><div class="step-num">5</div><div class="box card" style="margin:0"><b>If “pretty good but not good enough”, re-aim the dots along the curve</b> — <span class="kbd">Reparameterize → NewtonRaphsonRootFind</span> <span class="file">:154,162</span> — This means: slide each <span class="kbd">u</span> to where the dot is perpendicular to the curve (Newton’s trick for “closest point”), try the hug again, up to 4 times.</div></div>
+      <div class="node"><div class="step-num" style="background:var(--accent2)">↗</div><div class="box card" style="margin:0;border-color:var(--accent2)"><b>Still too wobbly?</b> Cut at <span class="kbd">splitPoint</span> (compute middle tangent <span class="file">:79</span>), and do the whole thing again on left half and right half. This is recursion — the same function calls itself. <span class="file">FitCubic :196</span> — This means: a function that handles a big job by splitting it into two smaller same-jobs.</div></div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="diagram">
+        <svg viewBox="0 0 420 120" width="100%" height="120" style="background:#080a0e;border-radius:8px">
+          <text x="10" y="15" fill="#7cc4ff" font-size="10">Recursion tree (example 12 dots, error small)</text>
+          <rect x="140" y="25" width="140" height="22" rx="8" fill="#1a2236" stroke="#7cc4ff"/><text x="210" y="40" text-anchor="middle" fill="#e6e9ee" font-size="9">FitCubic 0–11</text>
+          <line x1="170" y1="47" x2="110" y2="68" stroke="#3a445e"/><line x1="250" y1="47" x2="310" y2="68" stroke="#3a445e"/>
+          <rect x="30" y="68" width="160" height="22" rx="8" fill="#1a2236" stroke="#ffb86b"/><text x="110" y="83" text-anchor="middle" fill="#e6e9ee" font-size="9">0–6 (splits again)</text>
+          <rect x="230" y="68" width="160" height="22" rx="8" fill="#1d2a20" stroke="#7cffc4"/><text x="310" y="83" text-anchor="middle" fill="#e6e9ee" font-size="9">6–11 ✅ 1 Bezier</text>
+          <line x1="70" y1="90" x2="50" y2="102" stroke="#3a445e"/><line x1="150" y1="90" x2="170" y2="102" stroke="#3a445e"/>
+          <rect x="10" y="102" width="80" height="16" rx="8" fill="#1d2a20" stroke="#7cffc4"/><text x="50" y="113" text-anchor="middle" fill="#7cffc4" font-size="8">0–3 ✅</text>
+          <rect x="130" y="102" width="80" height="16" rx="8" fill="#1d2a20" stroke="#7cffc4"/><text x="170" y="113" text-anchor="middle" fill="#7cffc4" font-size="8">3–6 ✅</text>
+          <text x="10" y="12" fill="#a8b0c0" font-size="8">Worst dot = split point</text>
+        </svg>
+      </div>
+      <div class="card">
+        <h3>Why this works for artists</h3>
+        <p class="muted" style="margin:0">You never see the math. You just set one knob: <b>how much wiggle you tolerate</b>. The code does the rest — it keeps adding Beziers until every dot is close enough. More wiggle allowed = fewer Beziers = chunkier shape. Tight tolerance = many small Beziers = hugs every nibble.</p>
+        <div class="controls" style="margin-top:10px">
+          <span class="pill">Loose (0.01)</span><span class="pill">Medium (0.001)</span><span class="pill">Tight (0.0001)</span>
+        </div>
+        <p class="muted">In our playground below, drag the <span class="kbd">error</span> slider and watch the count change.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="step1">
+    <h2>Step 1 — Tangents: which way is the pen going?</h2>
+    <p class="muted"><b>Tangent</b> — This means: a unit arrow (length 1) that points along the stroke at a dot. We need one at the very start and one at the very end, because handles must leave the ends along the pen’s direction.</p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 420 120" width="100%" height="120" style="background:#080a0e;border-radius:8px">
+          <path d="M30 90 L 90 70 L 150 30 L 210 20 L 270 45 L 330 80 L 390 95" fill="none" stroke="#2a3140" stroke-width="1.8"/>
+          <g fill="#7cc4ff" stroke="#0b0e13" stroke-width="1"><circle cx="30" cy="90" r="4"/><circle cx="90" cy="70" r="3"/><circle cx="390" cy="95" r="4"/></g>
+          <!-- tangent arrows -->
+          <line x1="30" y1="90" x2="70" y2="75" stroke="#ffb86b" stroke-width="2.2" marker-end="url(#arr)"/>
+          <line x1="390" y1="95" x2="350" y2="85" stroke="#ffb86b" stroke-width="2.2" marker-end="url(#arr)"/>
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#ffb86b"/></marker></defs>
+          <text x="70" y="68" fill="#ffb86b" font-size="9">tHat1 = norm(d1 - d0)</text><text x="255" y="92" fill="#ffb86b" font-size="9">tHat2 = norm(d_{n-2} - d_{n-1})</text>
+          <text x="12" y="18" fill="#a8b0c0" font-size="9">Code: Executable/src/bezier_fit.cpp:69 &amp; 74</text>
+        </svg>
+      </div>
+      <div class="card">
+        <div class="code">Vec3 ComputeLeftTangent(d, 0) {
+  Vec3 t = d[1] - d[0];          // arrow from first to second dot
+  V3Normalize(&t);               // make it length 1
+  return t;                      // This means: unit direction at start
+}</div>
+        <p class="muted" style="margin:8px 0 0"><b>Center tangent</b> at a split — This means: average the two neighboring arrows and normalize. <span class="file">:79</span> <span class="kbd">ComputeCenterTangent(d, splitPoint)</span> — <span class="code" style="display:inline;padding:2px 6px"> (V1+V2)/2 then normalize</span>. That’s how the two halves join smoothly.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="step2">
+    <h2>Step 2 — Chord Length: “how far along am I?”</h2>
+    <p class="muted"><b>Parameter <span class="kbd">u</span></b> — This means: a number between 0 and 1 saying “how far along the whole line this dot sits, measured along the real wiggly length”. 0=start, 1=end. We need it so each dot knows which <span class="kbd">t</span> on the Bezier to compare against.</p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 420 130" width="100%" height="130" style="background:#080a0e;border-radius:8px">
+          <!-- top: uniform vs chord -->
+          <text x="10" y="18" fill="#a8b0c0" font-size="10">Uniform (bad) → spaces clusters by index, not length</text>
+          <g stroke="#3a445e" stroke-width="6" stroke-linecap="round"><line x1="20" y1="30" x2="80" y2="30"/><line x1="80" y1="30" x2="140" y2="30"/><line x1="140" y1="30" x2="200" y2="30"/><line x1="200" y1="30" x2="260" y2="30"/><line x1="260" y1="30" x2="320" y2="30"/><line x1="320" y1="30" x2="380" y2="30"/></g>
+          <g fill="#7cc4ff"><circle cx="20" cy="30" r="3"/><circle cx="80" cy="30" r="3"/><circle cx="140" cy="30" r="3"/><circle cx="200" cy="30" r="3"/><circle cx="260" cy="30" r="3"/><circle cx="320" cy="30" r="3"/><circle cx="380" cy="30" r="3"/></g>
+          <text x="10" y="58" fill="#a8b0c0" font-size="10">Chord length (used) → spaces by real distance</text>
+          <g stroke="#7cffc4" stroke-width="6" stroke-linecap="round"><line x1="20" y1="72" x2="45" y2="72"/><line x1="45" y1="72" x2="110" y2="72"/><line x1="110" y1="72" x2="140" y2="72"/><line x1="140" y1="72" x2="260" y2="72"/><line x1="260" y1="72" x2="295" y2="72"/><line x1="295" y1="72" x2="380" y2="72"/></g>
+          <g fill="#7cffc4"><circle cx="20" cy="72" r="3"/><circle cx="45" cy="72" r="3"/><circle cx="110" cy="72" r="3"/><circle cx="140" cy="72" r="3"/><circle cx="260" cy="72" r="3"/><circle cx="295" cy="72" r="3"/><circle cx="380" cy="72" r="3"/></g>
+          <text x="10" y="98" fill="#a8b0c0" font-size="9">dots that are far apart in space get far apart in u</text>
+          <text x="10" y="112" fill="#a8b0c0" font-size="8">Code: bezier_fit.cpp:88 ChordLengthParameterize — cum += distance(d[i], d[i-1]); u[i]/=total</text>
+        </svg>
+      </div>
+      <div class="card">
+        <h3>Visual check</h3>
+        <p class="muted">If you spaced <span class="kbd">u</span> uniformly (0, 0.2, 0.4…), a tight squiggle would be stretched and a long straight run squished. Chord length keeps the <span class="kbd">u</span> spacing true to the pen’s travel.</p>
+        <div class="callout"><div class="step-num">u</div><div class="muted" style="font-size:12.5px"><b>Example:</b> dots at distances 0, 2, 5, 9 meters along the line → cumulative 0,2,5,9 → divide by 9 → <span class="kbd">u = [0, 0.22, 0.55, 1.0]</span>. The middle dot isn’t at 0.5, it’s at 0.55 because the polyline was longer on one side.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="step3">
+    <h2>Step 3 — Least Squares: slide handles until “least wobble”</h2>
+    <p class="muted"><b>GenerateBezier</b> — This means: given the dots and their <span class="kbd">u</span>s and two tangent arrows, find the two handle distances <span class="kbd">alpha_l</span> and <span class="kbd">alpha_r</span> along those arrows that make the Bezier sit closest (squared distance) to all dots at once. <span class="file">bezier_fit.cpp:98</span></p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 420 140" width="100%" height="140" style="background:#080a0e;border-radius:8px">
+          <rect x="10" y="10" width="400" height="120" rx="8" fill="#0b0e13" stroke="#1e2433"/>
+          <text x="20" y="28" fill="#7cc4ff" font-size="11">C · alpha = X    —   2×2 system</text>
+          <text x="20" y="45" fill="#a8b0c0" font-size="9">C = built from tangent arrows &amp; Bernstein B1/B2, X = dots vs. flat line</text>
+          <g font-family="ui-monospace,monospace" font-size="10" fill="#e6e9ee">
+            <text x="20" y="68">[C00  C01] [alpha_l] = [X0]</text>
+            <text x="20" y="84">[C10  C11] [alpha_r]   [X1]</text>
+          </g>
+          <text x="20" y="105" fill="#ffb86b" font-size="9">Solve: alpha_l = det_X_C1 / det_C0_C1,  alpha_r = det_C0_X / det_C0_C1</text>
+          <text x="20" y="120" fill="#a8b0c0" font-size="8">If alpha &lt; epsilon (too small/negative) → fallback: dist = segLength/3 (Wu/Barsky)</text>
+        </svg>
+      </div>
+      <div class="card">
+        <h3>What slides?</h3>
+        <div class="diagram">
+          <svg viewBox="0 0 420 120" width="100%" height="120" style="background:#080a0e;border-radius:8px">
+            <path id="lsCurve" d="M40 90 C110 30, 310 30, 380 90" fill="none" stroke="#7cc4ff" stroke-width="2.5"/>
+            <g fill="#2a3140" stroke="#3a445e" stroke-width="0.8"><circle cx="80" cy="66" r="3"/><circle cx="130" cy="45" r="3"/><circle cx="210" cy="36" r="3"/><circle cx="290" cy="46" r="3"/><circle cx="340" cy="68" r="3"/></g>
+            <line x1="40" y1="90" x2="110" y2="30" stroke="#ffb86b" stroke-dasharray="3 3"/><line x1="380" y1="90" x2="310" y2="30" stroke="#ffb86b" stroke-dasharray="3 3"/>
+            <g fill="#ffb86b" stroke="#0b0e13"><circle cx="110" cy="30" r="4"/><circle cx="310" cy="30" r="4"/></g>
+            <g fill="#e6e9ee"><circle cx="40" cy="90" r="4"/><circle cx="380" cy="90" r="4"/></g>
+            <text x="100" y="22" fill="#ffb86b" font-size="9">alpha_l slides c1 out</text><text x="255" y="22" fill="#ffb86b" font-size="9">alpha_r slides c2</text>
+            <text x="10" y="115" fill="#a8b0c0" font-size="8">Gray dots = your digitized points — curve tries to hug them all at once</text>
+          </svg>
+        </div>
+        <p class="muted"><b>Least-squares</b> — This means: add up the squared gap for every dot, move handles until the total is as small as possible. The little 2×2 math finds that sweet spot in one shot.</p>
+      </div>
+    </div>
+    <div class="code" style="margin-top:10px">// bezier_fit.cpp:109  (verbatim)
+// Compute the A’s
+for (i=0;i&lt;nPts;i++) { V3Scale(&v1, B1(u[i])); V3Scale(&v2, B2(uPrime[i])); A[i][0]=v1; A[i][1]=v2; }
+// C and X, then alpha via determinants
+det_C0_C1 = C[0][0]*C[1][1]-C[1][0]*C[0][1];
+alpha_l = (det==0)?0 : det_X_C1/det_C0_C1;
+<span class="muted" style="color:#6b7a94">This means: build two equations that say “handle distances that best cancel the wobble”, solve them with high-school determinant arithmetic.</span></div>
+  </section>
+
+  <section id="step4">
+    <h2>Step 4 — How bad? And where to cut?</h2>
+    <p class="muted"><b>ComputeMaxError</b> — This means: walk every interior dot, evaluate the Bezier at its <span class="kbd">u</span> with <span class="kbd">BezierII(3, curve, u)</span> (De Casteljau’s triangle — repeatedly halve between control points), measure squared distance, keep the biggest. <span class="file">bezier_fit.cpp:181</span></p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 420 130" width="100%" height="130" style="background:#080a0e;border-radius:8px">
+          <path d="M30 100 C110 20, 310 20, 390 100" fill="none" stroke="#7cc4ff" stroke-width="2.2"/>
+          <g stroke="#ffb86b" stroke-width="1" stroke-dasharray="3 3"><line x1="130" y1="46" x2="130" y2="88"/><line x1="210" y1="36" x2="210" y2="95"/><line x1="290" y1="48" x2="290" y2="88"/></g>
+          <g fill="#ffb86b"><circle cx="130" cy="46" r="4"/><circle cx="210" cy="36" r="4"/><circle cx="290" cy="48" r="4"/></g>
+          <g fill="#2a3140" stroke="#e6e9ee" stroke-width="1"><circle cx="130" cy="88" r="3"/><circle cx="210" cy="95" r="6"/><circle cx="290" cy="88" r="3"/></g>
+          <text x="200" y="118" text-anchor="middle" fill="#ff6b7a" font-size="9">splitPoint = worst dot (max squared distance)</text>
+          <text x="10" y="18" fill="#a8b0c0" font-size="9">orange = curve point at same u, gray = digitized dot, line = gap</text>
+        </svg>
+        <div class="legend"><span><span class="dot" style="background:#ff6b7a"></span> biggest gap → cut here</span></div>
+      </div>
+      <div class="card">
+        <h3>The decision</h3>
+        <div class="diagram" style="padding:10px">
+          <svg viewBox="0 0 380 90" width="100%" height="90" style="background:#0b0e13;border-radius:8px">
+            <rect x="12" y="12" width="120" height="26" rx="8" fill="#1d2a20" stroke="#7cffc4"/><text x="72" y="29" text-anchor="middle" fill="#e6e9ee" font-size="9">maxError &lt; error?</text>
+            <text x="42" y="60" fill="#7cffc4" font-size="9">YES → keep</text><text x="235" y="60" fill="#ffb86b" font-size="9">NO → try Newton, else split</text>
+            <line x1="72" y1="38" x2="72" y2="52" stroke="#7cffc4"/><line x1="72" y1="38" x2="260" y2="38" stroke="#ffb86b"/>
+          </svg>
+        </div>
+        <p class="muted" style="margin:8px 0 0"><b>If it’s good enough</b> → <span class="kbd">DrawBezierCurve</span> is called (in our C++ we push to <span class="kbd">out</span> vector <span class="file">:224</span>). <b>If it’s close but not quite</b> (<span class="kbd">maxError &lt; error*4</span>) → try re-aiming. <b>If still bad</b> → split at that worst dot and start over on each half.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="step5">
+    <h2>Step 5 — Newton: “slide my u to the perpendicular spot”</h2>
+    <p class="muted"><b>NewtonRaphsonRootFind</b> — This means: for one dot, look at where it sits relative to the curve and nudge its <span class="kbd">u</span> a little closer to where a dropped perpendicular would hit the curve. Repeat for all dots → new <span class="kbd">uPrime</span>. Then rebuild handles. <span class="file">bezier_fit.cpp:162</span> — Try up to 4 times.</p>
+    <div class="grid2">
+      <div class="diagram">
+        <svg viewBox="0 0 420 130" width="100%" height="130" style="background:#080a0e;border-radius:8px">
+          <path d="M30 100 C130 20, 290 20, 390 100" fill="none" stroke="#7cc4ff" stroke-width="2.2"/>
+          <circle cx="210" cy="36" r="3" fill="#7cc4ff"/><circle cx="210" cy="88" r="4" fill="#ffb86b" stroke="#0b0e13"/>
+          <line x1="210" y1="36" x2="210" y2="88" stroke="#ff6b7a" stroke-width="1.2" stroke-dasharray="4 3"/>
+          <line x1="165" y1="68" x2="255" y2="68" stroke="#2a3140" stroke-width="6" opacity="0.6"/><line x1="165" y1="68" x2="255" y2="68" stroke="#a8b0c0" stroke-width="1" stroke-dasharray="3 3"/>
+          <text x="214" y="32" fill="#7cc4ff" font-size="9">curve point Q(u)</text><text x="214" y="102" fill="#ffb86b" font-size="9">your dot P</text>
+          <text x="10" y="18" fill="#a8b0c0" font-size="9">Q’(u) is the tangent at Q(u), Q’’ is how fast it turns</text>
+          <text x="10" y="122" fill="#a8b0c0" font-size="8">u’ = u − [(Q−P)·Q’] / [Q’·Q’ + (Q−P)·Q’’]   (perpendicular condition)</text>
+        </svg>
+      </div>
+      <div class="card">
+        <div class="code">Q_u  = BezierII(3, Q, u);          // point on curve
+Q1_u = BezierII(2, Q1, u);         // first derivative (tangent)
+Q2_u = BezierII(1, Q2, u);         // second derivative
+numerator   = (Q_u-P)·Q1_u;         // This means: how much Q−P sticks out along the tangent
+denominator = Q1_u·Q1_u + (Q_u-P)·Q2_u;
+uPrime = u - numerator/denominator; // nudge u toward perpendicular
+<span class="muted" style="color:#6b7a94">This means: Newton’s trick — one quick division to jump closer to “closest point on curve”.</span></div>
+        <p class="muted" style="margin:8px 0 0">In practice this shaves the error fast — the handles get a second, third, fourth chance before we give up and split.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="play">
+    <h2>🎮 Playground — drag, watch it fit</h2>
+    <p class="muted">Click to add dots on the dark canvas. Drag them. Slide <b>max_error</b> (squared BU) and see how many Beziers appear. <span class="pill">Loose = few Beziers</span> <span class="pill">Tight = many</span> — same as the real C++: <span class="file">fit_curve</span> is the same math.</p>
+    <div class="canvas-wrap" style="height:380px">
+      <canvas id="playground" width="1100" height="380"></canvas>
+      <div style="position:absolute;left:10px;top:10px;background:rgba(12,14,18,.85);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:11px">
+        <div class="controls" style="margin:0">
+          <label>max_error <input id="errSlider" type="range" min="0.00005" max="0.02" step="0.00005" value="0.001"></label><span id="errVal" class="kbd">0.0010</span>
+          <span id="curveCount" class="pill" style="background:#1d2a20;border-color:#7cffc4;color:#7cffc4">0 Beziers</span>
+          <button id="clearBtn">Clear</button><button id="randomBtn">Random squiggle</button><button id="perfectBtn">Perfect S</button>
+        </div>
+        <div class="muted" style="font-size:10px;margin-top:6px">Tip: try a straight line (2 dots → heuristic), then add a wiggle — watch the split appear at the worst dot.</div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:10px">
+      <div class="diagram"><b style="font-size:12px">What you’re seeing</b><ul class="muted" style="margin:6px 0 0 16px;font-size:12.5px"><li>• Gray polyline = your digitized points</li><li>• Colored curves = fitted Beziers (one color per piece)</li><li>• Orange dots = handles (<span class="kbd">c1/c2</span>), hollow = endpoints, solid = your dots</li><li>• Red halo = splitPoint where error was worst</li></ul></div>
+      <div class="card"><b style="font-size:12px">Try this sequence</b><ol class="muted" style="margin:6px 0 0 16px;font-size:12.5px"><li>Clear → click 7 dots in an S shape (like the original <span class="kbd">FitCurves.c:main</span> example).</li><li>Set error to <span class="kbd">0.004</span> → 1–2 Beziers. Tighten to <span class="kbd">0.0005</span> → 3–4.</li><li>Drag a middle dot far away → a new split pops, you get an extra Bezier.</li></ol></div>
+    </div>
+  </section>
+
+  <section id="code">
+    <h2>Code Map — where each idea lives in your repo</h2>
+    <p class="muted">This page follows your <b>faithful GraphicsGems copy</b> in <span class="file">Executable/src/bezier_fit.h / bezier_fit.cpp</span>. Every name below is the real name — grep it.</p>
+    <div class="grid2">
+      <div class="card">
+        <h3>Files</h3>
+        <ul class="muted" style="margin:6px 0 0 16px;font-size:12.5px">
+          <li><span class="file">Executable/src/bezier_fit.h:8</span> <span class="kbd">struct Vec3 {double x,y,z;}</span> — This means: a 3-D point. Original was 2-D <span class="kbd">Point2 {x,y}</span> — we added <span class="kbd">z</span> for Grease Pencil.</li>
+          <li><span class="file">bezier_fit.h:12</span> <span class="kbd">struct BezierCurve {p0,c1,c2,p1}</span> — This means: 4 Vec3s that define one cubic.</li>
+          <li><span class="file">bezier_fit.cpp:42</span> <span class="kbd">BezierII</span> — This means: De Casteljau — repeatedly blend between control points until one point remains. That’s the curve point at <span class="kbd">t</span>.</li>
+          <li><span class="file">bezier_fit.cpp:196</span> <span class="kbd">FitCubic</span> — This means: the recursive worker that tries one Bezier, checks, iterates, splits.</li>
+          <li><span class="file">bezier_fit.cpp:250</span> <span class="kbd">fit_curve</span> — This means: public front door. Dedups, computes end tangents, calls <span class="kbd">FitCubic</span> on 0…n-1.</li>
+          <li><span class="file">Executable/src/interpolate.cpp: +fit_bezier</span> — This means: the only nanobind glue. Takes flat float32, calls <span class="kbd">fit_curve_flat</span>, returns list of 12-float arrays to Python.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>“This means:” cheat sheet</h3>
+        <dl style="margin:0;font-size:12.5px">
+          <dt><span class="kbd">double* ChordLengthParameterize</span> <span class="file">:88</span></dt><dd class="muted">“How far along” numbers 0…1 for each dot, based on walking distance.</dd>
+          <dt><span class="kbd">GenerateBezier</span> <span class="file">:98</span></dt><dd class="muted">Least-squares solve for handle distances along tangents.</dd>
+          <dt><span class="kbd">ComputeMaxError</span> <span class="file">:181</span></dt><dd class="muted">Scan dots, find biggest squared gap and which dot caused it.</dd>
+          <dt><span class="kbd">Reparameterize + NewtonRaphsonRootFind</span> <span class="file">:154,162</span></dt><dd class="muted">Slide each <span class="kbd">u</span> toward the perpendicular foot on the curve.</dd>
+          <dt><span class="kbd">V3Normalize</span> <span class="file">:18</span></dt><dd class="muted">Make an arrow length 1 — keep direction, set length to one.</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="callout warn" style="margin-top:12px">
+      <div class="step-num" style="background:var(--warn)">!</div>
+      <div class="muted" style="font-size:12.5px"><b>No secret “biased” tweaks:</b> MaxIterations is <span class="kbd">4</span>, not 20. <span class="kbd">iterationError = error*4.0</span>, not <span class="kbd">error*error</span>. <span class="kbd">ComputeMaxError</span> uses direct <span class="kbd">u</span>, not sampled arc-length remap. That’s exactly as Schneider wrote it — we just lifted <span class="kbd">V2* → V3*</span> and removed the <span class="kbd">MAXPOINTS 1000</span> cap.</div>
+    </div>
+    <div class="grid2" style="margin-top:12px">
+      <div class="card">
+        <h3>Python side (after you build)</h3>
+        <div class="code">import numpy as np, gp_autointerpolate
+pts = np.array([0,0,0, 0,0.5,0, 1.1,1.4,0, 2.1,1.6,0, 3.2,1.1,0, 4,0.2,0, 4,0,0], dtype=np.float32)
+curves = gp_autointerpolate.fit_bezier(pts, 4.0)          # list of 12-float arrays
+flat  = gp_autointerpolate.fit_bezier_flat(pts, 0.004)    # single flat N*12 array
+# each curve: [p0x,p0y,p0z, c1x,c1y,c1z, c2x,c2y,c2z, p1x,p1y,p1z]
+</div>
+        <p class="muted">The <span class="kbd">T</span>-shelf button <span class="file">Addon/panels/toolshelf.py</span> <span class="kbd">gp.dummy_bezier</span> will later call this and turn curves into <span class="kbd">position/handle_left/handle_right</span> on a new Grease Pencil stroke.</p>
+      </div>
+      <div class="card">
+        <h3>Blender Units reminder</h3>
+        <p class="muted">Original test in <span class="file">FitCurves.c:main</span> uses 7 points and <span class="kbd">error=4.0</span> (units are whatever your coordinates use — in Blender that’s meters). For GP, start with <span class="kbd">0.0004</span> (2 cm squared) and loosen/tighten from there.</p>
+        <div class="diagram" style="margin-top:8px">
+          <svg viewBox="0 0 420 60" width="100%" height="60" style="background:#080a0e;border-radius:8px">
+            <text x="10" y="18" fill="#a8b0c0" font-size="9">error 0.02 (very tight) — many Beziers</text>
+            <g stroke="#7cffc4" stroke-width="2"><line x1="20" y1="30" x2="80" y2="30"/><line x1="80" y1="30" x2="140" y2="30"/><line x1="140" y1="30" x2="200" y2="30"/><line x1="200" y1="30" x2="260" y2="30"/></g>
+            <text x="10" y="50" fill="#a8b0c0" font-size="9">error 4.0 (loose, original demo) — one Bezier hugs loosely</text>
+            <g stroke="#ffb86b" stroke-width="2"><line x1="20" y1="58" x2="380" y2="58"/></g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Your next click</h2>
+    <p class="muted">You now have the picture: dots → tangents → guess <span class="kbd">u</span> → slide handles → check worst gap → nudge <span class="kbd">u</span> with Newton → split if needed. Try the playground above, then in Blender set your <span class="kbd">max_error</span> in BU and watch your 200-point sketch become 3 handle-pairs you can actually sculpt. The heavy math lives in <span class="file">Executable/src/bezier_fit.cpp</span> — but you only need to remember one knob: <b>error</b>.</p>
+    <div class="callout">
+      <div class="step-num">?</div>
+      <div class="muted" style="font-size:12.5px"><b>Question for you:</b> Open the playground, make an <span class="kbd">S</span> like the original 7-point demo, set error to <span class="kbd">4.0</span> — how many Beziers do you get? Now drag one middle dot outward — what happens to the split point? That’s the whole algorithm in your hands.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+// ----- minimal faithful JS FitCurves for playground (mirrors bezier_fit.cpp, not the JS fit-curve.js arc-length variant) -----
+const B0=u=>{let t=1-u; return t*t*t}, B1=u=>{let t=1-u; return 3*u*t*t}, B2=u=>{let t=1-u; return 3*u*u*t}, B3=u=>u*u*u;
+function V3len(a){return Math.hypot(a.x,a.y,a.z)}
+function V3norm(v){const l=V3len(v); if(l===0) return {x:0,y:0,z:0}; return {x:v.x/l,y:v.y/l,z:v.z/l}}
+function V3sub(a,b){return {x:a.x-b.x,y:a.y-b.y,z:a.z-b.z}}
+function V3add(a,b){return {x:a.x+b.x,y:a.y+b.y,z:a.z+b.z}}
+function V3scale(v,s){return {x:v.x*s,y:v.y*s,z:v.z*s}}
+function V3dot(a,b){return a.x*b.x+a.y*b.y+a.z*b.z}
+function BezierII(deg,V,t){const Vt=V.map(p=>({x:p.x,y:p.y,z:p.z})); for(let i=1;i<=deg;i++) for(let j=0;j<=deg-i;j++){Vt[j].x=(1-t)*Vt[j].x+t*Vt[j+1].x; Vt[j].y=(1-t)*Vt[j].y+t*Vt[j+1].y; Vt[j].z=(1-t)*Vt[j].z+t*Vt[j+1].z;} return Vt[0]}
+function chordParam(d,f,l){const u=[0]; for(let i=f+1;i<=l;i++) u[i-f]=u[i-f-1]+Math.hypot(d[i].x-d[i-1].x,d[i].y-d[i-1].y,d[i].z-d[i-1].z); const tot=u[l-f]; for(let i=f+1;i<=l;i++) u[i-f]/=tot; return u}
+function computeLeft(d,e){return V3norm(V3sub(d[e+1],d[e]))}
+function computeRight(d,e){return V3norm(V3sub(d[e-1],d[e]))}
+function computeCenter(d,c){const a=V3sub(d[c-1],d[c]), b=V3sub(d[c],d[c+1]); return V3norm({x:(a.x+b.x)/2,y:(a.y+b.y)/2,z:(a.z+b.z)/2})}
+function generateBezier(d,f,l,u,t1,t2){
+  const n=l-f+1; const A=Array(n).fill(0).map(()=>[null,null]); for(let i=0;i<n;i++){const v1={...t1}, v2={...t2}; const s1=B1(u[i]), s2=B2(u[i]); A[i][0]=V3scale(v1,s1); A[i][1]=V3scale(v2,s2);}
+  let C00=0,C01=0,C11=0,X0=0,X1=0; for(let i=0;i<n;i++){C00+=V3dot(A[i][0],A[i][0]); C01+=V3dot(A[i][0],A[i][1]); C11+=V3dot(A[i][1],A[i][1]); const qx= d[f].x*B0(u[i])+d[f].x*B1(u[i])+d[l].x*B2(u[i])+d[l].x*B3(u[i]); const qy= d[f].y*B0(u[i])+d[f].y*B1(u[i])+d[l].y*B2(u[i])+d[l].y*B3(u[i]); const qz= d[f].z*B0(u[i])+d[f].z*B1(u[i])+d[l].z*B2(u[i])+d[l].z*B3(u[i]); const tmp={x:d[f+i].x-qx,y:d[f+i].y-qy,z:d[f+i].z-qz}; X0+=V3dot(A[i][0],tmp); X1+=V3dot(A[i][1],tmp);}
+  const C10=C01; const det=C00*C11-C10*C01; let al=0, ar=0; if(det!==0){al=(X0*C11-X1*C01)/det; ar=(C00*X1-C10*X0)/det;}
+  const seg=Math.hypot(d[l].x-d[f].x,d[l].y-d[f].y,d[l].z-d[f].z); const eps=1e-6*seg;
+  const bez=[{...d[f]},null,null,{...d[l]}];
+  if(al<eps||ar<eps){const d33=seg/3; bez[1]=V3add(d[f],V3scale(t1,d33)); bez[2]=V3add(d[l],V3scale(t2,d33));}
+  else {bez[1]=V3add(d[f],V3scale(t1,al)); bez[2]=V3add(d[l],V3scale(t2,ar));}
+  return bez;
+}
+function newton(Q,P,u){const Qu=BezierII(3,Q,u); const Q1=[{x:(Q[1].x-Q[0].x)*3,y:(Q[1].y-Q[0].y)*3,z:(Q[1].z-Q[0].z)*3},{x:(Q[2].x-Q[1].x)*3,y:(Q[2].y-Q[1].y)*3,z:(Q[2].z-Q[1].z)*3},{x:(Q[3].x-Q[2].x)*3,y:(Q[3].y-Q[2].y)*3,z:(Q[3].z-Q[2].z)*3}]; const Q2=[{x:(Q1[1].x-Q1[0].x)*2,y:(Q1[1].y-Q1[0].y)*2,z:(Q1[1].z-Q1[0].z)*2},{x:(Q1[2].x-Q1[1].x)*2,y:(Q1[2].y-Q1[1].y)*2,z:(Q1[2].z-Q1[1].z)*2}]; const Q1u=BezierII(2,Q1,u), Q2u=BezierII(1,Q2,u); const num=(Qu.x-P.x)*Q1u.x+(Qu.y-P.y)*Q1u.y+(Qu.z-P.z)*Q1u.z; const den=Q1u.x*Q1u.x+Q1u.y*Q1u.y+Q1u.z*Q1u.z+(Qu.x-P.x)*Q2u.x+(Qu.y-P.y)*Q2u.y+(Qu.z-P.z)*Q2u.z; if(den===0) return u; return u-num/den;}
+function reparam(d,f,l,u,bez){const up=[]; for(let i=f;i<=l;i++) up[i-f]=newton(bez,d[i],u[i-f]); return up;}
+function maxErr(d,f,l,bez,u){let md=0, sp=Math.floor((l-f+1)/2); for(let i=f+1;i<l;i++){const P=BezierII(3,bez,u[i-f]); const dx=P.x-d[i].x, dy=P.y-d[i].y, dz=P.z-d[i].z; const dist=dx*dx+dy*dy+dz*dz; if(dist>=md){md=dist; sp=i;}} return [md,sp];}
+function fitCubic(d,f,l,t1,t2,err,out){
+  const n=l-f+1; const iterErr=err*4, maxIt=4;
+  if(n===2){const dist=Math.hypot(d[l].x-d[f].x,d[l].y-d[f].y,d[l].z-d[f].z)/3; const b=[{...d[f]},V3add(d[f],V3scale(t1,dist)),V3add(d[l],V3scale(t2,dist)),{...d[l]}]; out.push(b); return;}
+  let u=chordParam(d,f,l); let bez=generateBezier(d,f,l,u,t1,t2); let [me,sp]=maxErr(d,f,l,bez,u);
+  if(me<err){out.push(bez); return;}
+  if(me<iterErr){for(let i=0;i<maxIt;i++){const up=reparam(d,f,l,u,bez); const nb=generateBezier(d,f,l,up,t1,t2); const [me2,sp2]=maxErr(d,f,l,nb,up); if(me2<err){out.push(nb); return;} u=up; bez=nb; me=me2; sp=sp2;}}
+  const tc=computeCenter(d,sp); fitCubic(d,f,sp,t1,tc,err,out); const tc2={x:-tc.x,y:-tc.y,z:-tc.z}; fitCubic(d,sp,l,tc2,t2,err,out);
+}
+
+// dedup + entry
+function fitCurve(pts,err){
+  if(pts.length<2) return [];
+  const d=[pts[0]]; for(let i=1;i<pts.length;i++){const a=pts[i], b=d[d.length-1]; if(Math.abs(a.x-b.x)>1e-9||Math.abs(a.y-b.y)>1e-9||Math.abs(a.z-b.z)>1e-9) d.push(a);}
+  if(d.length<2) return [];
+  const t1=computeLeft(d,0), t2=computeRight(d,d.length-1);
+  const out=[]; fitCubic(d,0,d.length-1,t1,t2,err,out); return out;
+}
+
+// Playground rendering
+const cvs=document.getElementById('playground'), ctx=cvs.getContext('2d');
+let pts=[{x:60,y:190,z:0},{x:140,y:120,z:0},{x:220,y:80,z:0},{x:300,y:110,z:0},{x:420,y:50,z:0},{x:540,y:90,z:0},{x:640,y:180,z:0}];
+let dragging=-1, scale=1;
+function toCanvas(p){return {x:p.x,y:p.y}}
+function fitAndDraw(){
+  const err=parseFloat(document.getElementById('errSlider').value);
+  document.getElementById('errVal').textContent=err.toFixed(4);
+  const beziers=fitCurve(pts, err);
+  document.getElementById('curveCount').textContent=beziers.length+' Bezier'+(beziers.length===1?'':'s');
+  ctx.clearRect(0,0,cvs.width,cvs.height);
+  // grid
+  ctx.strokeStyle='#0f1420'; ctx.lineWidth=1; for(let x=0;x<cvs.width;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,cvs.height);ctx.stroke()} for(let y=0;y<cvs.height;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cvs.width,y);ctx.stroke()}
+  // polyline
+  ctx.strokeStyle='#2a3140'; ctx.lineWidth=1.2; ctx.setLineDash([4,4]); ctx.beginPath(); pts.forEach((p,i)=>{const q=toCanvas(p); if(i===0) ctx.moveTo(q.x,q.y); else ctx.lineTo(q.x,q.y)}); ctx.stroke(); ctx.setLineDash([]);
+  // beziers
+  const cols=['#7cffc4','#7cc4ff','#ffb86b','#ff7cc4','#8eff7c'];
+  beziers.forEach((b,i)=>{ctx.strokeStyle=cols[i%cols.length]; ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(b[0].x,b[0].y); ctx.bezierCurveTo(b[1].x,b[1].y,b[2].x,b[2].y,b[3].x,b[3].y); ctx.stroke();
+    // handles
+    ctx.strokeStyle=cols[i%cols.length]; ctx.globalAlpha=0.45; ctx.beginPath(); ctx.moveTo(b[0].x,b[0].y); ctx.lineTo(b[1].x,b[1].y); ctx.moveTo(b[3].x,b[3].y); ctx.lineTo(b[2].x,b[2].y); ctx.stroke(); ctx.globalAlpha=1;
+    [b[1],b[2]].forEach(h=>{ctx.fillStyle=cols[i%cols.length]; ctx.beginPath();ctx.arc(h.x,h.y,5,0,Math.PI*2);ctx.fill(); ctx.strokeStyle='#080a0e';ctx.lineWidth=1;ctx.stroke()});
+    // endpoints
+    [b[0],b[3]].forEach((p,idx)=>{if(idx===0&&i!==0) return; ctx.fillStyle='#e6e9ee'; ctx.beginPath();ctx.arc(p.x,p.y,4,0,Math.PI*2);ctx.fill(); ctx.strokeStyle='#080a0e';ctx.stroke()});
+  });
+  // points
+  pts.forEach(p=>{ctx.fillStyle='#1a2236'; ctx.beginPath();ctx.arc(p.x,p.y,6,0,Math.PI*2);ctx.fill(); ctx.fillStyle='#7cc4ff'; ctx.beginPath();ctx.arc(p.x,p.y,3.2,0,Math.PI*2);ctx.fill()});
+}
+function hitTest(mx,my){for(let i=0;i<pts.length;i++) if(Math.hypot(pts[i].x-mx,pts[i].y-my)<10) return i; return -1;}
+cvs.addEventListener('pointerdown',e=>{const r=cvs.getBoundingClientRect(); const mx=(e.clientX-r.left)*(cvs.width/r.width), my=(e.clientY-r.top)*(cvs.height/r.height); const h=hitTest(mx,my); if(h>=0){dragging=h; cvs.setPointerCapture(e.pointerId)} else {pts.push({x:mx,y:my,z:0}); fitAndDraw()}});
+cvs.addEventListener('pointermove',e=>{if(dragging<0) return; const r=cvs.getBoundingClientRect(); pts[dragging].x=(e.clientX-r.left)*(cvs.width/r.width); pts[dragging].y=(e.clientY-r.top)*(cvs.height/r.height); fitAndDraw()});
+cvs.addEventListener('pointerup',e=>{dragging=-1});
+document.getElementById('errSlider').addEventListener('input',fitAndDraw);
+document.getElementById('clearBtn').addEventListener('click',()=>{pts=[]; fitAndDraw()});
+document.getElementById('randomBtn').addEventListener('click',()=>{pts=[]; for(let i=0;i<9;i++) pts.push({x:40+i*75+ (Math.random()-0.5)*30, y:90+Math.sin(i*0.9)*60 + (Math.random()-0.5)*20, z:0}); fitAndDraw()});
+document.getElementById('perfectBtn').addEventListener('click',()=>{pts=[{x:60,y:190,z:0},{x:60,y:120,z:0},{x:130,y:40,z:0},{x:250,y:20,z:0},{x:360,y:40,z:0},{x:430,y:110,z:0},{x:430,y:190,z:0}]; fitAndDraw()});
+fitAndDraw();
+</script>
+</body>
+</html>

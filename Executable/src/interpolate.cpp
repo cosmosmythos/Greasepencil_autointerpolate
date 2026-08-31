@@ -10,6 +10,7 @@
 // FTP-SC stroke matching
 #include "stroke_matcher.h"
 #include "stroke.h"
+#include "bezier_fit.h"
 
 namespace nb = nanobind;
 
@@ -491,8 +492,39 @@ NB_MODULE(gp_autointerpolate, m) {
           return result.final_correspondence.matches;
       }, "Get list of (initial_idx, target_idx) match pairs");
 
-  // Main matcher class
-  nb::class_<ftpsc::StrokeMatcher>(m, "StrokeMatcher")
+   // Schneider Bezier fitting (polyline -> cubic Beziers, separate file)
+   m.def("fit_bezier", [](FArr points, float max_error) {
+      if (points.ndim() == 0 || points.shape(0) == 0) return nb::list();
+      const float *d = points.data();
+      size_t n = points.shape(0);
+      if (n % 3 != 0) return nb::list();
+      auto flat = bezier_fit::fit_curve_flat(d, n, max_error);
+      nb::list out;
+      for (size_t i = 0; i + 11 < flat.size(); i += 12) {
+         float *buf = new float[12];
+         for (int k = 0; k < 12; ++k) buf[k] = flat[i + k];
+         nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>> arr(buf, {12}, nb::capsule(buf, [](void *p) noexcept { delete[] (float*)p; }));
+         out.append(arr);
+      }
+      return out;
+   }, nb::arg("points"), nb::arg("max_error"),
+   "Fit polyline to cubic Beziers (Schneider 1990). points=flat float32 [x,y,z,...], max_error=squared BU. Returns list of 12-float arrays [p0,c1,c2,p1].");
+
+   m.def("fit_bezier_flat", [](FArr points, float max_error) {
+      if (points.ndim() == 0 || points.shape(0) == 0) return FArr();
+      const float *d = points.data();
+      size_t n = points.shape(0);
+      if (n % 3 != 0) return FArr();
+      auto flat = bezier_fit::fit_curve_flat(d, n, max_error);
+      if (flat.empty()) return FArr();
+      float *buf = new float[flat.size()];
+      std::copy(flat.begin(), flat.end(), buf);
+      return nb::ndarray<float, nb::numpy, nb::c_contig, nb::ndim<1>>(buf, {flat.size()}, nb::capsule(buf, [](void *p) noexcept { delete[] (float*)p; }));
+   }, nb::arg("points"), nb::arg("max_error"),
+   "Flat variant: returns single float32 array size N*12 (curves*4*3). Empty if no fit.");
+
+   // Main matcher class
+   nb::class_<ftpsc::StrokeMatcher>(m, "StrokeMatcher")
       .def(nb::init<>())
       .def(nb::init<const ftpsc::MatcherConfig&>(), nb::arg("config"))
       .def("match", [](ftpsc::StrokeMatcher &self,
