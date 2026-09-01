@@ -45,7 +45,6 @@ class VIEW3D_PT_gp_auto_interpolate(Panel):
     bl_category = 'GPAI'
     bl_label = "GP Auto Interpolate"
 
-    
     @classmethod
     def poll(cls, context):
         return context.active_object and context.active_object.type == 'GREASEPENCIL'

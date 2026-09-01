@@ -163,7 +163,7 @@ def draw_linked_strokes_main():
                 if points:
                     coords_2d = convert_points_to_screen(points, region, rv3d)
                     draw_stroke_overlay(coords_2d, LINKED_STROKE_COLOR)
-            
+
             # Draw stroke on frame2 if visible
             if frame2 in visible_frames:
                 points = get_stroke_points_world(gp_obj, active_layer, frame2, stroke2_idx)

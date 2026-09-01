@@ -513,6 +513,12 @@ class GP_PrevStroke(bpy.types.Operator):
 
 # Header UI function
 def draw_header(self, context):
+    try:
+        addon = bpy.context.preferences.addons.get("bl_ext.user_default.gp_auto_interpolate")
+        if addon is not None and not addon.preferences.header_show_stroke_guide:
+            return
+    except Exception:
+        pass
     gp_obj = context.active_object
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return

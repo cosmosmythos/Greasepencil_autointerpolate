@@ -32,8 +32,15 @@ def _operator_exists(idname):
 # Header UI Integration
 def draw_gpcorr_header(self, context):
     """Draw correspondence buttons in 3D View header"""
+    # prefs guard — preview-lock style per-tool visibility
+    try:
+        addon = bpy.context.preferences.addons.get("bl_ext.user_default.gp_auto_interpolate")
+        if addon is not None and not addon.preferences.header_show_correspondence:
+            return
+    except Exception:
+        pass
     layout = self.layout
-    
+
     obj = context.active_object
     if obj is None or obj.type != 'GREASEPENCIL':
         return

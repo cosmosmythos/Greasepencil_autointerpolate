@@ -132,9 +132,9 @@ def sample_easing_preset(preset_name, samples=64):
         if preset_name == 'LINEAR':
             value = t
         elif preset_name == 'EASE_IN':
-            value = t * t
+            value = t * t / (t * t + 3.236 * pow(1.0 - t, 2.109))
         elif preset_name == 'EASE_OUT':
-            value = 1.0 - (1.0 - t) * (1.0 - t)
+            value = t * t / (t * t + 0.402 * pow(1.0 - t, 2.27))
         elif preset_name == 'EASE_IN_OUT':
             if t < 0.5:
                 value = 2.0 * t * t

@@ -8,7 +8,8 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 
 | File | Role |
 |------|------|
-| `__init__.py` | Registers core submodules; calls `cpp_module.load()` and registers `npanel_handlers` + `recache_triggers` |
+| `__init__.py` | Registers core submodules; calls `preferences.register()` first (like TEXTURESYNTH) then `cpp_module.load()` + `npanel_handlers` + `recache_triggers` + `draw_sensor` + `stroke_delete_on_draw` |
+| `preferences.py` | AddonPreferences `bl_ext.user_default.gp_auto_interpolate` — preview-lock style: `USER`/`DEVELOPER` tabs + `TRIA_DOWN`/`TRIA_RIGHT` collapsibles (`3D View Header` / `Dopesheet`); Header: `header_enabled` + `PREPEND`/`APPEND` + per-tool `Enable X` (`Stroke Correspondence`, `Stroke Guide`, `Draw Sensor Toggle`); Dopesheet: `dopesheet_enabled` + `PREPEND`/`APPEND` + per-tool `Enable X` (`Toggle Interpolation`, `Refresh`, `Layer Filter`, `Easing`, `Arc / Trajectory`, `Bake Single`, `Bake Range`, `Bake Step`); live `_sync_headers`/`_sync_dopesheet` re-registers `VIEW3D_HT_tool_header`/`DOPESHEET_HT_header` + `tag_redraw`; description = `Enable X` (name) |
 | `cpp_module.py` | Sole loader for the compiled C++ `gp_autointerpolate` wheel; `get_interpolator()` returns a process-singleton `Interpolator` |
 | `cache.py` | Multi-object stroke cache + dirty-flag and runtime-update-guard API; `build()` extracts per-keyframe stroke data and easing/arc params |
 | `interpolation.py` | Per-frame pipeline: bisect prev/next key, call C++, write `*_i` mirror attributes |
@@ -17,11 +18,12 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 | `recache_triggers.py` | msgbus triggers (mode change, active-object change) → `mark_dirty` |
 | `bake_utils.py` | Bake-only helpers (stroke normal, arc params, apply to FINAL attributes) |
 | `constants.py` | Shared names + version strings |
-| `draw_sensor.py` | Draw-finish sensor: depsgraph `is_updated_geometry` burst (PAINT-only) + 0.45s silence + total stroke/point counts gate → modal watcher `gp.draw_sensor_watcher` `self.report({'INFO'})` “finished drawing” — suppresses mode-switch / file-new / undo-erase false positives without time grace |
+| `draw_sensor.py` | Draw-finish sensor: PAINT-only + mouse-down (tablet+mouse via `GetKeyState`) + `is_updated_geometry` burst → 3-state `DRAWING→RELEASED→FINALIZED` (0.05s post-process wait) + counts gate → silent `register_drawing_done_callback`. Header toggle `Scene.gp_draw_sensor_enabled` in `VIEW3D_HT_tool_header` (gated by `prefs.header_show_draw_sensor`) |
+| `stroke_delete_on_draw.py` | Demo hook: `register_drawing_done_callback` → resamples last stroke to quarter average edge spacing via `drawing.resize_strokes`, lerping position/radius/opacity only (polyline, no handles); guards non-finite/wild (>1e6) segments and clamps to 4096 points; always re-baselines sensor in `finally` (toggle `Scene.gp_resample_on_draw`) |
 
 ## Local Contracts
 
-- **Draw-finish sensor `draw_sensor.py` is PAINT-only and counts-gated, not time-graced.** `on_depsgraph_update` ARMs only on `is_updated_geometry` for `GreasePencil`/`Object:GreasePencil` while `active_object.mode` is `PAINT_GPENCIL`/`PAINT_GREASE_PENCIL`. `on_load_post` re-baselines `(strokes, points)` — no grace delay. `_idle_check` (0.45s) fires only if total strokes/points increased since last stable; mode-switch / file-new / undo-erase with no increase are silently suppressed. Report via persistent modal `gp.draw_sensor_watcher` → `self.report({'INFO'})` “finished drawing” (bottom Status Bar), because `self.report` from handlers/timers is suppressed by Blender.
+- **Draw-finish sensor `draw_sensor.py` is PAINT-only and counts-gated, not time-graced.** `on_depsgraph_update` ARMs only on `is_updated_geometry` for `GreasePencil`/`Object:GreasePencil` while `active_object.mode` is `PAINT_GPENCIL`/`PAINT_GREASE_PENCIL`. `on_load_post` re-baselines `(strokes, points)` — no grace delay. `_idle_check` (0.05s) fires only if total strokes/points increased since last stable; mode-switch / file-new / undo-erase with no increase are silently suppressed. `is_brush_stroke_running()` is `GetKeyState(VK_LBUTTON) && _in_draw_mode()` (mouse+tablet, no `wm.operators` history). State is `DRAWING (mouse down) → RELEASED (lift) → FINALIZED` after one settled `is_updated_geometry` post-process tick — pause with finger still down never leaves `DRAWING`. Notifies via `register_drawing_done_callback` (silent, no Status Bar — use callback for `rebuild_frame` or last-stroke work). `self.report` from handlers/timers is suppressed by Blender, so no modal watcher is used.
 - **Primary per-frame entry point is `utils/visibility.on_frame_change`, not a core handler.** When playing / scrubbing / rendering it shows modifiers then calls `interpolation.process_scene(scene)`. `core/npanel_handlers.on_frame_change` only syncs the easing-curve UI and never runs interpolation.
 - **Invalidation uses two layers:** geometry-path immediate rebuild + deferred keyframe signature check.
   - Geometry depsgraph update (`is_updated_geometry=True`) → immediate rebuild via `cache.clear() + cache.build()`. Only runs when the object is not already dirty, not currently building, and has no pending runtime grace.
@@ -36,6 +38,7 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 - **Two signatures, different scopes.**
   - `get_signature()` (structural: layer/frame/stroke/point counts + keyframe numbers) — build-time only.
   - `get_keyframe_signature()` (lightweight: layer count + keyframe numbers only) — timer-based, not per-frame.
+- **Preferences own header/dopesheet visibility (preview-lock style).** `preferences.py` `Enable X` — description equals name (`Enable Stroke Guide`, etc.). Header `VIEW3D_HT_tool_header` and Dopesheet `DOPESHEET_HT_header` use `PREPEND`/`APPEND` with live `_sync_headers`/`_sync_dopesheet` (immediate + 0.12s deferred after `panels`/`gp_correspondence`/`stroke_guide` register) + `tag_redraw`. Individual draws early-out: `stroke_guide`/`gp_correspondence`/`draw_sensor` check `header_show_*`, `panels/dopesheet` checks `dopesheet_show_*` per row.
 
 ## Work Guidance
 
@@ -54,3 +57,4 @@ Central engine for stroke interpolation. Loads the native C++ module, maintains 
 - Add a frame in Dopesheet → cache rebuilds automatically (detected by deferred sig check).
 - Remove a frame in Dopesheet → cache rebuilds automatically.
 - Toggle modifier or interpolation enabled → no unnecessary rebuilds.
+- Preferences: disable `Stroke Guide` in `3D View Header` → header buttons vanish without restart; flip `Prepend`/`Append` → header moves edge; disable `Easing` in `Dopesheet` → button vanishes.

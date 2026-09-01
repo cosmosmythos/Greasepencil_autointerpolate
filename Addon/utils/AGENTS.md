@@ -8,6 +8,7 @@ Shared utility modules for GP Auto Interpolate. Easing curves, arc data, visibil
 
 | File | Role |
 |------|------|
+| `curve_points.py` | Corner finder for resampled GP strokes — `find_corners(points, span=4) -> list[int]`; pure math, no bpy; locks 10° threshold + gap 1 |
 | `easing.py` | Easing curve system (complex, ~450 lines) |
 | `arc_data.py` | Arc stroke data structures |
 | `visibility.py` | Modifier on/off rule + scrub detection; **owns the primary per-frame handler** `on_frame_change` that drives `interpolation.process_scene` |

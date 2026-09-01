@@ -4,13 +4,18 @@ GP Auto Interpolate
 
 import bpy
 from bpy.app.handlers import persistent
-from bpy.props import BoolProperty, IntProperty
+from bpy.props import BoolProperty, IntProperty, EnumProperty, FloatProperty
 
 from . import core
 from . import utils
 from . import operators
 from . import panels
 from . import gp_correspondence
+
+_BEZIER_METHOD_ITEMS = [
+    ("ANGLE", "Angle", "Split at corners then fit each piece"),
+    ("ERROR", "Error", "Fit whole stroke, split where error is high"),
+]
 
 
 @persistent
@@ -86,6 +91,39 @@ def register():
         max=8
     )
 
+    bpy.types.Scene.gp_bezier_resample_subdiv = IntProperty(
+        name="Resample",
+        description="Resample subdivision before fitting. 0 to disable",
+        default=2,
+        min=0,
+        max=5,
+    )
+    bpy.types.Scene.gp_bezier_fit_method = EnumProperty(
+        name="Method",
+        description="Split mode",
+        items=_BEZIER_METHOD_ITEMS,
+        default="ANGLE",
+    )
+    bpy.types.Scene.gp_bezier_angle = FloatProperty(
+        name="Angle",
+        description="Corner angle (°)",
+        default=10.0,
+        min=1.0,
+        max=180.0,
+    )
+    bpy.types.Scene.gp_bezier_span = IntProperty(
+        name="Span",
+        description="Corner search radius (Points)",
+        default=3,
+        min=1,
+        max=10,
+    )
+    bpy.types.Scene.gp_bezier_fit_enabled = BoolProperty(
+        name="Bézier Fit",
+        description="Auto-convert drawn stroke to Bézier",
+        default=False,
+    )
+
     core.register()
     utils.register()
     operators.register()
@@ -97,6 +135,32 @@ def register():
         stroke_guide.register()
     except ImportError as e:
         print(f"[GPAI] Stroke guide: {e}")
+
+    # Apply saved header/dopesheet layout from preferences (prepend vs append, enabled)
+    try:
+        from .core.preferences import _sync_headers, _sync_dopesheet
+
+        def _deferred_header_sync():
+            try:
+                _sync_headers()
+                _sync_dopesheet()
+            except Exception:
+                pass
+            return None
+
+        # immediate attempt (prefs may already be valid)
+        try:
+            _sync_headers()
+            _sync_dopesheet()
+        except Exception:
+            pass
+        # also defer 0.1s so window_manager/areas exist
+        try:
+            bpy.app.timers.register(_deferred_header_sync, first_interval=0.12)
+        except Exception:
+            pass
+    except Exception:
+        pass
 
     if on_load_post not in bpy.app.handlers.load_post:
         bpy.app.handlers.load_post.append(on_load_post)
@@ -150,6 +214,11 @@ def unregister():
 
     del bpy.types.Scene.gp_interpolation_enabled
     del bpy.types.Scene.gp_bake_step
+    del bpy.types.Scene.gp_bezier_resample_subdiv
+    del bpy.types.Scene.gp_bezier_fit_method
+    del bpy.types.Scene.gp_bezier_angle
+    del bpy.types.Scene.gp_bezier_span
+    del bpy.types.Scene.gp_bezier_fit_enabled
 
 
 if __name__ == "__main__":
