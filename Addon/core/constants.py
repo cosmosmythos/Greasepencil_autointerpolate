@@ -1,13 +1,10 @@
-"""
-Centralized magic strings used throughout the addon
-"""
 
-# Modifier and Node Group names
+
 MODIFIER_NAME = "Auto-Interpolate (c)"
 NODEGROUP_NAME = "Auto-Interpolate (c)"
 
-# Node group version - update after when modifying the .blend node group
-# Must match the description field in the shipped .blend file
+
+
 NODEGROUP_VERSION = "v1.1.0"
 
 # Custom property keys

@@ -1,9 +1,3 @@
-"""
-N-Panel Handlers
-Manages curve loading, auto-saving for the N-Panel UI,
-and depsgraph-driven dirty flags for cache invalidation.
-
-"""
 
 import bpy
 import time
@@ -13,17 +7,16 @@ from ..operators.easing_direct import get_stored_easing_data
 # Global state
 _last_curve_hash = None
 _loading_curve = False
-_last_preview_key = None      # (layer_idx, frame_num) or None
+_last_preview_key = None
 _last_playhead_frame = None
 
 # Debounce state
-_last_sig_check_time = {}        # obj_name -> monotonic timestamp
-_SIG_CHECK_MIN_INTERVAL = 0.15   # seconds — skip dup updates inside this window
-_pending_sig_check = set()       # obj_names queued for deferred validation
+_last_sig_check_time = {}
+_SIG_CHECK_MIN_INTERVAL = 0.15
+_pending_sig_check = set()
 
 
 def _gp_id_types():
-    """RNA classes for Grease Pencil datablocks (4.2 vs 4.3+ names differ)."""
     types = []
     for name in ("GreasePencil", "GreasePencilv3"):
         t = getattr(bpy.types, name, None)
@@ -33,7 +26,6 @@ def _gp_id_types():
 
 
 def _targets_by_gp_data(target_names):
-    """Map gp_obj.data.name -> list of target names. Uses datablock name as key."""
     by_data = {}
     objects = bpy.data.objects
     for name in target_names:
@@ -46,19 +38,11 @@ def _targets_by_gp_data(target_names):
     return by_data
 
 
-# ---------------------------------------------------------------------------
-# Single source of truth: which key should the N-panel preview?
-# ---------------------------------------------------------------------------
+
+
+
 
 def resolve_preview_key(context):
-    """Return (layer_idx, frame_num) for the key whose easing should be previewed.
-
-    Priority:
-        1. First selected dopesheet key on the active layer.
-        2. Previous key <= playhead on the active layer.
-
-    Returns (None, None) if nothing is resolvable.
-    """
     gp_obj = context.active_object
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return None, None
@@ -75,12 +59,12 @@ def resolve_preview_key(context):
     if layer_idx is None:
         return None, None
 
-    # 1. Dopesheet selection wins
+
     selected = [f.frame_number for f in active_layer.frames if f.select]
     if selected:
         return layer_idx, min(selected)
 
-    # 2. Fallback: previous key <= playhead
+
     cf = context.scene.frame_current
     prev = max(
         (f.frame_number for f in active_layer.frames if f.frame_number <= cf),
@@ -91,12 +75,11 @@ def resolve_preview_key(context):
     return layer_idx, prev
 
 
-# ---------------------------------------------------------------------------
-# Curve hash / loading flag
-# ---------------------------------------------------------------------------
+
+
+
 
 def get_curve_hash():
-    """Get hash of current curve state (includes handle types)"""
     from ..utils.easing import get_easing_curve_node
     curve_node = get_easing_curve_node()
     if not curve_node or curve_node.type != 'CURVE_FLOAT':
@@ -111,19 +94,17 @@ def get_curve_hash():
 
 
 def set_loading_flag(loading):
-    """Prevent auto-save during programmatic changes"""
     global _loading_curve, _last_curve_hash
     _loading_curve = loading
     if not loading:
         _last_curve_hash = get_curve_hash()
 
 
-# ---------------------------------------------------------------------------
-# Load curve for the currently-resolved preview key
-# ---------------------------------------------------------------------------
+
+
+
 
 def load_curve_for_current_context(context):
-    """Load the easing curve for whichever key resolve_preview_key() picks."""
     if not context.active_object or context.active_object.type != 'GREASEPENCIL':
         return
 
@@ -153,12 +134,11 @@ def load_curve_for_current_context(context):
         set_loading_flag(False)
 
 
-# ---------------------------------------------------------------------------
-# Deferred signature check (non-geometry depsgraph updates)
-# ---------------------------------------------------------------------------
+
+
+
 
 def _deferred_sig_check():
-    """Timer callback: check keyframe signature and rebuild if changed."""
     from ..core import cache
     pending = list(_pending_sig_check)
     _pending_sig_check.clear()
@@ -183,21 +163,18 @@ def _deferred_sig_check():
     return None  # one-shot
 
 
-# ---------------------------------------------------------------------------
-# Frame-change handler (scrub / playback)
-# ---------------------------------------------------------------------------
+
+
+
 
 @persistent
 def on_frame_change(scene, depsgraph=None):
-    """Reload the preview curve when the playhead moves.
-    Skipped during playback/render.
-    """
     global _last_playhead_frame, _last_preview_key
     try:
         context = bpy.context
         screen = getattr(context, "screen", None)
         if screen and screen.is_animation_playing:
-            return  # no UI work during playback
+            return
 
         current_frame = scene.frame_current
         if current_frame == _last_playhead_frame:
@@ -212,13 +189,12 @@ def on_frame_change(scene, depsgraph=None):
         pass
 
 
-# ---------------------------------------------------------------------------
-# Depsgraph handler: dirty flags + preview reload + auto-save
-# ---------------------------------------------------------------------------
+
+
+
 
 @persistent
 def on_depsgraph_update(scene, depsgraph):
-    """Depsgraph handler: dirty flags + preview reload."""
     global _last_curve_hash, _loading_curve, _last_preview_key
 
     if _loading_curve:
@@ -238,11 +214,11 @@ def on_depsgraph_update(scene, depsgraph):
     except Exception:
         is_rendering = False
 
-    # Skip during playback or render.
+
     if is_playing or is_rendering:
         return
 
-    # --- PHASE 0: Dirty flags for cache invalidation (debounced) ---
+
     if scene.gp_interpolation_enabled:
         from ..core import cache
         from ..core.registry import get_targets
@@ -270,7 +246,7 @@ def on_depsgraph_update(scene, depsgraph):
                     if cache.is_runtime_update_active(target_name):
                         continue
 
-                    # Geometry update — rebuild immediately.
+
                     if is_geom_update:
                         if cache.has_runtime_update_grace(target_name):
                             cache.consume_runtime_update_grace(target_name)
@@ -285,7 +261,7 @@ def on_depsgraph_update(scene, depsgraph):
                             cache.mark_dirty(target_name)
                         continue
 
-                    # Non-geometry update — defer signature check.
+
                     last = _last_sig_check_time.get(target_name, 0.0)
                     if now - last < _SIG_CHECK_MIN_INTERVAL:
                         continue
@@ -295,7 +271,7 @@ def on_depsgraph_update(scene, depsgraph):
             if _pending_sig_check and not bpy.app.timers.is_registered(_deferred_sig_check):
                 bpy.app.timers.register(_deferred_sig_check, first_interval=0.05)
 
-    # --- Easing UI sync (active object only, never during playback) ---
+
     if not context.active_object or context.active_object.type != 'GREASEPENCIL':
         return
     gp_data = context.active_object.data
@@ -332,14 +308,14 @@ def on_depsgraph_update(scene, depsgraph):
     from ..utils import easing
     easing.set_easing_curve_to_frame(gp_data, layer, layer_idx, frame_num, 'CUSTOM')
     from . import cache
-    # Full rebuild needed — easing_data and easing_samples must be recomputed.
+
     cache.clear(gp_obj.name)
     cache.build(gp_obj)
 
 
-# ---------------------------------------------------------------------------
+
 # Register / unregister
-# ---------------------------------------------------------------------------
+
 
 def register():
     if on_frame_change not in bpy.app.handlers.frame_change_post:

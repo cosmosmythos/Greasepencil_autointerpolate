@@ -14,14 +14,13 @@ def _get_prefs():
 
 
 def draw_gp_dopesheet_ui(self, context):
-    """Draw UI buttons in Dope Sheet header — per-tool visibility + prepend/append from prefs."""
     prefs = _get_prefs()
     if prefs is not None and not prefs.dopesheet_enabled:
         return
     if not (context.active_object and context.active_object.type == 'GREASEPENCIL'):
         return
 
-    # defaults when prefs not yet available (startup before AddonPreferences registered)
+
     show_toggle = True
     show_refresh = True
     show_layer = True
@@ -40,19 +39,19 @@ def draw_gp_dopesheet_ui(self, context):
         show_bake_range = bool(prefs.dopesheet_show_bake_range)
         show_bake_step = bool(prefs.dopesheet_show_bake_step)
 
-    # if everything is off, draw nothing
+
     if not any((show_toggle, show_refresh, show_layer, show_easing, show_arc, show_bake_single, show_bake_range, show_bake_step)):
         return
 
     obj_enabled = is_object_enabled(context.scene, context.active_object.name)
     icon = 'RECORD_ON' if obj_enabled else 'RENDER_ANIMATION'
 
-    # SECTION 1: Interpolate & Refresh & Layer Filter
+
     if show_toggle or show_refresh or show_layer:
         row1 = self.layout.row(align=True)
         if show_toggle:
             row1.operator("gp.toggle_interpolation", text="", icon=icon, depress=obj_enabled)
-        # refresh + layer share an enabled sub-row when toggle exists, otherwise own row
+
         if show_refresh or show_layer:
             sub1 = row1.row(align=True)
             sub1.enabled = obj_enabled
@@ -61,7 +60,7 @@ def draw_gp_dopesheet_ui(self, context):
             if show_layer:
                 sub1.operator("gp.layer_filter_popup", text="", icon='DECORATE_LOCKED')
 
-    # SECTION 2: Easing & Trajectory
+
     if show_easing or show_arc:
         row2 = self.layout.row(align=True)
         row2.enabled = obj_enabled

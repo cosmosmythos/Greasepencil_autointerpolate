@@ -1,11 +1,3 @@
-"""
-Interpolation Engine for GP Auto Interpolate
-Handles real-time interpolation between keyframes.
-
-v2: Multi-object support via process_object() / process_all().
-    Numpy end-to-end in write path (no .tolist()).
-    Normalized cache schema (no isinstance guards).
-"""
 
 import bpy
 from bisect import bisect_right
@@ -15,7 +7,6 @@ from . import cache
 
 
 def calculate_stroke_normal(positions):
-    """Calculate average normal for a stroke using first, middle, last points."""
     point_count = len(positions) // 3
     if point_count < 3:
         return np.array([0.0, 0.0, 1.0], dtype=np.float32)  # Default: Z-up
@@ -41,7 +32,6 @@ def calculate_stroke_normal(positions):
 
 def write_interpolated_data_to_frame(gp_obj, target_frame_num,
                                      all_interpolated_data, target_layer_idx):
-    """Write interpolated data to frame *_i attributes."""
     try:
         cache.begin_runtime_update(gp_obj.name)
         obj_cache = cache.get_cache(gp_obj.name)
@@ -126,7 +116,6 @@ def write_interpolated_data_to_frame(gp_obj, target_frame_num,
 
 
 def process_object(gp_obj, current_frame):
-    """Process interpolation for a single GP object."""
     obj_name = gp_obj.name
     try:
         if cache.is_dirty(obj_name):
@@ -272,12 +261,10 @@ def process_object(gp_obj, current_frame):
 
 
 def process_all(context):
-    """Process all registered GP objects."""
     process_scene(context.scene)
 
 
 def process_scene(scene):
-    """Process all registered GP objects for an explicit scene."""
     from .registry import validate_targets
 
     targets = validate_targets(scene)
@@ -294,5 +281,4 @@ def process_scene(scene):
 
 
 def process(context):
-    """Legacy entry point. Delegates to process_all()."""
     process_all(context)

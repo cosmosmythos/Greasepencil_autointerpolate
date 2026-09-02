@@ -7,14 +7,13 @@ from ..core import cache
 
 
 def apply_preset_to_curve(preset_name, stored_data=None):
-    """Apply preset shape to curve node (loading flag must be set by caller!)"""
     curve_node = get_easing_curve_node()
     if not curve_node:
         return
-    
+
     curve_mapping = curve_node.mapping
     curve = curve_mapping.curves[0]
-    
+
     if preset_name == 'CUSTOM' and stored_data:
         if isinstance(stored_data, list) and len(stored_data) > 0:
             if isinstance(stored_data[0], dict):
@@ -27,7 +26,7 @@ def apply_preset_to_curve(preset_name, stored_data=None):
                         curve.points.new(i / 63.0, stored_data[i]).handle_type = 'AUTO_CLAMPED'
     else:
         while len(curve.points) > 2:
-            curve.points.remove(curve.points[1])        
+            curve.points.remove(curve.points[1])
         if preset_name == 'LINEAR':
             curve.points[0].handle_type = 'VECTOR'
             curve.points[-1].handle_type = 'VECTOR'
@@ -43,30 +42,29 @@ def apply_preset_to_curve(preset_name, stored_data=None):
             curve.points[0].handle_type = 'AUTO'
             curve.points[-1].handle_type = 'AUTO'
             curve.points.new(0.25, 0.1).handle_type = 'AUTO_CLAMPED'
-            curve.points.new(0.75, 0.9).handle_type = 'AUTO_CLAMPED'  
-    
+            curve.points.new(0.75, 0.9).handle_type = 'AUTO_CLAMPED'
+
     curve_mapping.update()
-    
+
     for window in bpy.context.window_manager.windows:
         for area in window.screen.areas:
             area.tag_redraw()
 
 
 def get_stored_easing_data(gp_data, layer_idx, frame_number):
-    """Get stored easing preset and data for a keyframe"""
     import json
     from ..utils.easing import get_or_create_layer_id
-    
+
     if "gp_easing_data" not in gp_data:
         return None, None
-    
+
     try:
         all_easing = json.loads(gp_data["gp_easing_data"])
         layer_id = get_layer_id_readonly(gp_data, layer_idx)
         if layer_id is None:
             return None, None
         layer_key = str(layer_id)
-        
+
         if layer_key in all_easing:
             for uuid, data in all_easing[layer_key].items():
                 if data.get('frame') == frame_number:
@@ -81,26 +79,24 @@ def get_stored_easing_data(gp_data, layer_idx, frame_number):
 
 
 def get_target_keyframes(context):
-    """Get keyframes to apply easing to.
-    Uses dopesheet selection if available, falls back to playhead keyframe."""
     selected = easing.get_selected_keyframes(context)
     if selected:
         return selected
-    
-    # Fallback: use the keyframe at the playhead
+
+
     gp_obj = context.active_object
     if not gp_obj or gp_obj.type != 'GREASEPENCIL':
         return []
-    
+
     gp_data = gp_obj.data
     if not gp_data.layers.active:
         return []
-    
+
     active_layer = gp_data.layers.active
     layer_idx = next((idx for idx, layer in enumerate(gp_data.layers) if layer == active_layer), None)
     if layer_idx is None:
         return []
-    
+
     current_frame = context.scene.frame_current
     prev_key = max((f.frame_number for f in active_layer.frames if f.frame_number <= current_frame), default=None)
     if prev_key is not None:
@@ -109,7 +105,6 @@ def get_target_keyframes(context):
 
 
 class GP_OT_ApplyEasingDirect(Operator):
-    """Apply easing type directly to selected keyframes"""
     bl_idname = "gp.apply_easing_direct"
     bl_label = "Apply Easing"
     bl_description = "Apply easing type to selected keyframes"
@@ -137,17 +132,17 @@ class GP_OT_ApplyEasingDirect(Operator):
         gp_obj = context.active_object
         if not gp_obj:
             return {'CANCELLED'}
-        
+
         selected_keys = get_target_keyframes(context)
         if not selected_keys:
             return {'CANCELLED'}
-        
+
         layer_idx, frame_num = selected_keys[0]
         layer = gp_obj.data.layers[layer_idx]
         current_preset, stored_data = get_stored_easing_data(gp_obj.data, layer_idx, frame_num)
-        
+
         from ..core.npanel_handlers import set_loading_flag
-        
+
         if self.easing_type == 'CUSTOM':
             set_loading_flag(True)
             try:
@@ -157,7 +152,7 @@ class GP_OT_ApplyEasingDirect(Operator):
                     for lidx, fnum in selected_keys:
                         lyr = gp_obj.data.layers[lidx]
                         easing.set_easing_curve_to_frame(gp_obj.data, lyr, lidx, fnum, 'CUSTOM')
-                
+
                 if context.scene.gp_interpolation_enabled:
                     cache.clear(gp_obj.name)
                     cache.build(gp_obj)
@@ -170,13 +165,13 @@ class GP_OT_ApplyEasingDirect(Operator):
                 for lidx, fnum in selected_keys:
                     lyr = gp_obj.data.layers[lidx]
                     easing.set_easing_curve_to_frame(gp_obj.data, lyr, lidx, fnum, self.easing_type)
-                
+
                 if context.scene.gp_interpolation_enabled:
                     cache.clear(gp_obj.name)
                     cache.build(gp_obj)
             finally:
                 set_loading_flag(False)
-        
+
         return {'FINISHED'}
 
 

@@ -1,10 +1,3 @@
-"""
-Visibility System for GP Auto Interpolate
-Rule: modifier ON only during playback or active scrubbing. OFF otherwise.
-
-v2: Multi-object — controls modifiers on ALL registered GP objects,
-    not just one.
-"""
 
 import bpy
 import time
@@ -59,12 +52,12 @@ def detect_scrubbing(scene):
     last_frame = visibility_state['last_frame']
     last_time = visibility_state['last_frame_time']
 
-    # Initialise on first ever call — but DO NOT bail; if playback is
-    # already starting we must still report scrubbing/playing correctly.
+
+
     if last_time is None or last_frame is None:
         visibility_state['last_frame'] = current_frame
         visibility_state['last_frame_time'] = current_time
-        # Trust the playback flag for the first tick; otherwise idle.
+
         visibility_state['is_scrubbing'] = False
         return False
 
@@ -82,7 +75,6 @@ def detect_scrubbing(scene):
 
 
 def playback_watchdog():
-    """Polls playback state. When playback stops, hides modifier."""
     scene = bpy.context.scene
 
     if not scene.gp_interpolation_enabled:
@@ -98,12 +90,11 @@ def playback_watchdog():
     return 0.05
 
 
-# ---------------------------------------------------------------------------
-# Multi-object modifier helpers
-# ---------------------------------------------------------------------------
+
+
+
 
 def _get_target_objects():
-    """Return list of (obj, modifier) pairs for all registered targets."""
     from ..core.registry import get_targets
     results = []
     targets = get_targets(bpy.context.scene)
@@ -117,25 +108,16 @@ def _get_target_objects():
 
 
 def _set_all_modifiers_visible(visible: bool):
-    """Set viewport modifier visibility on ALL registered GP objects.
-
-    NOTE: We deliberately do NOT touch `show_render` here. Writing it
-    fires a depsgraph update on every play/stop/scrub-end transition,
-    which previously chained into expensive signature hashes. Render
-    visibility is handled exclusively by `on_render_pre`/`on_render_post`.
-    """
     for _obj, mod in _get_target_objects():
         if mod.show_viewport != visible:
             mod.show_viewport = visible
 
 
 def _set_modifier_visible(visible: bool):
-    """Legacy single-object alias — now applies to all targets."""
     _set_all_modifiers_visible(visible)
 
 
 def update_modifier_visibility():
-    """Enforce visibility rule. Used as initial sync after toggling ON."""
     scene = bpy.context.scene
     is_playing = _is_animation_playing()
     is_scrubbing = detect_scrubbing(scene)
@@ -157,7 +139,6 @@ def stop_scrub_timer():
 
 
 def scrub_timeout():
-    """Dead-man timer: hide modifier when scrubbing ends."""
     if not _is_animation_playing() and not _is_rendering():
         _set_all_modifiers_visible(False)
     return None
@@ -179,8 +160,8 @@ def on_frame_change(scene, depsgraph=None):
     is_scrubbing = False if is_rendering else detect_scrubbing(scene)
 
     if is_rendering or is_playing or is_scrubbing:
-        # Make modifiers visible FIRST so the first frame of playback isn't
-        # rendered with a hidden modifier (which is what caused the visible
+
+
         # hitch on spacebar).
         _set_all_modifiers_visible(True)
 
@@ -198,14 +179,12 @@ def on_frame_change(scene, depsgraph=None):
 
 
 def force_modifier_off_for_object(gp_obj):
-    """Hide modifier on a specific object and reset scrub state."""
     mod = gp_obj.modifiers.get(MODIFIER_NAME)
     if mod and mod.show_viewport:
         mod.show_viewport = False
 
 
 def force_all_modifiers_off():
-    """Unconditionally hide modifiers on ALL registered objects."""
     global visibility_state
     ensure_visibility_state()
     stop_scrub_timer()
@@ -214,14 +193,12 @@ def force_all_modifiers_off():
     _set_all_modifiers_visible(False)
 
 
-# Legacy alias used by __init__.py unregister
+
 def force_modifier_off_for_authoring():
-    """Legacy alias for force_all_modifiers_off()."""
     force_all_modifiers_off()
 
 
 def on_undo_redo(scene, depsgraph=None):
-    """Correct modifier visibility after undo/redo."""
     handler_active = on_frame_change in bpy.app.handlers.frame_change_post
 
     if handler_active and not scene.gp_interpolation_enabled:

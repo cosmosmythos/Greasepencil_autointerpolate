@@ -20,14 +20,13 @@ _BEZIER_METHOD_ITEMS = [
 
 @persistent
 def on_load_post(dummy):
-    """Handler called after a .blend file is loaded."""
     from .core import cache
     from .core.constants import NODEGROUP_VERSION
     from .core.registry import migrate_legacy_target, get_targets, set_targets
     from .core import recache_triggers
     from .utils import visibility
 
-    # msgbus subscriptions are wiped on file load -- reinstall.
+
     recache_triggers.subscribe_msgbus()
     recache_triggers._last_mode.clear()
 
@@ -38,13 +37,13 @@ def on_load_post(dummy):
 
     scene = bpy.context.scene
 
-    # Migrate old single-target format → new multi-target list
+
     migrate_legacy_target(scene)
 
     if scene.gp_interpolation_enabled:
         targets = get_targets(scene)
 
-        # Validate targets still exist
+
         valid_targets = set()
         for target_name in targets:
             gp_obj = bpy.data.objects.get(target_name)
@@ -106,10 +105,12 @@ def register():
     )
     bpy.types.Scene.gp_bezier_angle = FloatProperty(
         name="Angle",
-        description="Corner angle (°)",
-        default=10.0,
-        min=1.0,
-        max=180.0,
+        description="Corner angle",
+        default=0.174533,  # 10°
+        min=0.0174533,  # 1°
+        max=3.14159,  # 180°
+        subtype='ANGLE',
+        unit='ROTATION',
     )
     bpy.types.Scene.gp_bezier_span = IntProperty(
         name="Span",
@@ -122,6 +123,17 @@ def register():
         name="Bézier Fit",
         description="Auto-convert drawn stroke to Bézier",
         default=False,
+    )
+    bpy.types.Scene.gp_bezier_error = FloatProperty(
+        name="Error",
+        description="Fit error",
+        default=0.02,
+        min=0.001,
+        max=0.5,
+        step=0.1,
+        precision=3,
+        subtype='DISTANCE',
+        unit='LENGTH',
     )
 
     core.register()
@@ -136,7 +148,7 @@ def register():
     except ImportError as e:
         print(f"[GPAI] Stroke guide: {e}")
 
-    # Apply saved header/dopesheet layout from preferences (prepend vs append, enabled)
+
     try:
         from .core.preferences import _sync_headers, _sync_dopesheet
 
@@ -148,13 +160,13 @@ def register():
                 pass
             return None
 
-        # immediate attempt (prefs may already be valid)
+
         try:
             _sync_headers()
             _sync_dopesheet()
         except Exception:
             pass
-        # also defer 0.1s so window_manager/areas exist
+
         try:
             bpy.app.timers.register(_deferred_header_sync, first_interval=0.12)
         except Exception:
@@ -173,7 +185,7 @@ def unregister():
     except (ValueError, AttributeError):
         pass
 
-    # Clean up runtime state before submodule unregistration
+
     from .utils import visibility
     from .core import cache
 
@@ -199,7 +211,7 @@ def unregister():
     visibility.clear()
     cache.clear()
 
-    # Unregister submodules (reverse order)
+
     try:
         from . import stroke_guide
         stroke_guide.unregister()
@@ -219,6 +231,7 @@ def unregister():
     del bpy.types.Scene.gp_bezier_angle
     del bpy.types.Scene.gp_bezier_span
     del bpy.types.Scene.gp_bezier_fit_enabled
+    del bpy.types.Scene.gp_bezier_error
 
 
 if __name__ == "__main__":

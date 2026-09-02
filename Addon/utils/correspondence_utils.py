@@ -1,6 +1,3 @@
-"""
-Correspondence Utilities: keyframe detection and stroke collection.
-"""
 
 import bpy
 import numpy as np
@@ -8,7 +5,6 @@ from mathutils import Vector
 
 
 def detect_keyframe_range(scene, layer):
-    """Auto-detect keyframe range based on playhead position."""
     playhead = scene.frame_current
     frames = sorted(f.frame_number for f in layer.frames)
 
@@ -41,7 +37,6 @@ def detect_keyframe_range(scene, layer):
 
 
 def find_keyframe_pairs(layer, start_frame, end_frame):
-    """Find all consecutive keyframe pairs in range."""
     frames = sorted(
         f.frame_number for f in layer.frames
         if start_frame <= f.frame_number <= end_frame
@@ -52,7 +47,6 @@ def find_keyframe_pairs(layer, start_frame, end_frame):
 
 
 def _viewport_axes():
-    """Get viewport axes or None if no VIEW_3D available."""
     try:
         screen = bpy.context.screen
         if screen:
@@ -84,7 +78,6 @@ def _viewport_axes():
 
 
 def _camera_axes_at_frame(scene, camera, frame):
-    """Get camera axes at specific frame via depsgraph. Uses current frame if frame is None."""
     if camera is None:
         return None
     if frame is None or frame == scene.frame_current:
@@ -117,18 +110,12 @@ def _camera_axes_at_frame(scene, camera, frame):
 
 
 def _get_view_axes(scene, method="camera", frame=None):
-    """
-    Get view axes for orthographic flattening. Returns (forward, up, right, label).
-    Only 2 valid methods: 'camera' or 'viewport_view'. z is discarded (explicit z=0).
-    If method is 'camera', frame is used to evaluate animated camera at that keyframe.
-    If no scene camera, fallback to viewport_view.
-    """
     if method == "camera":
         camera = scene.camera if scene else None
         axes = _camera_axes_at_frame(scene, camera, frame)
         if axes is not None:
             return axes
-        # no camera -> fallback to viewport_view
+
         vp = _viewport_axes()
         if vp is not None:
             return vp
@@ -138,7 +125,7 @@ def _get_view_axes(scene, method="camera", frame=None):
         vp = _viewport_axes()
         if vp is not None:
             return vp
-        # viewport missing -> try camera at frame as fallback
+
         camera = scene.camera if scene else None
         axes = _camera_axes_at_frame(scene, camera, frame)
         if axes is not None:
@@ -149,7 +136,6 @@ def _get_view_axes(scene, method="camera", frame=None):
 
 
 def _find_drawing(gp_obj, layer_idx, frame_number):
-    """Find drawing for layer/frame. Returns None if missing."""
     if gp_obj is None or gp_obj.type != "GREASEPENCIL":
         return None
     try:
@@ -163,11 +149,6 @@ def _find_drawing(gp_obj, layer_idx, frame_number):
 
 
 def collect_strokes_2d(gp_obj, layer_idx, frame, method="camera"):
-    """
-    Collect 2D projected strokes. Orthographic: x=pos.dot(right), y=pos.dot(up), z discarded.
-    Only 2 methods: 'camera' (default) or 'viewport_view'. Returns (strokes_2d, original_indices).
-    Normalized to 0-10 range (joint bbox, uniform scale, explicit z=0). For 'camera', view evaluated at `frame`.
-    """
     drawing = _find_drawing(gp_obj, layer_idx, frame)
     if drawing is None:
         return [], []
@@ -217,7 +198,6 @@ def collect_strokes_2d(gp_obj, layer_idx, frame, method="camera"):
 
 
 def to_cpp_strokes(strokes_2d):
-    """Flatten strokes to C++ format: [x0,y0,x1,y1,-1,-1, ...] as float32."""
     flat_data = []
     for stroke in strokes_2d:
         for x, y in stroke:

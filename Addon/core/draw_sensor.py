@@ -1,4 +1,3 @@
-"""draw_sensor - Fires drawing_done after pen lift, waits for post-process."""
 
 import time
 import traceback
@@ -14,6 +13,7 @@ _has_pending = False
 _last_stable = None
 _was_drawing = False
 _release_seen = False
+_release_time = 0.0
 
 _PREF_ID = "bl_ext.user_default.gp_auto_interpolate"
 
@@ -140,7 +140,7 @@ def _get_total_counts() -> tuple[int, int]:
 
 
 def _idle_check():
-    global _has_pending, _last_stable, _release_seen, _was_drawing, _last_burst
+    global _has_pending, _last_stable, _release_seen, _was_drawing, _last_burst, _release_time
     try:
         if not _sensor_enabled():
             _has_pending = False
@@ -155,6 +155,7 @@ def _idle_check():
             _release_seen = True
             _has_pending = True
             _last_burst = time.monotonic()
+            _release_time = _last_burst
             return _IDLE
         if not _has_pending and not _release_seen:
             return None
@@ -193,7 +194,7 @@ def _idle_check():
 
 @persistent
 def on_depsgraph_update(scene, depsgraph):
-    global _last_burst, _has_pending, _was_drawing, _release_seen
+    global _last_burst, _has_pending, _was_drawing, _release_seen, _release_time
     if not _sensor_enabled() or _is_busy() or not depsgraph:
         return
     is_drawing = _is_brush_stroke_running()
@@ -209,6 +210,7 @@ def on_depsgraph_update(scene, depsgraph):
         _release_seen = True
         _has_pending = True
         _last_burst = time.monotonic()
+        _release_time = _last_burst
         _ensure_timer()
         return
     has_geo = _has_gp_geometry_update(depsgraph)

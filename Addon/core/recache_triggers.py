@@ -1,32 +1,15 @@
-"""
-Surgical recache triggers for user-intuitive moments.
-
-Covers:
-  - Mode switch on a GP object (DRAW / EDIT / SCULPT / OBJECT / WEIGHT / VERTEX)
-  - Active object change
-
-NOT covered here (handled elsewhere):
-  - Geometry edits             -> core.npanel_handlers.on_depsgraph_update
-  - Dopesheet key shift        -> deferred keyframe-signature check via
-                                  npanel_handlers._deferred_sig_check() timer
-  - Undo / Redo                -> same depsgraph path within 0.15 s
-
-Subscriptions are owned by `_owner` and MUST be re-installed on every
-file load (`subscribe_msgbus`); see Addon/__init__.py:on_load_post.
-"""
 import bpy
 from . import cache
 from .registry import get_targets
 
 _owner = object()           # msgbus owner token
-_last_mode = {}             # obj_name -> last seen mode string
+_last_mode = {}
 
 _GP_TYPES = ('GREASEPENCIL', 'GPENCIL')
 
 
-# --- Guards --------------------------------------------------------------
+
 def _is_busy():
-    """True during playback or render -- never recache then."""
     try:
         screen = bpy.context.screen
         if screen and screen.is_animation_playing:
@@ -41,7 +24,6 @@ def _is_busy():
 
 
 def _prune_stale_mode_entries():
-    """Drop _last_mode keys for objects that no longer exist."""
     if not _last_mode:
         return
     existing = bpy.data.objects
@@ -50,9 +32,8 @@ def _prune_stale_mode_entries():
         _last_mode.pop(n, None)
 
 
-# --- MSGBUS callbacks ----------------------------------------------------
+
 def _on_mode_change():
-    """Active GP object's mode changed via Tab / header / operator."""
     if _is_busy():
         return
     obj = bpy.context.active_object
@@ -72,7 +53,6 @@ def _on_mode_change():
 
 
 def _on_active_object_change():
-    """Active object changed in the outliner / viewport."""
     if _is_busy():
         return
     obj = bpy.context.active_object
@@ -86,10 +66,8 @@ def _on_active_object_change():
     _prune_stale_mode_entries()
 
 
-# --- Subscribe / unsubscribe --------------------------------------------
+
 def subscribe_msgbus():
-    """(Re)install all msgbus subscriptions. Idempotent -- safe to call
-    repeatedly. MUST be called from both register() and on_load_post."""
     bpy.msgbus.clear_by_owner(_owner)
 
     bpy.msgbus.subscribe_rna(

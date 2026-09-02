@@ -1,75 +1,43 @@
-"""
-Cache System for GP Auto Interpolate
-Manages keyframe data caching for fast interpolation.
-
-Architecture (v2 — multi-object):
-  cache_registry = {
-      obj_name: {
-          'signature': tuple,             # full structural signature
-          '_keyframe_signature': tuple,   # lightweight: layer count + keyframe numbers
-          'layers': {
-                layer_idx: {
-                    'keyframes': { frame_num: [stroke_dicts] },
-                    'sorted_frames': [int],
-                    'frame_lookup': { frame_num: frame_ref },
-                    'easing_data': { frame_num: [samples] },
-                    'easing_samples': { frame_num: np.float32[64] },
-                    'arc_data': { frame_num: (amount, direction, blend, spiral) },
-                }
-            }
-      }
-  }
-
-Dirty-flag invalidation:
-  Instead of calling get_signature() every frame, depsgraph_update_post sets
-  a dirty flag per-object.  The interpolation loop checks is_dirty() and only
-  rebuilds when the flag is set.  Frame changes alone never invalidate.
-"""
 
 import bpy
 import numpy as np
 
 
-# ---------------------------------------------------------------------------
-# Global state
-# ---------------------------------------------------------------------------
 
-# Per-object cache: { obj_name: { 'signature': ..., 'layers': ... } }
+# Global state
+
+
+
 cache_registry = {}
 
-# Dirty flags: object names that need a cache rebuild
+
 _dirty_objects = set()
 
-# Suppress depsgraph updates from own writes.
+
 _runtime_update_depth = {}
 _runtime_update_grace = {}
 
-# ---------------------------------------------------------------------------
+
 # Dirty-flag API
-# ---------------------------------------------------------------------------
+
 
 def mark_dirty(obj_name):
-    """Mark an object's cache as needing rebuild."""
     _dirty_objects.add(obj_name)
 
 
 def is_dirty(obj_name):
-    """Check if an object needs a cache rebuild."""
     return obj_name in _dirty_objects
 
 
 def clear_dirty(obj_name):
-    """Clear the dirty flag."""
     _dirty_objects.discard(obj_name)
 
 
 def begin_runtime_update(obj_name):
-    """Increment the runtime update depth counter."""
     _runtime_update_depth[obj_name] = _runtime_update_depth.get(obj_name, 0) + 1
 
 
 def end_runtime_update(obj_name, grace_updates=0):
-    """Decrement the runtime update depth counter."""
     depth = _runtime_update_depth.get(obj_name, 0)
     if depth <= 1:
         _runtime_update_depth.pop(obj_name, None)
@@ -82,7 +50,6 @@ def end_runtime_update(obj_name, grace_updates=0):
 
 
 def is_runtime_update_active(obj_name):
-    """Return True while the addon is mutating this object."""
     return _runtime_update_depth.get(obj_name, 0) > 0
 
 
@@ -109,17 +76,15 @@ def clear_runtime_update_grace(obj_name):
     _runtime_update_grace.pop(obj_name, None)
 
 
-# ---------------------------------------------------------------------------
+
 # Cache accessors
-# ---------------------------------------------------------------------------
+
 
 def get_cache(obj_name):
-    """Get cache dict for an object. Returns {} if not cached."""
     return cache_registry.get(obj_name, {})
 
 
 def clear(obj_name=None):
-    """Clear cache for one object, or all if obj_name is None."""
     global cache_registry
     if obj_name:
         cache_registry.pop(obj_name, None)
@@ -133,12 +98,11 @@ def clear(obj_name=None):
         _runtime_update_grace.clear()
 
 
-# ---------------------------------------------------------------------------
-# Signature (used only inside build(), NOT every frame)
-# ---------------------------------------------------------------------------
+
+
+
 
 def get_signature(gp_obj):
-    """Calculates a signature based on the GP object's structure."""
     if not gp_obj or not gp_obj.data:
         return None
 
@@ -163,7 +127,6 @@ def get_signature(gp_obj):
 
 
 def get_keyframe_signature(gp_obj):
-    """Lightweight check: layer count + keyframe numbers only."""
     if not gp_obj or not gp_obj.data:
         return None
     keyframe_numbers = []
@@ -173,9 +136,9 @@ def get_keyframe_signature(gp_obj):
     return (len(gp_obj.data.layers), tuple(keyframe_numbers))
 
 
-# ---------------------------------------------------------------------------
+
 # Node group helpers
-# ---------------------------------------------------------------------------
+
 
 def append_nodegroup(nodegroup_name):
     import os
@@ -187,7 +150,6 @@ def append_nodegroup(nodegroup_name):
 
 
 def check_and_update_nodegroup():
-    """Check and update outdated node group. Returns True if updated."""
     from .constants import NODEGROUP_NAME, NODEGROUP_VERSION, MODIFIER_NAME
 
     existing = bpy.data.node_groups.get(NODEGROUP_NAME)
@@ -221,7 +183,6 @@ def check_and_update_nodegroup():
 
 
 def ensure_nodegroup():
-    """Ensure node group exists. Call from operators only, not handlers."""
     nodegroup_name = "Auto-Interpolate (c)"
     check_and_update_nodegroup()
     if nodegroup_name not in bpy.data.node_groups:
@@ -230,7 +191,6 @@ def ensure_nodegroup():
 
 
 def ensure_modifier(gp_obj):
-    """Ensure modifier exists on object. Call from operators only."""
     nodegroup = ensure_nodegroup()
     if not nodegroup:
         return None
@@ -241,12 +201,11 @@ def ensure_modifier(gp_obj):
     return modifier
 
 
-# ---------------------------------------------------------------------------
-# Cache build  (per-object, never touches siblings)
-# ---------------------------------------------------------------------------
+
+
+
 
 def build(gp_obj):
-    """Build/rebuild cache for one GP object. Writes only to cache_registry[obj_name]."""
     global cache_registry
 
     obj_name = gp_obj.name
@@ -399,14 +358,12 @@ def build(gp_obj):
 
 
 def _clear_frame_from_cache(layer_cache, frame_num):
-    """Remove a frame from all per-frame cache maps."""
     for key in ("keyframes", "frame_lookup", "easing_data", "easing_samples", "arc_data"):
         layer_cache.get(key, {}).pop(frame_num, None)
     layer_cache["sorted_frames"] = sorted(layer_cache.get("keyframes", {}).keys())
 
 
 def rebuild_frame(gp_obj, layer_idx, frame_num):
-    """Rebuild cache entry for a single frame."""
     obj_name = gp_obj.name
     entry = cache_registry.get(obj_name)
     if not entry:
@@ -492,7 +449,6 @@ def rebuild_frame(gp_obj, layer_idx, frame_num):
 
 
 def _update_key_signature(entry):
-    """Update only the _keyframe_signature after a frame change."""
     layers_sig = []
     for layer_idx in sorted(entry.get('layers', {}).keys()):
         lc = entry['layers'][layer_idx]
@@ -501,12 +457,11 @@ def _update_key_signature(entry):
     entry['_keyframe_signature'] = (layer_count, tuple(layers_sig))
 
 
-# ---------------------------------------------------------------------------
-# Internal: ensure _i attributes exist on every frame
-# ---------------------------------------------------------------------------
+
+
+
 
 def _ensure_interpolation_attributes(gp_obj):
-    """Create *_i mirror attributes on every frame. Copies source data on first creation."""
     attr_defs = [
         ("position_i", 'FLOAT_VECTOR', 'POINT', "position", 'vector', 3),
         ("opacity_i",  'FLOAT',        'POINT', "opacity",  'value',  1),
@@ -530,7 +485,7 @@ def _ensure_interpolation_attributes(gp_obj):
                     attrs.new(attr_name, attr_type, domain)
                     newly_created = True
 
-                # Copy source data into _i on first creation
+
                 if newly_created and source_name in attrs:
                     source_attr = attrs[source_name]
                     target_attr = attrs[attr_name]

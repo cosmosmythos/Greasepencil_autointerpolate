@@ -459,7 +459,7 @@ jobs:
           
           generate_manifest "windows-x64" "build_windows/Addon"
           cd build_windows/Addon
-          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "AGENTS.md"
+          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-windows-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "AGENTS.md" -x "*/AGENTS.md"
           cd ../..
           
           # macOS Universal (ARM64 + x86_64)
@@ -472,7 +472,7 @@ jobs:
           
           generate_manifest "macos-arm64\", \"macos-x64" "build_macos/Addon"
           cd build_macos/Addon
-          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-macos-universal.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "AGENTS.md"
+          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-macos-universal.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "AGENTS.md" -x "*/AGENTS.md"
           cd ../..
           
           # Linux
@@ -485,7 +485,7 @@ jobs:
           
           generate_manifest "linux-x64" "build_linux/Addon"
           cd build_linux/Addon
-          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "AGENTS.md"
+          zip -r ../../gp_auto_interpolate-${{ env.addon_version }}-linux-x64.zip . -x "*.pyc" -x "__pycache__/*" -x ".DS_Store" -x "AGENTS.md" -x "*/AGENTS.md"
           cd ../..
           
           echo "✅ Platform-specific packages created:"

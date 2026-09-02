@@ -1,4 +1,3 @@
-"""Addon preferences: header + dopesheet layout — preview-lock style."""
 
 import bpy
 from bpy.types import AddonPreferences, Panel
@@ -35,7 +34,6 @@ def _on_log_level_change(self, context):
 
 
 def _sync_headers():
-    """Re-register VIEW3D_HT_tool_header draws at the chosen prepend/append edge."""
     try:
         prefs = _get_prefs()
         if prefs is None:
@@ -66,7 +64,7 @@ def _sync_headers():
         adder = bpy.types.VIEW3D_HT_tool_header.prepend if pos == "PREPEND" else bpy.types.VIEW3D_HT_tool_header.append
         for fn in targets:
             try:
-                # Respect per-tool toggles stored in prefs
+
                 if fn is _gpc.draw_gpcorr_header and not prefs.header_show_correspondence:
                     continue
                 if fn is _sg.draw_header and not prefs.header_show_stroke_guide:
@@ -86,7 +84,6 @@ def _sync_headers():
 
 
 def _sync_dopesheet():
-    """Re-register DOPESHEET_HT_header draw at the chosen edge."""
     try:
         prefs = _get_prefs()
         if prefs is None:
@@ -141,7 +138,7 @@ def _on_dopesheet_prefs_change(self, context):
                 area.tag_redraw()
 
 
-# --- Bezier Fit header (VIEW3D_HT_tool_header) ---
+
 
 def draw_bezier_header(self, context):
     prefs = _get_prefs()
@@ -168,6 +165,7 @@ class VIEW3D_PT_gpai_bezier_settings(Panel):
         layout = self.layout
         col = layout.column(align=True)
         col.prop(scene, "gp_bezier_resample_subdiv", text="Resample")
+        col.prop(scene, "gp_bezier_error", text="Error")
         col.prop(scene, "gp_bezier_fit_method", text="")
         if scene.gp_bezier_fit_method == 'ANGLE':
             col.prop(scene, "gp_bezier_angle", text="Angle")
@@ -217,7 +215,7 @@ class GPAIPreferences(AddonPreferences):
         default=False,
     )
 
-    # -- 3D View Header (VIEW3D_HT_tool_header) --
+
     header_enabled: BoolProperty(
         name="Enable Header UI",
         description="Enable Header UI",
@@ -261,7 +259,7 @@ class GPAIPreferences(AddonPreferences):
         update=_on_header_prefs_change,
     )
 
-    # -- Dopesheet (DOPESHEET_HT_header) --
+
     dopesheet_enabled: BoolProperty(
         name="Enable Dopesheet UI",
         description="Enable Dopesheet UI",
@@ -371,7 +369,7 @@ class GPAIPreferences(AddonPreferences):
         )
 
     def _draw_user_section(self, layout):
-        # Draw Sensor — topmost
+
         if not self.show_draw_sensor_details:
             self._draw_dropdown_header(layout, "show_draw_sensor_details", "Draw Sensor")
         else:
@@ -379,7 +377,7 @@ class GPAIPreferences(AddonPreferences):
             self._draw_dropdown_header(box, "show_draw_sensor_details", "Draw Sensor")
             box.prop(self, "draw_sensor_enabled")
 
-        # 3D View Header — collapsible, preview-lock style
+
         if not self.show_header_details:
             self._draw_dropdown_header(layout, "show_header_details", "3D View Header")
         else:
@@ -395,7 +393,7 @@ class GPAIPreferences(AddonPreferences):
             sub.prop(self, "header_show_stroke_guide")
             sub.prop(self, "header_show_bezier")
 
-        # Dopesheet — collapsible
+
         if not self.show_dopesheet_details:
             self._draw_dropdown_header(layout, "show_dopesheet_details", "Dopesheet")
         else:
