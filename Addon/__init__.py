@@ -127,7 +127,7 @@ def register():
     bpy.types.Scene.gp_bezier_error = FloatProperty(
         name="Error",
         description="Fit error",
-        default=0.02,
+        default=0.1,
         min=0.001,
         max=0.5,
         step=0.1,

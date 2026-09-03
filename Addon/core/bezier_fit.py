@@ -128,7 +128,7 @@ def _get_error_sq() -> float:
     try:
         err = float(bpy.context.scene.gp_bezier_error)
     except Exception:
-        err = 0.02
+        err = 0.05
     return err * err
 
 

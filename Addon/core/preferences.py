@@ -377,6 +377,7 @@ class GPAIPreferences(AddonPreferences):
             self._draw_dropdown_header(box, "show_draw_sensor_details", "Draw Sensor")
             box.prop(self, "draw_sensor_enabled")
 
+        layout.separator()
 
         if not self.show_header_details:
             self._draw_dropdown_header(layout, "show_header_details", "3D View Header")
@@ -393,6 +394,7 @@ class GPAIPreferences(AddonPreferences):
             sub.prop(self, "header_show_stroke_guide")
             sub.prop(self, "header_show_bezier")
 
+        layout.separator()
 
         if not self.show_dopesheet_details:
             self._draw_dropdown_header(layout, "show_dopesheet_details", "Dopesheet")

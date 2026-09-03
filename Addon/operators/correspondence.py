@@ -405,9 +405,6 @@ class GPCORR_OT_link_selected(Operator):
 
         for layer_idx, layer in enumerate(obj.data.layers):
             for frame in layer.frames:
-                if not frame.select:
-                    continue
-
                 if not frame.drawing:
                     continue
 
@@ -421,7 +418,7 @@ class GPCORR_OT_link_selected(Operator):
 
 
         if len(selected_by_frame) != 2:
-            self.report({'WARNING'}, f"Select exactly one stroke in each of two frames (found {len(selected_by_frame)} frames)")
+            self.report({'WARNING'}, "Select exactly one stroke in each of two frames")
             return {'CANCELLED'}
 
         frames_list = list(selected_by_frame.items())
@@ -433,7 +430,7 @@ class GPCORR_OT_link_selected(Operator):
             return {'CANCELLED'}
 
         if len(strokes1) != 1 or len(strokes2) != 1:
-            self.report({'WARNING'}, f"Select exactly one stroke per frame (found {len(strokes1)} and {len(strokes2)})")
+            self.report({'WARNING'}, "Select exactly one stroke per frame")
             return {'CANCELLED'}
 
         stroke1_idx = strokes1[0]
@@ -552,14 +549,14 @@ class GPCORR_OT_unlink_selected(Operator):
         selected_by_frame = {}
         for layer_idx, layer in enumerate(obj.data.layers):
             for frame in layer.frames:
-                if not frame.select or not frame.drawing:
+                if not frame.drawing:
                     continue
                 sel = [i for i, s in enumerate(frame.drawing.strokes) if s.select]
                 if sel:
                     selected_by_frame[(layer_idx, frame.frame_number)] = sel
 
         if len(selected_by_frame) != 2:
-            self.report({'WARNING'}, f"Select exactly one stroke in each of two frames (found {len(selected_by_frame)} frames)")
+            self.report({'WARNING'}, "Select exactly one stroke in each of two frames")
             return {'CANCELLED'}
 
         (layer1, frame1), strokes1 = list(selected_by_frame.items())[0]

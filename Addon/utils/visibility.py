@@ -199,13 +199,13 @@ def force_modifier_off_for_authoring():
 
 
 def on_undo_redo(scene, depsgraph=None):
+    from ..core import cache as _cache
+    # undo/redo is a DNA memfile swap - cached GreasePencilFrame wrappers are dead StructRNA; never dereference them
+    if _cache.cache_registry:
+        _cache.clear()
     handler_active = on_frame_change in bpy.app.handlers.frame_change_post
-
     if handler_active and not scene.gp_interpolation_enabled:
         scene.gp_interpolation_enabled = True
-        from ..core import cache
-        cache.clear()
-
     if not scene.gp_interpolation_enabled or not _is_animation_playing():
         _set_all_modifiers_visible(False)
 
