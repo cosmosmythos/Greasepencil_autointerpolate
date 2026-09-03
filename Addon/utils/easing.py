@@ -4,9 +4,9 @@ import json
 import hashlib
 
 def get_layer_id_readonly(gp_data, layer_idx):
-    if "gpai_layer_id" not in gp_data.attributes:
+    attr = gp_data.attributes.get("gpai_layer_id")
+    if attr is None:
         return None
-    attr = gp_data.attributes["gpai_layer_id"]
     if layer_idx >= len(attr.data):
         return None
     val = attr.data[layer_idx].value
@@ -249,12 +249,9 @@ def get_easing_curve_from_frame(gp_data, layer_idx, frame_number, layer=None):
 
 
 def get_or_create_layer_id(gp_data, layer_idx):
-
-    if "gpai_layer_id" not in gp_data.attributes:
-
-        gp_data.attributes.new(name="gpai_layer_id", type='INT', domain='LAYER')
-
-    attr = gp_data.attributes["gpai_layer_id"]
+    attr = gp_data.attributes.get("gpai_layer_id")
+    if attr is None:
+        attr = gp_data.attributes.new(name="gpai_layer_id", type='INT', domain='LAYER')
 
 
     if attr.data[layer_idx].value == 0:

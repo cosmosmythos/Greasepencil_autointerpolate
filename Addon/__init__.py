@@ -136,6 +136,15 @@ def register():
         unit='LENGTH',
     )
 
+    bpy.types.Scene.gp_link_tolerance = FloatProperty(
+        name="Link Tolerance",
+        description="Search radius for linked strokes",
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        precision=3,
+    )
+
     core.register()
     utils.register()
     operators.register()
@@ -232,6 +241,10 @@ def unregister():
     del bpy.types.Scene.gp_bezier_span
     del bpy.types.Scene.gp_bezier_fit_enabled
     del bpy.types.Scene.gp_bezier_error
+    try:
+        del bpy.types.Scene.gp_link_tolerance
+    except (AttributeError, RuntimeError):
+        pass
 
 
 if __name__ == "__main__":

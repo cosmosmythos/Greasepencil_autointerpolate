@@ -53,45 +53,52 @@ class GP_OT_ShowEasingPopup(Operator):
     def draw(self, context):
         layout = self.layout
 
-
         col = layout.column(align=True)
-
 
         row1 = col.row(align=True)
         row1.prop_enum(self, "easing_type", 'LINEAR', text="Linear")
         row1.prop_enum(self, "easing_type", 'CUSTOM', text="Custom")
 
-
         row2 = col.row(align=True)
         row2.prop_enum(self, "easing_type", 'EASE_IN', text="In")
         row2.prop_enum(self, "easing_type", 'EASE_OUT', text="Out")
         row2.prop_enum(self, "easing_type", 'EASE_IN_OUT', text="In-Out")
-
-
-        if self.easing_type == 'CUSTOM':
-            layout.separator()
-            curve_node = get_easing_curve_node()
-            if curve_node:
-                layout.template_curve_mapping(curve_node, "mapping", type='NONE')
-            else:
-                layout.label(text="Curve not available", icon='ERROR')
-                layout.label(text="Enable interpolation first")
+        # no curve here - dopesheet is buttons only, Custom edit via N-panel GPAI (avoids BKE_curvemapping_changed AV)
 
     def execute(self, context):
         gp_obj = context.active_object
         if not gp_obj:
             return {'CANCELLED'}
 
-        from ..operators.easing_direct import get_target_keyframes
+        from ..operators.easing_direct import get_target_keyframes, get_stored_easing_data, apply_preset_to_curve
+        from ..core.npanel_handlers import set_loading_flag
+
         selected_keys = get_target_keyframes(context)
+        if not selected_keys:
+            return {'CANCELLED'}
 
-        for layer_idx, frame_num in selected_keys:
-            layer = gp_obj.data.layers[layer_idx]
-            easing.set_easing_curve_to_frame(gp_obj.data, layer, layer_idx, frame_num, self.easing_type)
+        layer_idx0, frame_num0 = selected_keys[0]
+        current_preset, stored_data = get_stored_easing_data(gp_obj.data, layer_idx0, frame_num0)
 
-        if context.scene.gp_interpolation_enabled:
-            cache.clear(gp_obj.name)
-            cache.build(gp_obj)
+        set_loading_flag(True)
+        try:
+            if self.easing_type == 'CUSTOM':
+                if current_preset == 'CUSTOM' and stored_data:
+                    apply_preset_to_curve('CUSTOM', stored_data)
+                for layer_idx, frame_num in selected_keys:
+                    layer = gp_obj.data.layers[layer_idx]
+                    easing.set_easing_curve_to_frame(gp_obj.data, layer, layer_idx, frame_num, 'CUSTOM')
+            else:
+                apply_preset_to_curve(self.easing_type)
+                for layer_idx, frame_num in selected_keys:
+                    layer = gp_obj.data.layers[layer_idx]
+                    easing.set_easing_curve_to_frame(gp_obj.data, layer, layer_idx, frame_num, self.easing_type)
+
+            if context.scene.gp_interpolation_enabled:
+                cache.clear(gp_obj.name)
+                cache.build(gp_obj)
+        finally:
+            set_loading_flag(False)
 
         return {'FINISHED'}
 

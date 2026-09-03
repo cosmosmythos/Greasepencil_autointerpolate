@@ -478,13 +478,14 @@ class GPCORR_OT_link_selected(Operator):
             set_state(viewport_context=viewport_ctx)
 
 
+            max_a = float(context.scene.gp_link_tolerance) * 10.0 if hasattr(context.scene, "gp_link_tolerance") else 5.0
             config = {
-                'max_alpha': 0.5,
+                'max_alpha': max_a,
                 'coincident_threshold': 0.5,
             }
             success, _ = start_match_job(obj, layer1, pairs, config)
             if success:
-                self.report({'INFO'}, f"Linked strokes on frames {norm_frame1}-{norm_frame2}")
+                self.report({'INFO'}, f"Linked strokes on frames {norm_frame1}-{norm_frame2} (α={max_a:.1f})")
         else:
             self.report({'INFO'}, "This pair is already linked")
 
@@ -614,13 +615,14 @@ class GPCORR_OT_unlink_selected(Operator):
             set_state(viewport_context=viewport_ctx)
 
 
+            max_a = float(context.scene.gp_link_tolerance) * 10.0 if hasattr(context.scene, "gp_link_tolerance") else 5.0
             config = {
-                'max_alpha': 0.5,
+                'max_alpha': max_a,
                 'coincident_threshold': 0.5,
             }
             success, _ = start_match_job(obj, layer1, pairs, config)
             if success:
-                self.report({'INFO'}, f"Unlinked strokes on frames {norm_frame1}-{norm_frame2}")
+                self.report({'INFO'}, f"Unlinked strokes on frames {norm_frame1}-{norm_frame2} (α={max_a:.1f})")
         else:
             self.report({'INFO'}, "Selected pair was not linked")
 

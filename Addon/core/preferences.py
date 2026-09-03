@@ -154,6 +154,18 @@ def draw_bezier_header(self, context):
     row.popover(panel="VIEW3D_PT_gpai_bezier_settings", text="")
 
 
+class VIEW3D_PT_gpai_link_settings(Panel):
+    bl_space_type = 'VIEW_3D'
+    bl_region_type = 'HEADER'
+    bl_label = "Link Tolerance"
+    bl_ui_units_x = 7
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column(align=True)
+        col.prop(context.scene, "gp_link_tolerance", slider=True)
+
+
 class VIEW3D_PT_gpai_bezier_settings(Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'HEADER'
@@ -430,12 +442,17 @@ class GPAIPreferences(AddonPreferences):
 
 def register():
     bpy.utils.register_class(GPAIPreferences)
+    bpy.utils.register_class(VIEW3D_PT_gpai_link_settings)
     bpy.utils.register_class(VIEW3D_PT_gpai_bezier_settings)
 
 
 def unregister():
     try:
         bpy.utils.unregister_class(VIEW3D_PT_gpai_bezier_settings)
+    except Exception:
+        pass
+    try:
+        bpy.utils.unregister_class(VIEW3D_PT_gpai_link_settings)
     except Exception:
         pass
     try:

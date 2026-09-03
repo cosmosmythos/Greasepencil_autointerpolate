@@ -45,6 +45,7 @@ def draw_gpcorr_header(self, context):
                  icon='RESTRICT_INSTANCED_OFF' if not _link_mode_active else 'SOLO_ON',
                  depress=_link_mode_active)
 
+    row.popover(panel="VIEW3D_PT_gpai_link_settings", text="")
 
     if _link_mode_active:
         row.operator("gpcorr.link_selected", text="Link", icon='ADD')

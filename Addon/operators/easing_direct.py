@@ -46,9 +46,20 @@ def apply_preset_to_curve(preset_name, stored_data=None):
 
     curve_mapping.update()
 
-    for window in bpy.context.window_manager.windows:
-        for area in window.screen.areas:
-            area.tag_redraw()
+    # guard - dopesheet popup no longer draws curve (buttons only), but N-panel does
+    try:
+        for window in list(bpy.context.window_manager.windows):
+            screen = getattr(window, "screen", None)
+            if not screen:
+                continue
+            for area in list(screen.areas):
+                try:
+                    if getattr(area, "type", None) in {'VIEW_3D', 'DOPESHEET_EDITOR', 'PROPERTIES'}:
+                        area.tag_redraw()
+                except ReferenceError:
+                    continue
+    except Exception:
+        pass
 
 
 def get_stored_easing_data(gp_data, layer_idx, frame_number):
